@@ -3,8 +3,8 @@
 ## Snapshot
 
 Last updated: 2026-10-10
-Version: 1.4.1 released (Linux, Windows, macOS). 1.4: the app's own Add Photos picker, the map (Pick from a Map, street map and satellite imagery), Edit > Settings, and the same pinned ExifTool on every system. 1.4.1: the blue pin GPS badge, the blue = existing / orange = new color theme, the map's Clear button, and no blocking dialogs. Merged to `main` but not released yet (PR #10; ships with the next version, no bump for incremental work): deselect after Apply, the map's Back button and zoom from a photo's preview, backups named `<name>_original.<ext>` (only for photos that had GPS), tighter window spacing, and a clearer window edge on Windows 11
-Status: Two-pane layout (Photo List and Photos to Change, with Location and Date & Time tabs), the app's own photo picker (folder tree, only photos), a pop-out map for picking a location (OpenStreetMap, USGS, or Esri with the user's key), fast thumbnails (shared Linux thumbnail cache, embedded JPEG thumbnails), background loading, failure-tolerant writes, undo/redo that restores the photo list, optional backups, an error log, and CI builds for Linux, Windows, and macOS.
+Version: 1.5.0 (not released yet; bumped on branch `picker-folders`). 1.4.1 is the latest release (Linux, Windows, macOS). 1.4: the app's own Add Photos picker, the map (Pick from a Map, street map and satellite imagery), Edit > Settings, and the same pinned ExifTool on every system. 1.4.1: the blue pin GPS badge, the blue = existing / orange = new color theme, the map's Clear button, and no blocking dialogs. 1.5 (unreleased): the Add Photos picker shows folders with the photos and folders can be chosen to add their photos (branch `picker-folders`), plus PR #10, merged earlier: deselect after Apply, the map's Back button and zoom from a photo's preview, backups named `<name>_original.<ext>` (only for photos that had GPS), tighter window spacing, and a clearer window edge on Windows 11
+Status: Two-pane layout (Photo List and Photos to Change, with Location and Date & Time tabs), the app's own photo picker (folder tree; folders and photos, either can be chosen), a pop-out map for picking a location (OpenStreetMap, USGS, or Esri with the user's key), fast thumbnails (shared Linux thumbnail cache, embedded JPEG thumbnails), background loading, failure-tolerant writes, undo/redo that restores the photo list, optional backups, an error log, and CI builds for Linux, Windows, and macOS.
 
 Repository: https://github.com/Petruchio96/photo-gps-editor
 
@@ -13,7 +13,7 @@ Repository: https://github.com/Petruchio96/photo-gps-editor
 Desktop application for viewing and editing GPS metadata in photo files.
 
 Key objectives:
-- Select one or many photos with the app's own picker (folder tree on the left, only photos on the right)
+- Select one or many photos, or whole folders, with the app's own picker (folder tree on the left, folders and photos on the right)
 - Display thumbnails in a grid, including real thumbnails for RAW files
 - View and copy GPS metadata
 - Apply GPS metadata to the photos selected in the grid, from typed, pasted, photo-sourced, or map-picked coordinates
@@ -149,8 +149,10 @@ callback) and the right-click menu uses `popup()`; the blocking `QMessageBox.war
 - Opened modal but non-blocking (`open()` plus a callback): a blocking `exec()` ran a nested event loop that crashed the Windows build when background results arrived
 - Left: folder tree with My Computer (user folders), Bookmarks (Linux file manager bookmarks, without repeats of user folders), Devices/Drives (mounted drives), Network (mounted shares, named like `photo on nas.local`). Folders expand on demand; an arrow shows only for folders with subfolders; hidden folders are left out like each system's file manager. The current folder is highlighted (navy) and the tree opens down to it. Folder icons come from Qt's style, not the system shell
 - Top: Back, Forward, Up, and a path box (type or paste a folder; UNC paths like `\\server\share` work on Windows)
-- Right: only photos, as thumbnails with GPS badges; same click/Shift-click/Select All rules and selection bar as the Photo List; photos already in the Photo List are marked "In Photo List" and can't be selected. Tiles appear at once as placeholders; thumbnails fill in batch by batch, then GPS badges in a second pass
-- One-photo mode: a click selects one photo, double-click chooses it, button `Use This Photo's Location`
+- Right: the folder's subfolders (large folder tiles with "5 photos, 2 folders" under the name), then its photos as thumbnails with GPS badges; same click/Shift-click/Select All rules and selection bar as the Photo List, for folders and photos alike; double-click a folder to open it (the tree follows). Photos already in the Photo List are marked "In Photo List" and can't be selected. Tiles appear at once as placeholders; thumbnails fill in batch by batch, then folder contents, then GPS badges
+- The selection stays while moving between folders ("3 photos and 1 folder selected"; Deselect All clears every folder), and an orange dot in the tree marks folders that hold selected photos: the deepest folder showing in the tree for each photo, so a folder gets the dot for photos directly inside it, and for photos in a subfolder only while that subfolder is collapsed out of sight (selected folders don't count; likewise a place such as Home isn't marked for what is inside another place in the tree, such as Pictures). The tree and tiles use a yellow folder drawn in code, the same on every system
+- `Add Photos in Subfolders` appears while a folder is selected: off at start, kept until the app closes (not saved). Off, a folder adds only the photos directly inside it; on, also those in every folder inside it (hidden and linked folders skipped). After Add, the main window finds the folders' photos in the background ("Reading folders…", `core/places.py` `photos_in_folders`), then adds them after the photos chosen one by one; duplicates and photos already in the list are skipped as usual
+- One-photo mode: a click selects one photo, double-click chooses it, button `Use This Photo's Location`; folders can be opened but not chosen
 - Opens in the last folder used (also after cancelling)
 - Windows: unmapped network shares don't appear in the tree (File Explorer's Network lists discovered computers); mapped drives appear under Drives. macOS: no Bookmarks section. Neither has a shared thumbnail cache, so only embedded previews speed things up there
 
@@ -169,7 +171,6 @@ Next up, in order:
 Later:
 
 - Windows installer for releases (instead of only the zip): compare options such as an MSI (WiX), Inno Setup, or MSIX, including Start menu shortcut, uninstall, upgrades over an older version, and signing/SmartScreen
-- Picker: a way to add whole folders. A toggle switches the picker to show only folders; several folders can be selected; a checkbox (off by default) also adds the photos in their subfolders
 - Add drag-and-drop support for loading photos
 - Explore a future API/web/container layer (Docker on a Synology NAS) on top of the reusable `services/` backend
 

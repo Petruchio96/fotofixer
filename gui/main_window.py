@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from core.places import photos_in_folders
 from core.runtime_paths import resource_path
 from gui.background import BackgroundRunner
 from gui.styles import APP_STYLESHEET
@@ -39,7 +40,7 @@ from services.gps_edit_history import GpsEditHistory, PhotoListSnapshot
 from services.models import OverwriteEntry, WorkflowSession
 from services.workflow_facade import PhotoWorkflowFacade
 
-APP_VERSION = "1.4.1"
+APP_VERSION = "1.5.0"
 
 # QSettings key for the "Keep Backup Copies of Originals" option.
 KEEP_BACKUPS_SETTING = "keep_backup_copies"
@@ -112,6 +113,9 @@ class MainWindow(
         self._only_selected_before_pick = False
         self._grid_items_by_path = {}
         self._group_header_items = []
+        # The Add Photos picker's "Add Photos in Subfolders": off at start,
+        # then as last left until the app closes (not saved between sessions).
+        self._picker_include_subfolders = False
 
         # Background loading state (see PhotoListMixin.load_photos and
         # _start_thumbnail_job). Generation numbers let late results from a
@@ -621,10 +625,13 @@ class MainWindow(
     def _pick_photo_files(self, title: str, on_chosen: Callable[[list[Path]], None]) -> None:
         """
         Choose photos to add with the app's own picker (folder tree on the
-        left, only photos on the right). The system pickers mix folders and
-        photos, and on Linux choosing both at once silently does nothing.
+        left; folders and photos on the right). The system pickers mix
+        folders and photos, and on Linux choosing both at once silently does
+        nothing.
 
         on_chosen(paths) runs after the picker closes with photos chosen.
+        For folders chosen, their photos are found first (see
+        _add_photos_from_folders) and included in paths.
         """
         self._open_photo_picker(title, single=False, on_chosen=on_chosen)
 
@@ -661,6 +668,7 @@ class MainWindow(
             thumbnail_loader=self.thumbnail_loader,
             background=self.background,
             single=single,
+            include_subfolders=self._picker_include_subfolders,
         )
         # Kept until the next picker opens, so background results that arrive
         # after it closes still find a live (ignored) object.
@@ -669,8 +677,17 @@ class MainWindow(
         def closed(result: int) -> None:
             if dialog.current_folder is not None:
                 self._remember_photo_folder(dialog.current_folder)
+            if not single:
+                self._picker_include_subfolders = dialog.include_subfolders()
             paths = dialog.selected_paths()
-            if result == QDialog.Accepted and paths:
+            folders = [] if single else dialog.selected_folders()
+            if result != QDialog.Accepted or not (paths or folders):
+                return
+            if folders:
+                self._add_photos_from_folders(
+                    paths, folders, dialog.include_subfolders(), on_chosen
+                )
+            else:
                 on_chosen(paths)
 
         dialog.finished.connect(closed)
@@ -679,6 +696,38 @@ class MainWindow(
         # is a normal window on every system that blocks the rest of the app.
         dialog.setWindowModality(Qt.ApplicationModal)
         dialog.show()
+
+    def _add_photos_from_folders(
+        self,
+        photos: list[Path],
+        folders: list[Path],
+        recursive: bool,
+        on_chosen: Callable[[list[Path]], None],
+    ) -> None:
+        """
+        Find the photos in the folders chosen in the picker (in the
+        background: a big folder tree on a network share takes a while),
+        then pass them, after the photos chosen one by one, to on_chosen.
+        """
+        self._set_status_message("Reading folders…", "info")
+
+        def work() -> list[Path]:
+            return photos_in_folders(folders, recursive=recursive)
+
+        def done(found: list[Path]) -> None:
+            if not photos and not found:
+                self._set_status_message(
+                    "No photos found in "
+                    + ("that folder." if len(folders) == 1 else "those folders."),
+                    "info",
+                )
+                return
+            on_chosen([*photos, *found])
+
+        def failed(exc: BaseException) -> None:
+            self._set_status_message(f"The folders could not be read: {exc}", "error")
+
+        self.background.submit(work, done, failed)
 
     def _photo_picker_start_folder(self) -> Path:
         """

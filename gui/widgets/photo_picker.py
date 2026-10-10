@@ -1,12 +1,15 @@
 """
-The Add Photos picker: a folder tree on the left, only photos on the right.
+The Add Photos picker: a folder tree on the left; the folder's subfolders
+and photos on the right.
 
 Why this file exists:
     The system file pickers mix folders and photos in one list, and on Linux
-    choosing both at once silently does nothing. This window keeps them
-    apart: folders live only in the tree, so only photos can be selected.
-    It also shows thumbnails (upright, with GPS badges) while choosing, and
-    marks photos that are already in the Photo List.
+    choosing both at once silently does nothing. Here folders and photos can
+    be chosen together: a chosen folder adds the photos in it (and, with
+    "Add Photos in Subfolders", in every folder inside it). The selection
+    stays while moving between folders. It also shows thumbnails (upright,
+    with GPS badges) while choosing, and marks photos that are already in
+    the Photo List.
 
 Places in the tree:
     My Computer (Home and the user folders), Bookmarks (the Linux file
@@ -33,9 +36,10 @@ from PySide6.QtCore import (
     QTimer,
     Signal,
 )
-from PySide6.QtGui import QColor, QFont, QIcon, QKeySequence, QPainter, QPen, QPixmap
+from PySide6.QtGui import QColor, QFont, QIcon, QKeySequence, QPainter, QPainterPath, QPen, QPixmap
 from PySide6.QtWidgets import (
     QAbstractItemView,
+    QCheckBox,
     QDialog,
     QFrame,
     QHBoxLayout,
@@ -45,7 +49,6 @@ from PySide6.QtWidgets import (
     QListWidgetItem,
     QPushButton,
     QSplitter,
-    QStyle,
     QTreeWidget,
     QTreeWidgetItem,
     QVBoxLayout,
@@ -55,6 +58,7 @@ from PySide6.QtWidgets import (
 from core.places import (
     GVFS_FILE_SYSTEM,
     Place,
+    folder_contents_summary,
     gvfs_share_name,
     has_subfolders,
     is_network_file_system,
@@ -74,14 +78,23 @@ PATH_ROLE = Qt.UserRole
 HAS_GPS_ROLE = Qt.UserRole + 1
 # On tree items: True once the folder's subfolders have been listed.
 LOADED_ROLE = Qt.UserRole + 2
+# On grid items: True for a folder tile (the rest are photos). Past the
+# thumbnail delegate's roles (up to Qt.UserRole + 8).
+IS_FOLDER_ROLE = Qt.UserRole + 9
 
 THUMBNAILS_PER_BATCH = 24
 GPS_PER_BATCH = 50
+FOLDER_SUMMARIES_PER_BATCH = 20
+# Room for the thumbnail and two lines of text (a folder's name and contents).
+TILE_SIZE = QSize(170, 206)
 # Placeholder animation frame interval (milliseconds), as in the Photo List.
 SHIMMER_FRAME_MS = 40
 
 # Matches QTreeWidget#pickerTree in styles.py.
 TREE_BACKGROUND = QColor("#fbfdff")
+# The selection color (orange = what is about to change): the dot on tree
+# folders with something selected inside.
+SELECTED_MARK_COLOR = QColor("#d97706")
 
 # The tree's sections, in order: (title, places).
 type PlaceSections = list[tuple[str, list[Place]]]
@@ -177,6 +190,49 @@ def default_place_sections() -> PlaceSections:
     return [(title, places) for title, places in sections if places]
 
 
+def painted_folder_icon(size: QSize) -> QIcon:
+    """
+    A yellow folder drawn in code at any size: the picker's tree and its
+    folder tiles. Qt's own folder icon differs per system and is too small
+    to scale up to a tile on most of them. Drawn at twice the size too, for
+    sharp edges on high-resolution screens.
+    """
+    icon = QIcon()
+    for scale in (1, 2):
+        pixmap = QPixmap(size * scale)
+        pixmap.setDevicePixelRatio(scale)
+        pixmap.fill(Qt.transparent)
+        painter = QPainter(pixmap)
+        painter.setRenderHint(QPainter.Antialiasing)
+        width = size.width() * (0.78 if size.width() > 32 else 0.92)
+        height = width * 0.76
+        left = (size.width() - width) / 2
+        top = (size.height() - height) / 2
+        unit = height / 16
+        outline = max(1.0, unit * 0.35)
+        back = QPainterPath()
+        back.moveTo(left, top + unit)
+        back.lineTo(left + width * 0.38, top + unit)
+        back.lineTo(left + width * 0.38 + unit * 1.6, top + unit * 2.6)
+        back.lineTo(left + width, top + unit * 2.6)
+        back.lineTo(left + width, top + height)
+        back.lineTo(left, top + height)
+        back.closeSubpath()
+        painter.setPen(QPen(QColor("#b7862a"), outline))
+        painter.setBrush(QColor("#e9b949"))
+        painter.drawPath(back)
+        front = QPainterPath()
+        front.addRoundedRect(left, top + unit * 4.6, width, height - unit * 4.6, unit * 0.7, unit * 0.7)
+        painter.setPen(QPen(QColor("#c99a3a"), outline * 0.8))
+        painter.setBrush(QColor("#f3cd6b"))
+        painter.drawPath(front)
+        painter.end()
+        icon.addPixmap(pixmap)
+        # The same in a selected tree row (Qt would otherwise dim it).
+        icon.addPixmap(pixmap, QIcon.Selected)
+    return icon
+
+
 class PickerTree(QTreeWidget):
     """
     The folder tree. Draws its own expand arrows so the selected folder's
@@ -187,6 +243,9 @@ class PickerTree(QTreeWidget):
         super().__init__(parent)
         self.setMouseTracking(True)
         self._hovered_index = None
+        # Set by the picker: True for folders to mark with an orange dot
+        # (something inside them is selected).
+        self.mark_test = None
         # A new selection repaints everything too (see mouseMoveEvent).
         self.currentItemChanged.connect(lambda *_: self.viewport().update())
 
@@ -214,6 +273,20 @@ class PickerTree(QTreeWidget):
         # The arrow column: everything left of the item itself.
         rect = QRect(0, option.rect.top(), self.visualRect(index).left(), option.rect.height())
         self._paint_arrow(painter, rect, index)
+        item = self.itemFromIndex(index)
+        if item is not None and self.mark_test is not None and self.mark_test(item):
+            self._paint_mark(painter, option.rect)
+
+    def _paint_mark(self, painter: QPainter, row: QRect) -> None:
+        """An orange dot at the right end of the row."""
+        radius = 4
+        center = QPointF(self.viewport().width() - 14, row.center().y() + 0.5)
+        painter.save()
+        painter.setRenderHint(QPainter.Antialiasing)
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(SELECTED_MARK_COLOR)
+        painter.drawEllipse(center, radius, radius)
+        painter.restore()
 
     def _paint_arrow(self, painter: QPainter, rect: QRect, index) -> None:
         # Cover any selection or hover color Qt painted in the arrow column,
@@ -247,13 +320,16 @@ class PickerTree(QTreeWidget):
 
 class PickerGrid(QListWidget):
     """
-    The photo grid in the picker, with the same click rules as the Photo
-    List: click adds or removes a photo, Shift+click adds a range, Ctrl+A
-    selects every photo. Photos already in the Photo List can't be selected.
+    The picker's grid of folders and photos, with the same click rules as
+    the Photo List: click adds or removes a folder or photo, Shift+click
+    adds a range, Ctrl+A selects everything shown. Double-click opens a
+    folder. Photos already in the Photo List can't be selected.
     """
 
     # Double-click on a photo (used to choose it in one-photo mode).
     photo_double_clicked = Signal()
+    # Double-click on a folder: open it. Carries the folder's path (str).
+    folder_double_clicked = Signal(str)
 
     def __init__(self) -> None:
         super().__init__()
@@ -289,8 +365,17 @@ class PickerGrid(QListWidget):
         event.accept()
 
     def mouseDoubleClickEvent(self, event) -> None:
+        item = self.itemAt(event.position().toPoint())
+        if event.button() == Qt.LeftButton and item is not None and item.data(IS_FOLDER_ROLE):
+            if not self.single:
+                # The first click of the double-click selected (or
+                # deselected) the folder; this undoes it, so opening a
+                # folder leaves the selection as it was.
+                self.mousePressEvent(event)
+            self.folder_double_clicked.emit(item.data(PATH_ROLE))
+            event.accept()
+            return
         if self.single:
-            item = self.itemAt(event.position().toPoint())
             if item is not None and item.flags() & Qt.ItemIsSelectable:
                 self._set_selected([other for other in self.selectedItems() if other is not item], False)
                 self._set_selected([item], True)
@@ -347,6 +432,9 @@ class PhotoPickerDialog(QDialog):
             The tree's places; read from the system when not given.
         single:
             Choose one photo (to use its location) instead of photos to add.
+            Folders can then be opened but not selected.
+        include_subfolders:
+            Whether "Add Photos in Subfolders" starts checked.
     """
 
     def __init__(
@@ -361,6 +449,7 @@ class PhotoPickerDialog(QDialog):
         background,
         place_sections: PlaceSections | None = None,
         single: bool = False,
+        include_subfolders: bool = False,
     ) -> None:
         super().__init__(parent)
         self.setObjectName("photoPicker")
@@ -369,13 +458,16 @@ class PhotoPickerDialog(QDialog):
         self.setMinimumSize(820, 520)
 
         self._single = single
+        self._start_include_subfolders = include_subfolders
         self._in_list = set() if single else {Path(path) for path in in_list}
         self._workflow = workflow
         self._thumbnail_loader = thumbnail_loader
         self._background = background
-        # Qt's own folder icon. QFileIconProvider asks the system shell for
-        # icons, which on Windows has caused crashes elsewhere in the app.
-        self._folder_icon = self.style().standardIcon(QStyle.SP_DirIcon)
+        # Drawn in code, like the grid's folder tiles, so the tree and the
+        # grid match on every system. (QFileIconProvider asks the system
+        # shell for icons, which on Windows has caused crashes elsewhere in
+        # the app.)
+        self._folder_icon = painted_folder_icon(QSize(18, 18))
 
         self.current_folder: Path | None = None
         self._back: list[Path] = []
@@ -388,6 +480,13 @@ class PhotoPickerDialog(QDialog):
         self._images: dict[str, object] = {}
         self._photo_count = 0
         self._blank_icon: QIcon | None = None
+        self._folder_tile_icon: QIcon | None = None
+        # Everything selected, in every folder visited: path -> True for a
+        # folder, False for a photo, in the order selected. Kept here, not
+        # in the grid, so the selection stays while moving between folders.
+        self._chosen: dict[str, bool] = {}
+        # The folders that hold selected photos (see _tree_item_marked).
+        self._chosen_containers: set[Path] = set()
 
         # Animates the placeholder tiles while thumbnails load.
         self._shimmer_timer = QTimer(self)
@@ -435,7 +534,11 @@ class PhotoPickerDialog(QDialog):
         self.tree.setIndentation(18)
         self.tree.setIconSize(QSize(18, 18))
         self.tree.itemExpanded.connect(self._load_subfolders)
+        # Expanding or collapsing moves the dots (see _tree_item_marked).
+        self.tree.itemExpanded.connect(lambda _item: self.tree.viewport().update())
+        self.tree.itemCollapsed.connect(lambda _item: self.tree.viewport().update())
         self.tree.itemClicked.connect(self._tree_item_clicked)
+        self.tree.mark_test = self._tree_item_marked
         self.tree.setMinimumWidth(220)
 
         # Right: the photos in the folder.
@@ -466,8 +569,9 @@ class PhotoPickerDialog(QDialog):
         self.grid.verticalScrollBar().setSingleStep(24)
         self.grid.setItemDelegate(ThumbnailDelegate(self.grid))
         self.grid.single = self._single
-        self.grid.itemSelectionChanged.connect(self._update_selection)
+        self.grid.itemSelectionChanged.connect(self._grid_selection_changed)
         self.grid.photo_double_clicked.connect(self.accept)
+        self.grid.folder_double_clicked.connect(lambda path: self.open_folder(Path(path)))
         grid_box_layout.addWidget(self.grid, 1)
 
         self.empty_label = QLabel()
@@ -484,7 +588,8 @@ class PhotoPickerDialog(QDialog):
         note = QLabel(
             "Choose a photo with GPS; its location goes into New Location."
             if self._single
-            else "Photos already in the Photo List are marked and can't be selected again."
+            else "Click to select photos or folders. Double-click a folder to open it. "
+            "Photos already in the Photo List can't be selected again."
         )
         note.setObjectName("pickerNote")
         note.setWordWrap(True)
@@ -497,7 +602,7 @@ class PhotoPickerDialog(QDialog):
         self.add_button.setToolTip(
             "Put this photo's GPS coordinates in New Location"
             if self._single
-            else "Add the selected photos to the Photo List"
+            else "Add the selected photos, and the photos in the selected folders, to the Photo List"
         )
         self.add_button.clicked.connect(self.accept)
         bottom.addWidget(note, 1)
@@ -546,11 +651,21 @@ class PhotoPickerDialog(QDialog):
         self.selection_count_label = QLabel("0 selected")
         self.selection_count_label.setObjectName("selectionCount")
         self.select_all_button = QPushButton("Select All")
-        self.select_all_button.setToolTip("Select every photo in this folder (Ctrl+A)")
+        self.select_all_button.setToolTip("Select every photo and folder shown (Ctrl+A)")
         self.select_all_button.clicked.connect(self.grid_select_all)
         self.deselect_all_button = QPushButton("Deselect All")
-        self.deselect_all_button.setToolTip("Deselect all photos")
+        self.deselect_all_button.setToolTip("Deselect everything, in every folder")
         self.deselect_all_button.clicked.connect(self.grid_deselect_all)
+        # Shown only while a folder is selected (see _update_selection).
+        self.subfolders_check = QCheckBox("Add Photos in Subfolders")
+        self.subfolders_check.setObjectName("selectionBarCheck")
+        self.subfolders_check.setToolTip(
+            "Also add the photos in every folder inside the selected folders"
+        )
+        self.subfolders_check.setChecked(self._start_include_subfolders)
+        self.subfolders_check.setCursor(Qt.PointingHandCursor)
+        self.subfolders_check.toggled.connect(lambda _checked: self._update_selection())
+        self.subfolders_check.hide()
         self.folder_summary_label = QLabel()
         self.folder_summary_label.setObjectName("pickerSummary")
 
@@ -566,6 +681,8 @@ class PhotoPickerDialog(QDialog):
             layout.addWidget(separator)
             layout.addWidget(button)
         layout.addStretch(1)
+        layout.addWidget(self.subfolders_check)
+        layout.addSpacing(12)
         layout.addWidget(self.folder_summary_label)
         if self._single:
             # Only one photo is chosen: no count or Select All needed.
@@ -671,6 +788,9 @@ class PhotoPickerDialog(QDialog):
         if remember and self.current_folder is not None and folder != self.current_folder:
             self._back.append(self.current_folder)
             self._forward.clear()
+        if self._single:
+            # One photo is chosen from the folder it is in.
+            self._chosen.clear()
         self.current_folder = folder
         self.path_box.setText(str(folder))
         self._set_path_error(False)
@@ -726,15 +846,19 @@ class PhotoPickerDialog(QDialog):
 
     def _load_photos(self, folder: Path) -> None:
         """
-        Show the folder's photos right away as placeholder tiles with their
-        names, then fill in GPS badges and thumbnails batch by batch in the
-        background (reading every photo first is slow on network shares).
+        Show the folder's subfolders and photos right away (photos as
+        placeholder tiles with their names), then fill in thumbnails, folder
+        contents, and GPS badges batch by batch in the background (reading
+        every photo first is slow on network shares).
         """
         self._stop_loading()
         generation = self._generation
         token = CancelToken()
         self._token = token
-        self.grid.clear()
+        # Quietly: clearing deselects the old folder's items first, which
+        # would otherwise drop them from the selection (see _chosen).
+        with QSignalBlocker(self.grid):
+            self.grid.clear()
         self._items_by_path = {}
         self._images = {}
         self._photo_count = 0
@@ -743,13 +867,16 @@ class PhotoPickerDialog(QDialog):
         self._update_selection()
 
         def work():
-            return None if token.cancelled else list_photos(folder)
+            if token.cancelled:
+                return None
+            return list_subfolders(folder), list_photos(folder)
 
-        def done(photos) -> None:
-            if generation != self._generation or photos is None:
+        def done(listing) -> None:
+            if generation != self._generation or listing is None:
                 return
-            self._show_photos(photos)
-            self._start_thumbnails(generation, token, photos)
+            folders, photos = listing
+            self._show_items(folders, photos)
+            self._start_thumbnails(generation, token, photos, folders)
 
         def failed(exc: BaseException) -> None:
             if generation != self._generation:
@@ -767,16 +894,27 @@ class PhotoPickerDialog(QDialog):
                 return icon, has_gps
         return None, False
 
-    def _show_photos(self, photos: list[Path]) -> None:
+    def _show_items(self, folders: list[Path], photos: list[Path]) -> None:
+        """Folder tiles first, then the photos, selected as remembered."""
         self._photo_count = len(photos)
-        in_list_count = 0
         self.grid.setUpdatesEnabled(False)
         try:
+            for path in folders:
+                item = QListWidgetItem(self._folder_icon_for_tile(), path.name)
+                item.setData(PATH_ROLE, str(path))
+                item.setData(IS_FOLDER_ROLE, True)
+                item.setSizeHint(TILE_SIZE)
+                item.setToolTip(f"{path.name}\nDouble-click to open")
+                if self._single:
+                    # Opened (double-click), never chosen, in one-photo mode.
+                    item.setFlags(Qt.ItemIsEnabled)
+                self.grid.addItem(item)
+                self._items_by_path[str(path)] = item
             for path in photos:
                 icon, has_gps = self._cached_icon(path)
                 item = QListWidgetItem(icon if icon is not None else self._blank(), path.name)
                 item.setData(PATH_ROLE, str(path))
-                item.setSizeHint(QSize(170, 190))
+                item.setSizeHint(TILE_SIZE)
                 if icon is None:
                     # A placeholder tile until the thumbnail arrives.
                     item.setData(SHIMMER_ROLE, True)
@@ -784,21 +922,34 @@ class PhotoPickerDialog(QDialog):
                 else:
                     self._set_gps(item, has_gps)
                 if path in self._in_list:
-                    in_list_count += 1
                     item.setFlags(Qt.ItemIsEnabled)
                     item.setData(IN_LIST_ROLE, True)
                     item.setToolTip(f"{path.name}\nAlready in the Photo List")
                 self.grid.addItem(item)
                 self._items_by_path[str(path)] = item
+            # Selected earlier (before leaving this folder): select again.
+            # Signals are blocked, so this doesn't count as a new selection.
+            with QSignalBlocker(self.grid):
+                for key in self._chosen:
+                    item = self._items_by_path.get(key)
+                    if item is not None and item.flags() & Qt.ItemIsSelectable:
+                        item.setSelected(True)
         finally:
             self.grid.setUpdatesEnabled(True)
 
-        summary = f"{len(photos)} photo{'' if len(photos) == 1 else 's'}" if photos else ""
-        if in_list_count:
-            summary += f" · {in_list_count} already in the Photo List"
-        self.folder_summary_label.setText(summary)
-        self._show_message("" if photos else "No photos in this folder. Choose a folder on the left.")
+        # Only "Reading folder…" while loading; no counts afterwards (next
+        # to the selection count they were confusing).
+        self.folder_summary_label.setText("")
+        self._show_message(
+            "" if folders or photos else "No photos or folders in this folder. Choose a folder on the left."
+        )
         self._update_selection()
+
+    def _folder_icon_for_tile(self) -> QIcon:
+        """A large folder, the size of a thumbnail."""
+        if self._folder_tile_icon is None:
+            self._folder_tile_icon = painted_folder_icon(self.grid.iconSize())
+        return self._folder_tile_icon
 
     def _set_gps(self, item: QListWidgetItem, has_gps: bool) -> None:
         item.setData(HAS_GPS_ROLE, has_gps)
@@ -806,12 +957,13 @@ class PhotoPickerDialog(QDialog):
             name = Path(item.data(PATH_ROLE)).name
             item.setToolTip(f"{name}\n{'Has GPS coordinates' if has_gps else 'No GPS coordinates'}")
 
-    def _start_thumbnails(self, generation, token, photos: list[Path]) -> None:
+    def _start_thumbnails(self, generation, token, photos: list[Path], folders: list[Path] = ()) -> None:
         """
         In the background: thumbnails for the whole folder first (top of the
-        folder first), then GPS badges. Thumbnails come from the system cache
-        or the small preview inside each photo where possible, so this is
-        quick even for large photos on a network share.
+        folder first), then what is in each subfolder, then GPS badges.
+        Thumbnails come from the system cache or the small preview inside
+        each photo where possible, so this is quick even for large photos on
+        a network share.
         """
         pending = [
             path for path in photos
@@ -830,6 +982,16 @@ class PhotoPickerDialog(QDialog):
                     return
                 images = loader.load_images(pending[start:start + THUMBNAILS_PER_BATCH])
                 background.post(self._apply_thumbnails, (generation, images))
+
+            # "5 photos, 2 folders" under each folder tile.
+            for start in range(0, len(folders), FOLDER_SUMMARIES_PER_BATCH):
+                if token.cancelled:
+                    return
+                summaries = {
+                    folder: folder_contents_summary(folder)
+                    for folder in folders[start:start + FOLDER_SUMMARIES_PER_BATCH]
+                }
+                background.post(self._apply_folder_summaries, (generation, summaries))
 
             # GPS badges second, so they never hold up the thumbnails.
             for start in range(0, len(photos), GPS_PER_BATCH):
@@ -869,6 +1031,21 @@ class PhotoPickerDialog(QDialog):
         if not any(item.data(SHIMMER_ROLE) for item in self._items_by_path.values()):
             self._shimmer_timer.stop()
 
+    def _apply_folder_summaries(self, payload) -> None:
+        generation, summaries = payload
+        if generation != self._generation:
+            return
+        for folder, (photos, subfolders) in summaries.items():
+            item = self._items_by_path.get(str(folder))
+            if item is None:
+                continue
+            parts = []
+            if photos:
+                parts.append(_count(photos, "photo"))
+            if subfolders:
+                parts.append(_count(subfolders, "folder"))
+            item.setText(f"{folder.name}\n{', '.join(parts) or 'No photos'}")
+
     def _apply_gps(self, payload) -> None:
         generation, has_gps = payload
         if generation != self._generation:
@@ -905,20 +1082,106 @@ class PhotoPickerDialog(QDialog):
         self.grid.select_all()
 
     def grid_deselect_all(self) -> None:
-        self.grid.clearSelection()
+        """Deselect everything, also what was selected in other folders."""
+        self._chosen.clear()
+        with QSignalBlocker(self.grid):
+            self.grid.clearSelection()
+        self.grid.viewport().update()
+        self._update_selection()
 
     def selected_paths(self) -> list[Path]:
-        """The photos chosen, in the order shown."""
-        return [
-            Path(self.grid.item(row).data(PATH_ROLE))
-            for row in range(self.grid.count())
-            if self.grid.item(row).isSelected()
+        """The photos chosen (in any folder), in the order selected."""
+        return [Path(path) for path, is_folder in self._chosen.items() if not is_folder]
+
+    def selected_folders(self) -> list[Path]:
+        """The folders chosen, in the order selected."""
+        return [Path(path) for path, is_folder in self._chosen.items() if is_folder]
+
+    def include_subfolders(self) -> bool:
+        """Whether "Add Photos in Subfolders" is checked."""
+        return self.subfolders_check.isChecked()
+
+    def _grid_selection_changed(self) -> None:
+        """
+        Copy the grid's selection into _chosen. Only the items shown are
+        touched, so what was selected in other folders stays selected.
+        """
+        for row in range(self.grid.count()):
+            item = self.grid.item(row)
+            key = item.data(PATH_ROLE)
+            if item.isSelected():
+                if key not in self._chosen:
+                    self._chosen[key] = bool(item.data(IS_FOLDER_ROLE))
+            else:
+                self._chosen.pop(key, None)
+        self._update_selection()
+
+    def _tree_item_marked(self, item: QTreeWidgetItem) -> bool:
+        """
+        True for a tree folder that holds selected photos (selected folders
+        don't count). The dot goes on the deepest folder showing in the tree
+        for each photo: a folder is marked for photos directly inside it,
+        and for photos deeper down only while the subfolder holding them is
+        hidden (collapsed). Likewise a place (Home) is not marked for what is
+        inside another place in the tree (Pictures): that place gets it.
+        """
+        path_text = item.data(0, PATH_ROLE)
+        if path_text is None or not self._chosen_containers:
+            return False
+        ancestor = item.parent()
+        while ancestor is not None:
+            if not ancestor.isExpanded():
+                # Hidden in a collapsed branch: a folder above shows the dot.
+                return False
+            ancestor = ancestor.parent()
+        folder = Path(path_text)
+        containers = [
+            container for container in self._chosen_containers
+            if container == folder or folder in container.parents
         ]
+        parent = item.parent()
+        is_place = parent is not None and parent.data(0, PATH_ROLE) is None
+        if is_place and containers:
+            inner_places = [
+                place for place in self._place_paths()
+                if place != folder and folder in place.parents
+            ]
+            containers = [
+                container for container in containers
+                if not any(container == place or place in container.parents for place in inner_places)
+            ]
+        if item.isExpanded():
+            # Photos inside a subfolder showing below this one mark that
+            # subfolder instead.
+            shown = [Path(item.child(index).data(0, PATH_ROLE)) for index in range(item.childCount())]
+            containers = [
+                container for container in containers
+                if container == folder
+                or not any(container == child or child in container.parents for child in shown)
+            ]
+        return bool(containers)
+
+    def _place_paths(self) -> list[Path]:
+        """The folders listed directly under the tree's sections."""
+        paths = []
+        for section_index in range(self.tree.topLevelItemCount()):
+            section = self.tree.topLevelItem(section_index)
+            for child_index in range(section.childCount()):
+                paths.append(Path(section.child(child_index).data(0, PATH_ROLE)))
+        return paths
 
     def _update_selection(self) -> None:
-        count = len(self.selected_paths())
+        photo_count = len(self.selected_paths())
+        folder_count = len(self.selected_folders())
+        count = photo_count + folder_count
         has_selection = count > 0
-        self.selection_count_label.setText(f"{count} selected")
+        parts = []
+        if photo_count:
+            parts.append(_count(photo_count, "photo"))
+        if folder_count:
+            parts.append(_count(folder_count, "folder"))
+        chosen_text = " and ".join(parts)
+        self.selection_count_label.setText(f"{chosen_text} selected" if has_selection else "0 selected")
         if self.selection_bar.property("active") != has_selection:
             self.selection_bar.setProperty("active", has_selection)
             for widget in [self.selection_bar, *self.selection_bar.findChildren(QWidget)]:
@@ -927,12 +1190,26 @@ class PhotoPickerDialog(QDialog):
         selectable = self.grid.selectable_items()
         self.select_all_button.setEnabled(any(not item.isSelected() for item in selectable))
         self.deselect_all_button.setEnabled(has_selection)
+        self.subfolders_check.setVisible(folder_count > 0 and not self._single)
         self.add_button.setEnabled(has_selection)
         if self._single:
             self.add_button.setText("Use This Photo's Location")
         else:
             self.add_button.setText(
-                f"Add {count} Photo{'' if count == 1 else 's'} to Photo List"
+                f"Add {_count(photo_count, 'Photo') if photo_count else ''}"
+                f"{' and ' if photo_count and folder_count else ''}"
+                f"{_count(folder_count, 'Folder') if folder_count else ''} to Photo List"
                 if has_selection
                 else "Add Photos to Photo List"
             )
+
+        # The tree's dots: which folders hold selected photos.
+        self._chosen_containers = {
+            Path(path).parent for path, is_folder in self._chosen.items() if not is_folder
+        }
+        self.tree.viewport().update()
+
+
+def _count(number: int, word: str) -> str:
+    """ "1 photo", "3 photos". """
+    return f"{number} {word}{'' if number == 1 else 's'}"

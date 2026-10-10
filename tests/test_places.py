@@ -1,3 +1,4 @@
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -5,6 +6,7 @@ from types import SimpleNamespace
 
 from core.places import (
     Place,
+    folder_contents_summary,
     gvfs_share_name,
     has_subfolders,
     is_hidden,
@@ -14,6 +16,7 @@ from core.places import (
     list_subfolders,
     network_share_name,
     parse_gtk_bookmarks,
+    photos_in_folders,
 )
 
 
@@ -164,6 +167,66 @@ class FolderListingTests(unittest.TestCase):
         missing = self.root / "gone"
         self.assertEqual(list_photos(missing), [])
         self.assertEqual(list_subfolders(missing), [])
+
+
+
+class FolderPhotosTests(unittest.TestCase):
+    """The photos added for folders chosen in the picker."""
+
+    def setUp(self) -> None:
+        temp_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(temp_dir.cleanup)
+        self.root = Path(temp_dir.name)
+        # trip/{b.jpg, A.cr3, notes.txt}, trip/day 1/c.jpg,
+        # trip/day 1/morning/d.dng, trip/.hidden/e.jpg, trip/Day 2/f.jpg
+        self.trip = self.root / "trip"
+        for folder in ("day 1/morning", ".hidden", "Day 2"):
+            (self.trip / folder).mkdir(parents=True)
+        for name in ("b.jpg", "A.cr3", "notes.txt", "day 1/c.jpg", "day 1/morning/d.dng", ".hidden/e.jpg", "Day 2/f.jpg"):
+            (self.trip / name).write_bytes(b"")
+
+    def test_only_the_folders_own_photos_without_subfolders(self) -> None:
+        self.assertEqual(
+            photos_in_folders([self.trip], recursive=False),
+            [self.trip / "A.cr3", self.trip / "b.jpg"],
+        )
+
+    def test_every_photo_inside_with_subfolders(self) -> None:
+        # Each folder before its subfolders, siblings by name ignoring case;
+        # hidden folders left out.
+        self.assertEqual(
+            photos_in_folders([self.trip], recursive=True),
+            [
+                self.trip / "A.cr3",
+                self.trip / "b.jpg",
+                self.trip / "day 1" / "c.jpg",
+                self.trip / "day 1" / "morning" / "d.dng",
+                self.trip / "Day 2" / "f.jpg",
+            ],
+        )
+
+    def test_a_photo_found_twice_is_listed_once(self) -> None:
+        photos = photos_in_folders([self.trip / "day 1", self.trip], recursive=True)
+
+        self.assertEqual(len(photos), len(set(photos)))
+        self.assertEqual(photos[:2], [self.trip / "day 1" / "c.jpg", self.trip / "day 1" / "morning" / "d.dng"])
+
+    def test_stops_when_cancelled(self) -> None:
+        self.assertEqual(photos_in_folders([self.trip], recursive=True, cancelled=lambda: True), [])
+
+    @unittest.skipIf(sys.platform == "win32", "symlinks need extra rights on Windows")
+    def test_a_link_to_a_parent_folder_is_not_followed(self) -> None:
+        (self.trip / "day 1" / "loop").symlink_to(self.trip, target_is_directory=True)
+
+        photos = photos_in_folders([self.trip], recursive=True)
+
+        self.assertEqual(len(photos), 5)
+
+    def test_folder_contents_summary_counts_photos_and_folders(self) -> None:
+        # Hidden folder and the text file don't count.
+        self.assertEqual(folder_contents_summary(self.trip), (2, 2))
+        self.assertEqual(folder_contents_summary(self.trip / "day 1" / "morning"), (1, 0))
+        self.assertEqual(folder_contents_summary(self.root / "missing"), (0, 0))
 
 
 if __name__ == "__main__":

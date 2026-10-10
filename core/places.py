@@ -13,6 +13,7 @@ from __future__ import annotations
 import os
 import stat
 import sys
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import unquote, urlparse
@@ -242,3 +243,78 @@ def list_photos(folder: Path) -> list[Path]:
         if is_supported_file(Path(entry.name)) and _is_file(entry)
     ]
     return sorted(photos, key=lambda path: path.name.casefold())
+
+
+def _is_real_dir(entry: os.DirEntry) -> bool:
+    """
+    A folder that is not a link to somewhere else (a symlink, or a junction
+    on Windows). Walking into links could loop forever (a link to a parent
+    folder) or wander off into another drive.
+    """
+    try:
+        if entry.is_symlink() or getattr(entry, "is_junction", lambda: False)():
+            return False
+        return entry.is_dir(follow_symlinks=False)
+    except OSError:
+        return False
+
+
+def _folder_tree(folder: Path, cancelled: Callable[[], bool] | None) -> Iterator[Path]:
+    """
+    A folder, then every folder inside it at any depth (hidden and linked
+    folders left out), each folder before its subfolders, siblings by name.
+    """
+    stack = [folder]
+    while stack:
+        if cancelled is not None and cancelled():
+            return
+        current = stack.pop()
+        yield current
+        subfolders = sorted(
+            (Path(entry.path) for entry in _visible_entries(current) if _is_real_dir(entry)),
+            key=lambda path: path.name.casefold(),
+        )
+        # Reversed, so the first one by name comes off the stack first.
+        stack.extend(reversed(subfolders))
+
+
+def photos_in_folders(
+    folders: list[Path],
+    *,
+    recursive: bool,
+    cancelled: Callable[[], bool] | None = None,
+) -> list[Path]:
+    """
+    The photos in folders chosen in the picker: only those directly inside
+    each folder, or also those in every folder inside it when recursive is
+    True. Each folder's photos are sorted as in list_photos; a photo found
+    twice (a folder chosen along with a folder inside it) is listed once.
+    Stops early, returning what it found so far, once cancelled() is True.
+    """
+    found: list[Path] = []
+    seen: set[Path] = set()
+    for folder in folders:
+        tree = _folder_tree(Path(folder), cancelled) if recursive else [Path(folder)]
+        for current in tree:
+            if cancelled is not None and cancelled():
+                return found
+            for photo in list_photos(current):
+                if photo not in seen:
+                    seen.add(photo)
+                    found.append(photo)
+    return found
+
+
+def folder_contents_summary(folder: Path) -> tuple[int, int]:
+    """
+    How many photos and how many (visible) folders are directly inside a
+    folder, for the picker's folder tiles. Does not look into subfolders.
+    """
+    photos = 0
+    subfolders = 0
+    for entry in _visible_entries(folder):
+        if _is_dir(entry):
+            subfolders += 1
+        elif is_supported_file(Path(entry.name)) and _is_file(entry):
+            photos += 1
+    return photos, subfolders

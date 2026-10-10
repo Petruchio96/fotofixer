@@ -621,6 +621,19 @@ QFrame#selectionBar[active="true"] QPushButton#selectionBarButton:disabled {
     background: transparent;
     color: #a9b4c0;
 }
+/* The picker's "Add Photos in Subfolders" (shown while a folder is selected). */
+QCheckBox#selectionBarCheck {
+    background: #ffffff;
+    color: #7a4100;
+    font-weight: 700;
+    border: 1px solid #f0c48a;
+    border-radius: 8px;
+    padding: 5px 10px;
+    spacing: 7px;
+}
+QCheckBox#selectionBarCheck:hover {
+    background: #fff8ee;
+}
 QLabel#fieldLabel {
     color: #31445a;
     font-size: 13px;

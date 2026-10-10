@@ -494,10 +494,19 @@ class MainWindowSmokeTests(unittest.TestCase):
         folder.mkdir()
         return folder
 
-    def _fake_picker(self, *, chosen: list[Path], folder: Path | None, accept: bool = True):
+    def _fake_picker(
+        self,
+        *,
+        chosen: list[Path],
+        folder: Path | None,
+        accept: bool = True,
+        chosen_folders: list[Path] = (),
+        include_subfolders: bool | None = None,
+    ):
         """
         Stand in for the Add Photos picker: records how it was opened and
-        "chooses" the given photos in the given folder.
+        "chooses" the given photos and folders in the given folder.
+        include_subfolders None leaves the checkbox as the picker opened it.
         """
         opened: list[dict] = []
 
@@ -513,6 +522,11 @@ class MainWindowSmokeTests(unittest.TestCase):
                 opened.append(kwargs)
                 self.current_folder = folder
                 self.finished = FakeSignal()
+                self._include = (
+                    kwargs.get("include_subfolders", False)
+                    if include_subfolders is None
+                    else include_subfolders
+                )
 
             def setWindowModality(self, modality) -> None:
                 pass
@@ -525,6 +539,12 @@ class MainWindowSmokeTests(unittest.TestCase):
 
             def selected_paths(self):
                 return list(chosen)
+
+            def selected_folders(self):
+                return list(chosen_folders)
+
+            def include_subfolders(self):
+                return self._include
 
         return patch("gui.main_window.PhotoPickerDialog", FakePicker), opened
 
@@ -558,6 +578,67 @@ class MainWindowSmokeTests(unittest.TestCase):
 
         self.assertEqual(opened[0]["title"], "Add Photos")
         self.assertEqual(opened[0]["in_list"], set(self.paths))
+
+    def _folder_tree(self) -> Path:
+        """trip/a.jpg, trip/b.jpg, trip/day2/c.jpg."""
+        folder = self._photo_folder()
+        (folder / "day2").mkdir()
+        for path in (folder / "a.jpg", folder / "b.jpg", folder / "day2" / "c.jpg"):
+            path.write_bytes(b"")
+        return folder
+
+    def test_choosing_a_folder_adds_the_photos_in_it(self) -> None:
+        folder = self._folder_tree()
+        loose = Path("/tmp/loose.jpg")
+        picker, _opened = self._fake_picker(
+            chosen=[loose], chosen_folders=[folder], folder=folder.parent, include_subfolders=False
+        )
+
+        chosen = []
+        with picker:
+            self.window._pick_photo_files("Add Photos", chosen.append)
+
+        # Photos chosen one by one first, then the folder's own photos.
+        self.assertEqual(chosen, [[loose, folder / "a.jpg", folder / "b.jpg"]])
+
+    def test_choosing_a_folder_with_subfolders_adds_every_photo_inside(self) -> None:
+        folder = self._folder_tree()
+        picker, _opened = self._fake_picker(
+            chosen=[], chosen_folders=[folder], folder=folder.parent, include_subfolders=True
+        )
+
+        chosen = []
+        with picker:
+            self.window._pick_photo_files("Add Photos", chosen.append)
+
+        self.assertEqual(chosen, [[folder / "a.jpg", folder / "b.jpg", folder / "day2" / "c.jpg"]])
+
+    def test_choosing_a_folder_without_photos_says_so(self) -> None:
+        folder = self._photo_folder()
+        picker, _opened = self._fake_picker(chosen=[], chosen_folders=[folder], folder=folder.parent)
+
+        chosen = []
+        with picker:
+            self.window._pick_photo_files("Add Photos", chosen.append)
+
+        self.assertEqual(chosen, [])
+        self.assertEqual(self.window._last_status_message, "No photos found in that folder.")
+
+    def test_subfolders_checkbox_is_remembered_while_the_app_runs(self) -> None:
+        picker, opened = self._fake_picker(chosen=[], folder=None, accept=False, include_subfolders=True)
+        with picker:
+            self.window._pick_photo_files("Add Photos", lambda _paths: None)
+        later, opened_later = self._fake_picker(chosen=[], folder=None, accept=False)
+        with later:
+            self.window._pick_photo_files("Add Photos", lambda _paths: None)
+
+        self.assertFalse(opened[0]["include_subfolders"])
+        self.assertTrue(opened_later[0]["include_subfolders"])
+
+        # Not saved: a new session starts with it off.
+        reopened = MainWindow(settings=QSettings(str(self.settings_path), QSettings.IniFormat))
+        self.addCleanup(reopened.close)
+        self.assertFalse(reopened._picker_include_subfolders)
 
     def test_last_folder_is_remembered_between_sessions(self) -> None:
         folder = self._photo_folder()

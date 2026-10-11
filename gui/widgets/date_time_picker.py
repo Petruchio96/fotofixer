@@ -195,21 +195,7 @@ class DateTimePicker(QWidget):
         firing zone_chosen. mixed shows it in red (the photos have more than
         one time zone).
         """
-        with QSignalBlocker(self.zone_box):
-            if [self.zone_box.itemData(i) for i in range(self.zone_box.count())] == [k for k, _ in items]:
-                for index, (_key, label) in enumerate(items):
-                    self.zone_box.setItemText(index, label)
-            else:
-                self.zone_box.clear()
-                for item_key, label in items:
-                    self.zone_box.addItem(label, item_key)
-            index = self.zone_box.findData(key)
-            self.zone_box.setCurrentIndex(max(index, 0))
-        self.zone_box.setToolTip(tooltip)
-        if self.zone_box.property("mixed") != mixed:
-            self.zone_box.setProperty("mixed", mixed)
-            self.zone_box.style().unpolish(self.zone_box)
-            self.zone_box.style().polish(self.zone_box)
+        fill_zone_box(self.zone_box, items, key, mixed=mixed, tooltip=tooltip)
 
     def _user_changed(self, *_args) -> None:
         self._update_am_pm()
@@ -219,6 +205,29 @@ class DateTimePicker(QWidget):
         self.am_pm_label.setText("am" if self.hour_box.currentIndex() < 12 else "pm")
         # The hour box draws itself (see HourComboBox.paintEvent).
         self.hour_box.update()
+
+
+def fill_zone_box(box: QComboBox, items, key: str, *, mixed: bool, tooltip: str) -> None:
+    """
+    Fill a time zone drop-down ((key, label) pairs) and show one, without
+    firing its signals. mixed shows it in red (the photos have more than one
+    time zone). Shared by the date and time pickers and Change Time Zone.
+    """
+    with QSignalBlocker(box):
+        if [box.itemData(i) for i in range(box.count())] == [k for k, _ in items]:
+            for index, (_key, label) in enumerate(items):
+                box.setItemText(index, label)
+        else:
+            box.clear()
+            for item_key, label in items:
+                box.addItem(label, item_key)
+        index = box.findData(key)
+        box.setCurrentIndex(max(index, 0))
+    box.setToolTip(tooltip)
+    if box.property("mixed") != mixed:
+        box.setProperty("mixed", mixed)
+        box.style().unpolish(box)
+        box.style().polish(box)
 
 
 def _colon() -> QLabel:

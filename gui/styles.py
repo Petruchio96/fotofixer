@@ -772,6 +772,21 @@ QLabel#choiceDetail {
     font-size: 13px;
     color: #556579;
 }
+/* "Change ▾" on the chosen card while step 2 is folded up. */
+QLabel#choiceChange {
+    font-size: 12px;
+    color: #8a4b00;
+}
+QCheckBox#keepClockCheck {
+    font-size: 14px;
+    font-weight: 600;
+    color: #162131;
+}
+QLabel#keepClockNote {
+    font-size: 12px;
+    color: #556579;
+    margin-left: 19px;
+}
 QDateEdit#dateField,
 QComboBox#timeField {
     background: #ffffff;
@@ -821,6 +836,14 @@ QComboBox#timeZoneCombo[mixed="true"] {
     color: #c62828;
     border-color: #e8a0a0;
     background: #fff5f5;
+}
+/* Only the box is red (the photos have more than one zone); its list of
+   zones keeps the normal colors. */
+QComboBox#timeZoneCombo QAbstractItemView {
+    color: #162131;
+    background: #ffffff;
+    selection-background-color: #fff3e3;
+    selection-color: #162131;
 }
 QLabel#timeColon,
 QLabel#amPmLabel {

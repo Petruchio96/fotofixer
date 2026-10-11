@@ -96,6 +96,7 @@ class PhotoWorkflowFacade:
         *,
         session: WorkflowSession,
         preparation: ApplyPreparation,
+        on_progress=None,
     ) -> ApplyWorkflowResult:
         return execute_apply_workflow(
             session=session,
@@ -103,6 +104,7 @@ class PhotoWorkflowFacade:
             writer=self.writer,
             loader=self.loader,
             cache=self.metadata_cache,
+            on_progress=on_progress,
         )
 
     def clear_gps_workflow(
@@ -110,6 +112,7 @@ class PhotoWorkflowFacade:
         *,
         session: WorkflowSession,
         target_paths: list[Path],
+        on_progress=None,
     ) -> ApplyWorkflowResult:
         return clear_gps_workflow(
             session=session,
@@ -117,6 +120,7 @@ class PhotoWorkflowFacade:
             writer=self.writer,
             loader=self.loader,
             cache=self.metadata_cache,
+            on_progress=on_progress,
         )
 
     def restore_gps_states_workflow(
@@ -124,6 +128,7 @@ class PhotoWorkflowFacade:
         *,
         session: WorkflowSession,
         states: dict[Path, tuple[float | None, float | None]],
+        on_progress=None,
     ) -> ApplyWorkflowResult:
         return restore_gps_states_workflow(
             session=session,
@@ -131,6 +136,7 @@ class PhotoWorkflowFacade:
             writer=self.writer,
             loader=self.loader,
             cache=self.metadata_cache,
+            on_progress=on_progress,
         )
 
     def write_date_tags_workflow(
@@ -138,6 +144,7 @@ class PhotoWorkflowFacade:
         *,
         session: WorkflowSession,
         values_by_path: dict[Path, dict[str, str | None]],
+        on_progress=None,
     ) -> ApplyWorkflowResult:
         """
         Write date tags to photos (see services/date_time_service.py for
@@ -149,4 +156,5 @@ class PhotoWorkflowFacade:
             writer=self.writer,
             loader=self.loader,
             cache=self.metadata_cache,
+            on_progress=on_progress,
         )

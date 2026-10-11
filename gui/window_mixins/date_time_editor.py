@@ -1,5 +1,6 @@
 """
-The Date & Time tab: shift the selected photos' dates, or set one date.
+The Date & Time tab: shift the selected photos' dates, set one date, or
+change their time zone.
 
 Shift (the main job): the camera's clock was off, so every selected photo is
 off by the same amount. The tab shows a reference photo (the earliest
@@ -8,6 +9,12 @@ date and time, or copy the time from a photo known to be right that was taken
 at the same moment, and every selected photo moves by the same amount.
 
 Set: every selected photo gets one date and time.
+
+Change Time Zone: the photos get another time zone. Normally the moment they
+were taken stays the same (the clock times change); "Keep the clock time"
+keeps the clock times instead, which moves the moment (for photos whose times
+were right but whose zone was wrong). Every change works on the moment a
+photo was taken.
 
 It works like the Location tab: the photo the correct time came from is the
 "source" (blue card, SOURCE mark in the Photo List, never changed itself),
@@ -31,13 +38,23 @@ from core.time_zones import ZONES_BY_KEY, computer_utc_offset, offset_at_local
 from gui.presenters.date_time_state import (
     MODE_SET,
     MODE_SHIFT,
+    MODE_ZONE,
     DateTimeState,
     build_date_time_state,
     describe_shift,
+    keep_clock_message,
 )
-from gui.widgets.editor_panel import DATE_TIME_TAB, refresh_tab_icons
+from gui.widgets.date_time_picker import fill_zone_box
+from gui.widgets.editor_panel import CHANGE_ROW_ROLE, DATE_TIME_TAB, refresh_tab_icons
 from services.date_time_service import date_tag_values, photo_instant, photos_by_date, saved_date_tags
 from services.gps_edit_history import EDIT_DATE
+
+# Change Time Zone's drop-down hint, when the selected photos have more than
+# one time zone (it shows in red then).
+MIXED_ZONES_CHANGE_TIP = (
+    "The selected photos have more than one time zone. All of them will change "
+    "to this time zone."
+)
 
 TIME_PICK_PROMPT = (
     "Click the photo taken at the same moment as {reference}. Its time becomes "
@@ -78,9 +95,12 @@ class DateTimeEditorMixin:
     def choose_date_change_mode(self, mode: str) -> None:
         """Step 2: Shift or Set (a choice card was clicked)."""
         if mode == self._date_change_mode:
-            # Clicking the chosen card again keeps it chosen.
+            # The chosen card: while step 2 is folded up to it, open all the
+            # choices again; while open, fold back up.
+            self._date_choices_open = not self._date_choices_open
             self.update_details_panel()
             return
+        self._date_choices_open = False
         if self.is_picking_location:
             self.stop_picking_location()
         self._date_change_mode = mode
@@ -138,11 +158,43 @@ class DateTimeEditorMixin:
 
     def date_zone_chosen(self, key: str) -> None:
         """
-        A time zone picked in the drop-down: the times shown convert to it
-        (the same moment), and every photo changed gets it.
+        A time zone picked in a drop-down: the times shown convert to it
+        (the same moment), and every photo changed gets it. (Change Time
+        Zone with "Keep the clock time" keeps the clock times instead.)
         """
         self._date_zone = ZONES_BY_KEY.get(key)
         self.update_details_panel()
+
+    def keep_clock_clicked(self, checked: bool) -> None:
+        """
+        Change Time Zone's "Keep the clock time" checkbox. Turning it on asks
+        first (it moves the moment the photos were taken); Cancel unchecks
+        it. Turning it off needs no question.
+        """
+        if not checked:
+            self._date_keep_clock = False
+            self.update_details_panel()
+            return
+        state = self._build_date_time_state()
+        zone = ZONES_BY_KEY.get(state.zone_key)
+        dialog = QMessageBox(self)
+        dialog.setIcon(QMessageBox.Question)
+        dialog.setWindowTitle("Keep the Clock Time?")
+        dialog.setText(
+            keep_clock_message(self.session.loaded_photo_infos, self.get_selected_paths(), zone)
+            if zone is not None
+            else "When enabled, the photos keep their clock times and only get the new time zone."
+        )
+        keep_button = dialog.addButton("Keep Clock Time", QMessageBox.AcceptRole)
+        dialog.addButton(QMessageBox.Cancel)
+        dialog.setDefaultButton(keep_button)
+
+        def closed(button) -> None:
+            self._date_keep_clock = button is keep_button
+            self.date_keep_clock_check.setChecked(self._date_keep_clock)
+            self.update_details_panel()
+
+        self.show_message(dialog, closed)
 
     def date_set_value_edited(self) -> None:
         self._date_set_value = self.date_set_picker.value()
@@ -301,6 +353,10 @@ class DateTimeEditorMixin:
         self._date_shift = timedelta(0)
         self._date_reference = None
         self._date_zone = None
+        self._date_keep_clock = False
+        self._date_choices_open = False
+        if hasattr(self, "date_keep_clock_check"):
+            self.date_keep_clock_check.setChecked(False)
         self._set_time_source(None)
 
     def _build_date_time_state(self) -> DateTimeState:
@@ -321,6 +377,7 @@ class DateTimeEditorMixin:
             set_value=self._date_set_value or datetime.now().replace(microsecond=0),
             source=self._time_source,
             zone=self._date_zone,
+            keep_clock=self._date_keep_clock,
             computer_offset=computer_utc_offset(),
         )
 
@@ -329,6 +386,7 @@ class DateTimeEditorMixin:
         self._apply_date_steps(state)
         self.date_shift_box.setVisible(shift_mode)
         self.date_set_box.setVisible(self._date_change_mode == MODE_SET)
+        self.date_zone_box.setVisible(self._date_change_mode == MODE_ZONE)
 
         # Reference card.
         has_reference = state.reference is not None
@@ -374,10 +432,19 @@ class DateTimeEditorMixin:
                 mixed=state.zone_mixed,
                 tooltip=state.zone_tooltip,
             )
+        fill_zone_box(
+            self.date_zone_combo,
+            state.zone_items,
+            state.zone_key,
+            mixed=state.zone_mixed,
+            # Only worth a hint when the photos are in several zones (red).
+            tooltip=MIXED_ZONES_CHANGE_TIP if state.zone_mixed else "",
+        )
         # Off (and blank) until a photo is selected, then always available,
         # even when the selected photos have no date (and no reference).
-        for picker in (self.date_reference_picker, self.date_set_picker):
-            picker.zone_box.setEnabled(state.selected_count > 0)
+        for box in (self.date_reference_picker.zone_box, self.date_set_picker.zone_box, self.date_zone_combo):
+            box.setEnabled(state.selected_count > 0)
+        self.date_keep_clock_check.setChecked(self._date_keep_clock)
 
         self._fill_date_changes_list(state)
         self.date_hint_label.setText(state.hint)
@@ -395,7 +462,8 @@ class DateTimeEditorMixin:
         has_photos = bool(self.session.selected_paths)
         selected = state.selected_count
         mode = self._date_change_mode
-        done = [selected > 0, selected > 0 and mode is not None, False]
+        # Step 2 isn't done while its choices are open again (step 3 waits).
+        done = [selected > 0, selected > 0 and mode is not None and not self._date_choices_open, False]
         done[2] = done[1] and state.can_apply
 
         select_step, mode_step, correct_step, apply_step = self.date_steps
@@ -411,12 +479,23 @@ class DateTimeEditorMixin:
         )
         self.step_select_hint.setVisible(not done[0])
 
-        mode_step.set_state("locked" if not done[0] else "done" if done[1] else "active")
-        for card, card_mode in ((self.date_shift_choice, MODE_SHIFT), (self.date_set_choice, MODE_SET)):
+        # Step 2 folds up to the chosen card (more room for step 3); clicking
+        # it opens all three choices again.
+        folded = done[1]
+        mode_step.set_state("locked" if not done[0] else "done" if folded else "active")
+        for card_mode, card in self.date_choice_cards.items():
             card.setChecked(mode == card_mode)
             card.setEnabled(True)
+            card.setVisible(not folded or mode == card_mode)
+            card.set_folded(folded and mode == card_mode)
 
-        correct_step.title.setText("Enter the date and time" if mode == MODE_SET else "Correct the date and time")
+        correct_step.title.setText(
+            "Enter the date and time"
+            if mode == MODE_SET
+            else "Choose the new time zone"
+            if mode == MODE_ZONE
+            else "Correct the date and time"
+        )
         correct_step.set_state("locked" if not done[1] else "done" if done[2] else "active")
         apply_step.set_state("active" if done[2] else "locked")
 
@@ -458,8 +537,8 @@ class DateTimeEditorMixin:
             for row in state.rows:
                 new = f"→  {row.new}" if row.kind == "change" else row.new
                 item = QTreeWidgetItem([row.name, row.current, new])
-                item.setToolTip(0, row.name)
-                item.setToolTip(1, f"Current date: {row.current}")
+                # For the hover hint when the row is cut short (DateChangesList).
+                item.setData(0, CHANGE_ROW_ROLE, (row.name, row.current, row.new or "Not changed"))
                 item.setForeground(1, QBrush(MUTED_COLOR))
                 color = {
                     "change": NEW_DATE_COLOR,
@@ -500,43 +579,62 @@ class DateTimeEditorMixin:
         }
         selected_before = self.get_selected_paths()
 
-        result = self.workflow.write_date_tags_workflow(session=self.session, values_by_path=values)
-        self.session = result.session
-        execution = result.execution_result
-        succeeded = execution.successful_paths
-        if succeeded:
-            self._remember_gps_edit(
-                before_states={path: before[path] for path in succeeded},
-                after_states={path: values[path] for path in succeeded},
-                kind=EDIT_DATE,
-            )
-        else:
-            self._clear_gps_edit_history()
-
-        # Start over for the next change (back to step 1).
-        shift_text = describe_shift(state.shift)
-        state_mode = self._date_change_mode
-        self.reset_date_change()
-
-        # Deselect what changed; keep failures selected to retry.
-        self._rerender_selecting(
-            self._failed_targets(selected_before, list(plan.new_dates), succeeded)
-        )
-        if succeeded:
-            count = len(succeeded)
-            photos = f"{count} photo{'' if count == 1 else 's'}"
-            if state_mode == MODE_SHIFT:
-                message = f"Shifted {photos} ({shift_text})."
+        # The writes run in the background with a progress bar (see _run_writes).
+        def done(result) -> None:
+            self.session = result.session
+            execution = result.execution_result
+            succeeded = execution.successful_paths
+            if succeeded:
+                self._remember_gps_edit(
+                    before_states={path: before[path] for path in succeeded},
+                    after_states={path: values[path] for path in succeeded},
+                    kind=EDIT_DATE,
+                )
             else:
-                message = f"Set the date on {photos} to {format_display_datetime(state.plan.new_dates[succeeded[0]])}."
-            self._set_status_message(message, "success", undo=True)
-        self._report_write_failures("change the date of", execution.failed_paths)
+                self._clear_gps_edit_history()
 
-    def _restore_date_states(self, states: dict) -> tuple[list[str], list[Path]]:
+            # Start over for the next change (back to step 1).
+            shift_text = describe_shift(state.shift)
+            state_mode = self._date_change_mode
+            self.reset_date_change()
+
+            # Deselect what changed; keep failures selected to retry.
+            self._rerender_selecting(
+                self._failed_targets(selected_before, list(plan.new_dates), succeeded)
+            )
+            if succeeded:
+                count = len(succeeded)
+                photos = f"{count} photo{'' if count == 1 else 's'}"
+                if state_mode == MODE_SHIFT:
+                    message = f"Shifted {photos} ({shift_text})."
+                elif state_mode == MODE_ZONE:
+                    zone = ZONES_BY_KEY.get(state.zone_key)
+                    message = f"Changed the time zone of {photos}" + (f" to {zone.name}." if zone else ".")
+                else:
+                    message = f"Set the date on {photos} to {format_display_datetime(state.plan.new_dates[succeeded[0]])}."
+                self._set_status_message(message, "success", undo=True)
+            self._report_write_failures("change the date of", execution.failed_paths)
+
+        self._run_writes(
+            "Changing time zones" if self._date_change_mode == MODE_ZONE else "Changing dates",
+            len(values),
+            lambda progress: self.workflow.write_date_tags_workflow(
+                session=self.session,
+                values_by_path=values,
+                on_progress=progress,
+            ),
+            done,
+        )
+
+    def _restore_date_states(self, states: dict, text: str, on_done) -> None:
         """Undo/redo of a date change: write the remembered date tags back."""
-        return self._restore_states(
-            lambda: self.workflow.write_date_tags_workflow(
+        self._restore_states(
+            text,
+            len(states),
+            lambda progress: self.workflow.write_date_tags_workflow(
                 session=self.session,
                 values_by_path=states,
-            )
+                on_progress=progress,
+            ),
+            on_done,
         )

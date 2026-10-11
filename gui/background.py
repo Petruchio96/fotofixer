@@ -22,7 +22,7 @@ import threading
 import time
 from collections.abc import Callable
 
-from PySide6.QtCore import QObject, Qt, Signal
+from PySide6.QtCore import QEvent, QObject, Qt, Signal
 
 
 class CancelToken:
@@ -186,3 +186,35 @@ class BackgroundRunner(QObject):
             except Exception:
                 # Report it (see error_log.py) and keep delivering the rest.
                 sys.excepthook(*sys.exc_info())
+
+
+class InputBlocker(QObject):
+    """
+    While installed on the application, swallows clicks, keys, the mouse
+    wheel, and shortcuts aimed at one window, so nothing can change while
+    background work writes to the photos (the window still repaints and
+    shows its progress). Install with QApplication.installEventFilter.
+    """
+
+    BLOCKED = {
+        QEvent.MouseButtonPress,
+        QEvent.MouseButtonRelease,
+        QEvent.MouseButtonDblClick,
+        QEvent.KeyPress,
+        QEvent.KeyRelease,
+        QEvent.Wheel,
+        QEvent.Shortcut,
+        QEvent.ShortcutOverride,
+        QEvent.ContextMenu,
+    }
+
+    def __init__(self, window) -> None:
+        super().__init__(window)
+        self._window = window
+
+    def eventFilter(self, watched: QObject, event: QEvent) -> bool:
+        if event.type() not in self.BLOCKED:
+            return False
+        window = watched.window() if hasattr(watched, "window") else None
+        # The main window and anything it opened (the map, menus).
+        return window is self._window or (window is not None and window.parent() is self._window)

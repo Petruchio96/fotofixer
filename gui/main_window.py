@@ -25,7 +25,7 @@ from PySide6.QtWidgets import (
 
 from core.places import photos_in_folders
 from core.runtime_paths import resource_path
-from gui.background import BackgroundRunner
+from gui.background import BackgroundRunner, InputBlocker
 from gui.styles import APP_STYLESHEET
 from gui.thumbnail_loader import ThumbnailLoader
 from gui.widgets.browser_panel import build_browser_panel
@@ -42,7 +42,7 @@ from services.gps_edit_history import EDIT_DATE, EDIT_GPS, GpsEditHistory, Photo
 from services.models import OverwriteEntry, WorkflowSession
 from services.workflow_facade import PhotoWorkflowFacade
 
-APP_VERSION = "1.6.1"
+APP_VERSION = "1.6.2"
 
 # QSettings key for the "Keep Backup Copies of Originals" option.
 KEEP_BACKUPS_SETTING = "keep_backup_copies"
@@ -117,8 +117,14 @@ class MainWindow(
         self._date_set_value = None
         # The time zone chosen in the drop-down, or None (each photo keeps its own).
         self._date_zone = None
+        # Change Time Zone's "Keep the clock time" (off: the moment stays).
+        self._date_keep_clock = False
+        # Step 2 opened again (all three choices showing) after one was chosen.
+        self._date_choices_open = False
         # Date & Time mode's camera filter: "all" or one camera's name.
         self._camera_filter = "all"
+        # Set while _run_writes writes to the photos (input is blocked).
+        self._input_blocker = None
         # Message boxes open right now (see show_message).
         self._open_messages: list[QMessageBox] = []
         self._last_status_message = ""
@@ -268,6 +274,10 @@ class MainWindow(
         self._shimmer_clock = QElapsedTimer()
 
     def closeEvent(self, event) -> None:
+        if self._input_blocker is not None:
+            # Writing to the photos: closing now could leave a change half done.
+            event.ignore()
+            return
         settings_dialog = getattr(self, "_settings_dialog", None)
         if settings_dialog is not None and settings_dialog.isVisible():
             settings_dialog.reject()
@@ -443,12 +453,15 @@ class MainWindow(
             return
 
         what = "date" if self.gps_history.kind == EDIT_DATE else "GPS"
-        failed_paths, _backups = self._restore_edit_states(states)
-        failed_paths += self._delete_backups(self.gps_history.backups)
-        self.gps_history.mark_undone()
-        self._update_undo_redo_actions()
-        self._report_write_failures(f"undo the {what} change for", failed_paths)
-        self._set_status_message(f"{what[0].upper()}{what[1:]} change undone.", "info")
+
+        def done(failed_paths: list[str], _backups: list[Path]) -> None:
+            failed_paths += self._delete_backups(self.gps_history.backups)
+            self.gps_history.mark_undone()
+            self._update_undo_redo_actions()
+            self._report_write_failures(f"undo the {what} change for", failed_paths)
+            self._set_status_message(f"{what[0].upper()}{what[1:]} change undone.", "info")
+
+        self._restore_edit_states(states, f"Undoing the {what} change", done)
 
     def redo_gps_edit(self) -> None:
         states = self.gps_history.redo_states()
@@ -456,37 +469,50 @@ class MainWindow(
             return
 
         what = "date" if self.gps_history.kind == EDIT_DATE else "GPS"
-        failed_paths, backups = self._restore_edit_states(states)
-        # Redo made the backups again: the next undo deletes these.
-        self.gps_history.set_backups(tuple(backups))
-        self.gps_history.mark_redone()
-        self._update_undo_redo_actions()
-        self._report_write_failures(f"redo the {what} change for", failed_paths)
-        self._set_status_message(f"{what[0].upper()}{what[1:]} change redone.", "info")
 
-    def _restore_edit_states(self, states: dict) -> tuple[list[str], list[Path]]:
-        """Write the remembered states back, GPS or dates (see gps_history.kind)."""
+        def done(failed_paths: list[str], backups: list[Path]) -> None:
+            # Redo made the backups again: the next undo deletes these.
+            self.gps_history.set_backups(tuple(backups))
+            self.gps_history.mark_redone()
+            self._update_undo_redo_actions()
+            self._report_write_failures(f"redo the {what} change for", failed_paths)
+            self._set_status_message(f"{what[0].upper()}{what[1:]} change redone.", "info")
+
+        self._restore_edit_states(states, f"Redoing the {what} change", done)
+
+    def _restore_edit_states(self, states: dict, text: str, on_done) -> None:
+        """
+        Write the remembered states back, GPS or dates (see gps_history.kind),
+        then on_done(failure messages, backups made).
+        """
         if self.gps_history.kind == EDIT_DATE:
-            return self._restore_date_states(states)
-        return self._restore_gps_states(states)
+            self._restore_date_states(states, text, on_done)
+        else:
+            self._restore_gps_states(states, text, on_done)
 
     def _restore_gps_states(
         self,
         states: dict[Path, tuple[float | None, float | None]],
-    ) -> tuple[list[str], list[Path]]:
-        return self._restore_states(
-            lambda: self.workflow.restore_gps_states_workflow(
+        text: str,
+        on_done,
+    ) -> None:
+        self._restore_states(
+            text,
+            len(states),
+            lambda progress: self.workflow.restore_gps_states_workflow(
                 session=self.session,
                 states=states,
-            )
+                on_progress=progress,
+            ),
+            on_done,
         )
 
-    def _restore_states(self, write) -> tuple[list[str], list[Path]]:
+    def _restore_states(self, text: str, total: int, write, on_done) -> None:
         """
-        Write remembered states back to files (write() does it and returns
-        the workflow result), and put the photo list back the way it was
-        when the edit was made. Returns failure messages, and the backups
-        the writes made (added to the list).
+        Write remembered states back to files in the background (write does
+        it; see _run_writes), and put the photo list back the way it was
+        when the edit was made. Then on_done(failure messages, the backups
+        the writes made, which are added to the list).
         """
         # A load still running would replace the list put back here.
         self.cancel_loading()
@@ -499,17 +525,75 @@ class MainWindow(
                 path for path in self.session.target_paths if path in kept
             ]
 
-        result = write()
-        self.session = result.session
-        self._render_current_photo_session()
-        if snapshot is not None:
-            self.select_browser_paths(list(snapshot.selected))
-        else:
-            self.list_widget.clearSelection()
-            self.update_details_panel()
-        backups = self._take_new_backups()
-        self._add_backups_to_list(backups)
-        return list(result.execution_result.failed_paths), backups
+        def done(result) -> None:
+            self.session = result.session
+            self._render_current_photo_session()
+            if snapshot is not None:
+                self.select_browser_paths(list(snapshot.selected))
+            else:
+                self.list_widget.clearSelection()
+                self.update_details_panel()
+            backups = self._take_new_backups()
+            self._add_backups_to_list(backups)
+            on_done(list(result.execution_result.failed_paths), backups)
+
+        self._run_writes(text, total, write, done)
+
+    def _run_writes(self, text: str, total: int, write, on_done) -> None:
+        """
+        Write to the photos in the background (writing to many photos, or
+        photos on a network share, can take a while), with a progress bar
+        under the Photo List ("Changing dates… 37 of 114") and the window
+        ignoring clicks and keys until it's done.
+
+        Args:
+            text:
+                What is happening, e.g. "Changing dates".
+            total:
+                How many photos are written.
+            write:
+                write(on_progress) does the writes on the background thread
+                and returns the workflow result; on_progress(done, total)
+                is called after each photo.
+            on_done:
+                on_done(result) runs on the GUI thread when it's finished.
+        """
+        # A load still running would use ExifTool at the same time.
+        self.cancel_loading(update_indicator=False)
+        self._input_blocker = InputBlocker(self)
+        QApplication.instance().installEventFilter(self._input_blocker)
+        QApplication.setOverrideCursor(Qt.WaitCursor)
+        self.loading_indicator.begin(f"{text}… 0 of {total}", total, cancellable=False)
+
+        def progress(done: int, count: int) -> None:
+            # Called on the background thread: the bar updates on the GUI thread.
+            self.background.post(
+                lambda value: self.loading_indicator.set_progress(*value, f"{text}… {value[0]} of {value[1]}"),
+                (done, count),
+            )
+
+        def finished(result) -> None:
+            self._end_writes()
+            on_done(result)
+
+        def failed(exc: BaseException) -> None:
+            self._end_writes()
+            dialog = QMessageBox(self)
+            dialog.setIcon(QMessageBox.Warning)
+            dialog.setWindowTitle("Could Not Change the Photos")
+            dialog.setText(f"The change could not be finished:\n\n{exc}")
+            dialog.setStandardButtons(QMessageBox.Ok)
+            self.show_message(dialog)
+
+        self.background.submit(lambda: write(progress), finished, failed)
+
+    def _end_writes(self) -> None:
+        if self._input_blocker is not None:
+            QApplication.instance().removeEventFilter(self._input_blocker)
+            self._input_blocker.deleteLater()
+            self._input_blocker = None
+            QApplication.restoreOverrideCursor()
+        self.loading_indicator.finish()
 
     def _take_new_backups(self) -> list[Path]:
         """

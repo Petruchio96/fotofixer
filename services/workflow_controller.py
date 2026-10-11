@@ -120,6 +120,7 @@ def execute_apply_workflow(
     writer,
     loader,
     cache=None,
+    on_progress=None,
 ) -> ApplyWorkflowResult:
     """
     Execute an apply action and refresh selected-photo state afterward.
@@ -133,6 +134,7 @@ def execute_apply_workflow(
         latitude=coordinates.latitude,
         longitude=coordinates.longitude,
         writer=writer,
+        on_progress=on_progress,
     )
     refreshed_session = refresh_photo_workflow(session, loader, cache)
     return ApplyWorkflowResult(
@@ -148,11 +150,12 @@ def clear_gps_workflow(
     writer,
     loader,
     cache=None,
+    on_progress=None,
 ) -> ApplyWorkflowResult:
     """
     Clear GPS from the target files and refresh selected-photo state afterward.
     """
-    execution_result = clear_gps_from_paths(target_paths, writer=writer)
+    execution_result = clear_gps_from_paths(target_paths, writer=writer, on_progress=on_progress)
     refreshed_session = refresh_photo_workflow(session, loader, cache)
     return ApplyWorkflowResult(
         session=refreshed_session,
@@ -167,13 +170,14 @@ def restore_gps_states_workflow(
     writer,
     loader,
     cache=None,
+    on_progress=None,
 ) -> ApplyWorkflowResult:
     """
     Restore GPS metadata states and refresh selected-photo workflow state.
 
     Every file is attempted even if some fail; failures are in the result.
     """
-    execution_result = restore_gps_states(states, writer=writer)
+    execution_result = restore_gps_states(states, writer=writer, on_progress=on_progress)
     refreshed_session = refresh_photo_workflow(session, loader, cache)
     return ApplyWorkflowResult(
         session=refreshed_session,
@@ -188,13 +192,14 @@ def write_date_tags_workflow(
     writer,
     loader,
     cache=None,
+    on_progress=None,
 ) -> ApplyWorkflowResult:
     """
     Write date tags (a date change, or its undo/redo) and refresh the
     selected-photo state afterward. Every file is attempted even if some
     fail; failures are in the result.
     """
-    execution_result = write_date_tags_to_paths(values_by_path, writer=writer)
+    execution_result = write_date_tags_to_paths(values_by_path, writer=writer, on_progress=on_progress)
     if cache is not None:
         # The file's modified time is part of the cache key and was just set
         # (undo can set it back to an earlier value): read these files again.

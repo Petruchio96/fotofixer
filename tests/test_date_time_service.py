@@ -11,6 +11,7 @@ from services.date_time_service import (
     photos_by_date,
     plan_set,
     plan_shift,
+    plan_zone_change,
     saved_date_tags,
 )
 
@@ -158,6 +159,58 @@ class TimeZoneShiftTests(unittest.TestCase):
         values = date_tag_values(plan.new_dates[photo.path], plan.new_offsets[photo.path])
         self.assertEqual(values["OffsetTimeOriginal"], "-05:00")
         self.assertEqual(values["OffsetTime"], "-05:00")
+
+
+
+class ZoneChangeTests(unittest.TestCase):
+    """Change Time Zone: the same moment by default, or the same clock time."""
+
+    def setUp(self) -> None:
+        # The wedding photos: right clock time (Central), wrong zone (MDT).
+        self.wedding = info("w.jpg", datetime(2026, 5, 23, 11, 16, 41), offset=timedelta(hours=-6))
+        self.no_zone = info("n.jpg", datetime(2026, 5, 23, 11, 30, 10))
+        self.undated = info("u.jpg", None)
+        self.infos = {p.path: p for p in (self.wedding, self.no_zone, self.undated)}
+        self.paths = list(self.infos)
+
+    def test_same_moment_changes_the_clock(self) -> None:
+        plan = plan_zone_change(self.infos, self.paths, ZONES_BY_KEY["central"])
+        self.assertEqual(plan.new_dates[self.wedding.path], datetime(2026, 5, 23, 12, 16, 41))
+        self.assertEqual(plan.new_offsets[self.wedding.path], timedelta(hours=-5))
+
+    def test_keep_clock_changes_only_the_zone(self) -> None:
+        plan = plan_zone_change(self.infos, self.paths, ZONES_BY_KEY["central"], keep_clock=True)
+        self.assertEqual(plan.new_dates[self.wedding.path], datetime(2026, 5, 23, 11, 16, 41))
+        self.assertEqual(plan.new_offsets[self.wedding.path], timedelta(hours=-5))
+
+    def test_photo_without_a_zone_keeps_its_clock_either_way(self) -> None:
+        for keep_clock in (False, True):
+            plan = plan_zone_change(self.infos, self.paths, ZONES_BY_KEY["central"], keep_clock=keep_clock)
+            self.assertEqual(plan.new_dates[self.no_zone.path], datetime(2026, 5, 23, 11, 30, 10))
+            self.assertEqual(plan.new_offsets[self.no_zone.path], timedelta(hours=-5))
+
+    def test_undated_photos_are_skipped(self) -> None:
+        for keep_clock in (False, True):
+            plan = plan_zone_change(self.infos, self.paths, ZONES_BY_KEY["central"], keep_clock=keep_clock)
+            self.assertEqual(plan.skipped_undated, [self.undated.path])
+            self.assertNotIn(self.undated.path, plan.new_dates)
+
+    def test_photos_already_in_the_zone_are_unchanged(self) -> None:
+        for keep_clock in (False, True):
+            plan = plan_zone_change(self.infos, [self.wedding.path], ZONES_BY_KEY["mountain"], keep_clock=keep_clock)
+            self.assertEqual(plan.new_dates, {})
+            self.assertEqual(plan.unchanged, [self.wedding.path])
+
+    def test_to_europe_across_daylight_saving(self) -> None:
+        # Paris changes clocks on 2026-10-25, Denver on 2026-11-01.
+        before = info("b.jpg", datetime(2026, 10, 24, 10, 5), offset=timedelta(hours=-6))
+        between = info("m.jpg", datetime(2026, 10, 28, 10, 5), offset=timedelta(hours=-6))
+        infos = {before.path: before, between.path: between}
+        plan = plan_zone_change(infos, list(infos), ZONES_BY_KEY["paris"])
+        self.assertEqual(plan.new_dates[before.path], datetime(2026, 10, 24, 18, 5))
+        self.assertEqual(plan.new_offsets[before.path], timedelta(hours=2))
+        self.assertEqual(plan.new_dates[between.path], datetime(2026, 10, 28, 17, 5))
+        self.assertEqual(plan.new_offsets[between.path], timedelta(hours=1))
 
 
 if __name__ == "__main__":

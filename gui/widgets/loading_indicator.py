@@ -111,7 +111,7 @@ class LoadingIndicator(QStackedWidget):
         """True while the progress row (not the hint) is on screen."""
         return self._showing
 
-    def begin(self, text: str, total: int | None = None) -> None:
+    def begin(self, text: str, total: int | None = None, *, cancellable: bool = True) -> None:
         """
         Start (or continue) a loading phase.
 
@@ -120,7 +120,11 @@ class LoadingIndicator(QStackedWidget):
                 What is happening, for example "Reading GPS data…".
             total:
                 Number of steps, or None for a bar that just keeps moving.
+            cancellable:
+                Show the Cancel button (not while writing to the photos: a
+                change stopped halfway would be hard to undo).
         """
+        self.cancel_button.setVisible(cancellable)
         self._active = True
         self._hide_timer.stop()
         self._set_text_and_range(text, total)

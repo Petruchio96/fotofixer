@@ -10,7 +10,8 @@ Why this file exists:
 Shift, in short: the reference photo (the earliest selected, unless another
 is chosen) gets its correct date and time; every selected photo with a date
 moves by the same amount. A photo the correct time was copied from is never
-changed.
+changed. Change Time Zone gives the selected photos another zone: the same
+moment by default, or the same clock time (keep_clock).
 """
 
 from __future__ import annotations
@@ -28,6 +29,7 @@ from core.time_zones import (
     abbreviation,
     default_zone,
     describe_offset,
+    offset_at_local,
     zone_label,
 )
 from services.date_time_service import (
@@ -36,6 +38,7 @@ from services.date_time_service import (
     photos_by_date,
     plan_set,
     plan_shift,
+    plan_zone_change,
     shifted_clock,
 )
 
@@ -48,6 +51,7 @@ MIXED_ZONES_TIP = (
 
 MODE_SHIFT = "shift"
 MODE_SET = "set"
+MODE_ZONE = "zone"
 
 @dataclass(frozen=True)
 class ChangeRow:
@@ -138,6 +142,7 @@ def build_date_time_state(
     set_value: datetime,
     source: Path | None,
     zone: Zone | None = None,
+    keep_clock: bool = False,
     now: datetime | None = None,
     computer_offset: timedelta = timedelta(0),
 ) -> DateTimeState:
@@ -159,14 +164,18 @@ def build_date_time_state(
             the change when it is also selected.
         zone:
             The time zone chosen in the drop-down, or None if left alone
-            (then every photo keeps its own time zone).
+            (then every photo keeps its own time zone; Change Time Zone
+            uses the default zone shown).
+        keep_clock:
+            Change Time Zone: keep the clock times instead of the moment.
         now / computer_offset:
             The date for zone labels when there is none, and the fallback
             for an unusual offset (see core/time_zones.default_zone).
     """
     now = now or datetime.now().replace(microsecond=0)
     count = len(selected_paths)
-    source_selected = source is not None and source in selected_paths
+    # The photo the time was copied from only matters to Shift.
+    source_selected = mode != MODE_ZONE and source is not None and source in selected_paths
     exclude = source if source_selected else None
     dated = photos_by_date(photo_infos, selected_paths, exclude=exclude)
 
@@ -205,16 +214,6 @@ def build_date_time_state(
         reference_detail = ""
         corrected = None
 
-    # What will change.
-    if mode == MODE_SHIFT:
-        plan = plan_shift(photo_infos, selected_paths, shift, exclude=exclude, zone=zone)
-    elif mode == MODE_SET:
-        plan = plan_set(photo_infos, selected_paths, set_value, zone=zone)
-    else:
-        # Step 2 not done yet: nothing to change.
-        plan = DatePlan()
-    rows = _rows(photo_infos, selected_paths, plan, mode, exclude, zone) if mode else []
-
     # Time zone drop-down: blank until a photo is selected, then the
     # default comes from the selected photos.
     selected_infos = [photo_infos[path] for path in selected_paths if path in photo_infos]
@@ -227,6 +226,23 @@ def build_date_time_state(
         if selected_infos
         else None
     )
+    if mode == MODE_ZONE and zone is None:
+        # Change Time Zone always has a zone: the one shown (the photos' most
+        # common zone; the computer's when none of them has one).
+        zone = default or default_zone([], computer_offset=computer_offset, now=now)
+        default = zone
+
+    # What will change.
+    if mode == MODE_SHIFT:
+        plan = plan_shift(photo_infos, selected_paths, shift, exclude=exclude, zone=zone)
+    elif mode == MODE_SET:
+        plan = plan_set(photo_infos, selected_paths, set_value, zone=zone)
+    elif mode == MODE_ZONE:
+        plan = plan_zone_change(photo_infos, selected_paths, zone, keep_clock=keep_clock)
+    else:
+        # Step 2 not done yet: nothing to change.
+        plan = DatePlan()
+    rows = _rows(photo_infos, selected_paths, plan, mode, exclude, zone) if mode else []
     # The red warning is about the photos that would change: the selection
     # only (with nothing selected, nothing changes).
     offsets = {
@@ -235,7 +251,12 @@ def build_date_time_state(
         if path in photo_infos and photo_infos[path].time_offset is not None
     }
     zone_mixed = len(offsets) > 1
-    label_date = (corrected if mode == MODE_SHIFT else set_value) or now
+    if mode == MODE_SHIFT:
+        label_date = corrected or now
+    elif mode == MODE_ZONE:
+        label_date = (photo_infos[dated[0]].date_taken if dated else None) or now
+    else:
+        label_date = set_value or now
     items = [(z.key, zone_label(z, label_date)) for z in ZONES]
     if default is None:
         # Nothing selected: an empty box; selected photos without a zone:
@@ -264,13 +285,15 @@ def build_date_time_state(
                 "Check that all of their clocks were off by the same amount."
             )
             tone = "warning"
-        if mode == MODE_SHIFT and plan.skipped_undated:
+        if mode in (MODE_SHIFT, MODE_ZONE) and plan.skipped_undated:
             skipped = len(plan.skipped_undated)
             hints.append(
                 f"{_photos_lower(skipped)} without a date will be skipped "
                 f"(use Set One Date and Time for {'it' if skipped == 1 else 'them'})."
             )
             tone = "warning"
+        if mode == MODE_ZONE and dated and not plan.new_dates:
+            hints.append("The selected photos are already in this time zone. Choose another one.")
 
     changing = len(plan.new_dates)
     can_apply = changing > 0
@@ -278,6 +301,12 @@ def build_date_time_state(
         apply_label = "Apply"
     elif mode == MODE_SHIFT:
         apply_label = f"Shift {_photos(len(dated))}" if dated else "Shift Selected Photos"
+    elif mode == MODE_ZONE:
+        apply_label = (
+            f"Change Time Zone of {_photos(len(plan.new_dates))}"
+            if plan.new_dates
+            else "Change Time Zone of Selected Photos"
+        )
     else:
         apply_label = f"Set Date on {_photos(count)}" if count else "Set Date on Selected Photos"
 
@@ -308,6 +337,37 @@ def build_date_time_state(
     )
 
 
+def keep_clock_message(
+    photo_infos: Mapping[Path, PhotoInfo],
+    selected_paths: list[Path],
+    zone: Zone,
+) -> str:
+    """
+    The "Keep the Clock Time?" pop-up's text, with an example from the
+    earliest selected photo that has a date and a zone (11:16 am MDT →
+    11:16 am CDT, and how far that moves the moment).
+    """
+    text = "When enabled, the photos keep their clock times and only get the new time zone"
+    for path in photos_by_date(photo_infos, selected_paths):
+        info = photo_infos[path]
+        if info.time_offset is None:
+            continue
+        clock = format_display_datetime(info.date_taken).split(" ", 1)[1]
+        new_offset = offset_at_local(zone, info.date_taken)
+        moved = describe_shift(info.time_offset - new_offset).replace(" later", "").replace(" earlier", "")
+        example = (
+            f"{clock} {describe_offset(info.time_offset, info.date_taken)} → "
+            f"{clock} {abbreviation(zone, info.date_taken)}"
+        )
+        if moved:
+            return (
+                f"{text}: {example}. That moves the moment they were taken by the "
+                f"difference between the zones ({moved} here)."
+            )
+        return f"{text}: {example}."
+    return f"{text}, which moves the moment they were taken by the difference between the zones."
+
+
 def _with_zone(value: datetime | None, offset: timedelta | None) -> str:
     """'10/03/2026 9:14:02am MDT'; a photo without a zone, just the date."""
     text = format_display_datetime(value)
@@ -336,9 +396,13 @@ def _rows(
         return _with_zone(info.date_taken, info.time_offset)
 
     def new_text(path: Path, new: datetime) -> str:
-        if zone is not None:
-            return f"{format_display_datetime(new)} {abbreviation(zone, new)}"
         info = photo_infos.get(path)
+        if zone is not None:
+            text = f"{format_display_datetime(new)} {abbreviation(zone, new)}"
+            if mode == MODE_ZONE and info is not None and info.time_offset is None:
+                # No zone before, so no known moment: the clock time is kept.
+                text += " (time kept, time zone added)"
+            return text
         return _with_zone(new, info.time_offset if info is not None else None)
 
     ordered = photos_by_date(photo_infos, selected_paths, exclude=exclude)
@@ -359,6 +423,6 @@ def _rows(
         )
     if exclude is not None:
         rows.append(ChangeRow(exclude.name, current(exclude), "Source, not changed", "source"))
-    if mode == MODE_SHIFT:
+    if mode in (MODE_SHIFT, MODE_ZONE):
         rows.extend(ChangeRow(path.name, "No date", "Skipped", "skipped") for path in undated)
     return rows

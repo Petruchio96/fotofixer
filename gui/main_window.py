@@ -106,7 +106,10 @@ class MainWindow(
         # Date & Time tab (see DateTimeEditorMixin): Shift or Set, the
         # reference photo chosen with the arrows (None: the earliest), the
         # shift entered, the photo the correct time came from, and Set's date.
-        self._date_change_mode = "shift"
+        # None until Shift or Set is chosen (step 2).
+        self._date_change_mode = None
+        # The step the Date & Time tab last scrolled to.
+        self._date_active_step = None
         self._date_reference = None
         self._date_shift = timedelta(0)
         self._time_source = None

@@ -688,29 +688,89 @@ QGroupBox#locationGroup {
 QGroupBox#locationGroup::title {
     color: #1f5fc4;
 }
-/* Date & Time tab: orange box, since it holds what is about to change. */
-QGroupBox#dateGroup {
-    background: #fffaf3;
-    border: 1px solid #f0c48a;
-}
-QGroupBox#dateGroup::title {
-    color: #b45f06;
-}
-QComboBox#dateModeCombo {
-    background: #ffffff;
-    color: #7a4100;
-    border: 1px solid #f0c48a;
-    border-radius: 10px;
-    padding: 6px 10px;
-    min-height: 22px;
-}
 QScrollArea#dateScroll,
 QWidget#dateScrollContent {
     background: transparent;
 }
-QLabel#dateModeHelp {
+/* Date & Time steps: orange = the step to do now, navy ✓ = done, grey = later. */
+QFrame#stepBox {
+    border: 1px solid #e1e8ef;
+    border-radius: 12px;
+    background: #ffffff;
+}
+QFrame#stepBox[state="active"] {
+    border-color: #f0c48a;
+    background: #fffaf3;
+}
+QFrame#stepBox[state="locked"] {
+    background: #f7f9fb;
+}
+QLabel#stepCircle {
+    border-radius: 14px;
+    font-weight: 700;
+    font-size: 14px;
+    background: #26425f;
+    color: #ffffff;
+}
+QFrame#stepBox[state="active"] QLabel#stepCircle {
+    background: #d97706;
+}
+QFrame#stepBox[state="locked"] QLabel#stepCircle {
+    background: #e3e9f0;
+    color: #8c9aa8;
+}
+QLabel#stepTitle {
+    font-weight: 700;
+    font-size: 15px;
+    color: #162131;
+}
+QFrame#stepBox[state="locked"] QLabel#stepTitle {
+    color: #8c9aa8;
+}
+QLabel#stepSummary {
     color: #556579;
     font-size: 13px;
+}
+QFrame#stepBox[state="locked"] QLabel#stepSummary {
+    color: #8c9aa8;
+}
+QLabel#stepHint {
+    color: #7a4100;
+    font-size: 13px;
+}
+/* Step 1's Add Photos when the list is empty (blue). */
+QPushButton#stepAddButton {
+    background: #1f6feb;
+    color: #ffffff;
+    border: 1px solid #1f6feb;
+    border-radius: 8px;
+    padding: 7px 14px;
+    font-weight: 600;
+}
+QPushButton#stepAddButton:hover {
+    background: #1a5fd0;
+}
+QPushButton#choiceCard {
+    background: #ffffff;
+    border: 2px solid #e1e8ef;
+    border-radius: 10px;
+    text-align: left;
+}
+QPushButton#choiceCard:hover {
+    border-color: #f0c48a;
+}
+QPushButton#choiceCard:checked {
+    background: #fff3e3;
+    border-color: #d97706;
+}
+QLabel#choiceTitle {
+    font-weight: 700;
+    font-size: 14px;
+    color: #162131;
+}
+QLabel#choiceDetail {
+    font-size: 12px;
+    color: #556579;
 }
 QDateEdit#dateField,
 QComboBox#timeField {
@@ -732,14 +792,12 @@ QComboBox#timeField {
 /* Qt's own arrows are replaced by one drawn in code (date_time_picker.py). */
 QComboBox#timeField::drop-down,
 QComboBox#timeZoneCombo::drop-down,
-QComboBox#dateModeCombo::drop-down,
 QDateEdit#dateField::drop-down {
     width: 22px;
     border: none;
 }
 QComboBox#timeField::down-arrow,
 QComboBox#timeZoneCombo::down-arrow,
-QComboBox#dateModeCombo::down-arrow,
 QDateEdit#dateField::down-arrow {
     image: none;
     width: 0px;
@@ -786,10 +844,6 @@ QPushButton#referenceArrow:hover {
 QPushButton#referenceArrow:disabled {
     color: #a8b3bf;
     border-color: #dde5ee;
-}
-QLabel#dateChangesTitle {
-    color: #7a4100;
-    font-weight: 700;
 }
 QTreeWidget#dateChangesList {
     background: #ffffff;

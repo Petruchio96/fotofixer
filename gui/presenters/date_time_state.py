@@ -49,15 +49,6 @@ MIXED_ZONES_TIP = (
 MODE_SHIFT = "shift"
 MODE_SET = "set"
 
-MODE_HELP = {
-    MODE_SHIFT: (
-        "Keep the time between photos: correct the reference photo (the earliest, "
-        "unless you pick another) and every selected photo moves by the same amount."
-    ),
-    MODE_SET: "Give every selected photo the same date and time, including photos with no date.",
-}
-
-
 @dataclass(frozen=True)
 class ChangeRow:
     """One line of the "Changing date to:" list."""
@@ -155,7 +146,7 @@ def build_date_time_state(
         selected_paths:
             The photos to change.
         mode:
-            MODE_SHIFT or MODE_SET.
+            MODE_SHIFT, MODE_SET, or None while no kind of change is chosen.
         reference:
             The reference photo chosen with the arrows (None: the earliest).
         shift:
@@ -217,9 +208,12 @@ def build_date_time_state(
     # What will change.
     if mode == MODE_SHIFT:
         plan = plan_shift(photo_infos, selected_paths, shift, exclude=exclude, zone=zone)
-    else:
+    elif mode == MODE_SET:
         plan = plan_set(photo_infos, selected_paths, set_value, zone=zone)
-    rows = _rows(photo_infos, selected_paths, plan, mode, exclude, zone)
+    else:
+        # Step 2 not done yet: nothing to change.
+        plan = DatePlan()
+    rows = _rows(photo_infos, selected_paths, plan, mode, exclude, zone) if mode else []
 
     # Time zone drop-down: blank until a photo is selected, then the
     # default comes from the selected photos.
@@ -280,7 +274,9 @@ def build_date_time_state(
 
     changing = len(plan.new_dates)
     can_apply = changing > 0
-    if mode == MODE_SHIFT:
+    if mode is None:
+        apply_label = "Apply"
+    elif mode == MODE_SHIFT:
         apply_label = f"Shift {_photos(len(dated))}" if dated else "Shift Selected Photos"
     else:
         apply_label = f"Set Date on {_photos(count)}" if count else "Set Date on Selected Photos"

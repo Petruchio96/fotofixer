@@ -122,6 +122,14 @@ class DateTimeTabTests(unittest.TestCase):
         QTest.mouseClick(tab_bar, Qt.LeftButton, Qt.NoModifier, tab_bar.tabRect(DATE_TIME_TAB).center())
         self.assertEqual(self.window.editor_tabs.currentIndex(), DATE_TIME_TAB)
 
+    def _choose_shift(self) -> None:
+        """Step 2: click the Shift card."""
+        QTest.mouseClick(self.window.date_shift_choice, Qt.LeftButton)
+
+    def _choose_set(self) -> None:
+        """Step 2: click the Set card."""
+        QTest.mouseClick(self.window.date_set_choice, Qt.LeftButton)
+
     def _click_item(self, path: Path) -> None:
         grid = self.window.list_widget
         item = self.window._grid_items_by_path[str(path)]
@@ -154,6 +162,52 @@ class DateTimeTabTests(unittest.TestCase):
             tuple(changes.topLevelItem(row).text(column) for column in range(3))
             for row in range(changes.topLevelItemCount())
         ]
+
+    # --- Steps ----------------------------------------------------------------
+
+    def _step_states(self) -> list[str]:
+        return [step.property("state") for step in self.window.date_steps]
+
+    def test_steps_open_one_after_another(self) -> None:
+        self._open_date_tab()
+        self.assertEqual(self._step_states(), ["active", "locked", "locked", "locked"])
+        self.assertTrue(self.window.step_add_photos_button.isHidden())
+
+        self._select(self.canon1, self.canon2)
+        self.assertEqual(self._step_states(), ["done", "active", "locked", "locked"])
+        self.assertEqual(self.window.date_steps[0].summary.text(), "2 photos selected")
+        self.assertFalse(self.window.date_apply_button.isVisible())
+
+        self._choose_shift()
+        self.assertTrue(self.window.date_shift_choice.isChecked())
+        self.assertEqual(self._step_states(), ["done", "done", "active", "locked"])
+
+        self._set_corrected_time(datetime(2026, 10, 3, 10, 16, 12))
+        self.assertEqual(self._step_states(), ["done", "done", "done", "active"])
+        self.assertTrue(self.window.date_apply_button.isVisible())
+
+        # After applying, back to step 1 with nothing chosen.
+        QTest.mouseClick(self.window.date_apply_button, Qt.LeftButton)
+        self.assertEqual(self._step_states(), ["active", "locked", "locked", "locked"])
+        self.assertFalse(self.window.date_shift_choice.isChecked())
+
+    def test_empty_list_offers_add_photos_in_step_1(self) -> None:
+        self.window.clear_photo_list()
+        self._open_date_tab()
+
+        self.assertFalse(self.window.step_add_photos_button.isHidden())
+        self.assertIn("The Photo List is empty", self.window.step_select_hint.text())
+        with patch.object(self.window, "_pick_photo_files") as pick:
+            QTest.mouseClick(self.window.step_add_photos_button, Qt.LeftButton)
+        pick.assert_called_once()
+
+    def test_set_card_titles_step_3_enter(self) -> None:
+        self._open_date_tab()
+        self._select(self.canon1)
+        self._choose_set()
+        self.assertEqual(self.window.date_steps[2].title.text(), "Enter the date and time")
+        self.assertTrue(self.window.date_shift_box.isHidden())
+        self.assertFalse(self.window.date_set_box.isHidden())
 
     # --- Photo List in Date & Time mode ---------------------------------------
 
@@ -227,6 +281,7 @@ class DateTimeTabTests(unittest.TestCase):
     def test_shift_by_correcting_the_earliest_photo(self) -> None:
         self._open_date_tab()
         self._select(self.canon2, self.canon1)
+        self._choose_shift()
         self.assertEqual(self.window.date_reference_title.text(), "IMG_4101.CR3 · Canon EOS R6")
         self.assertEqual(self.window.date_reference_detail.text(), "Current Date: 10/03/2026 9:14:02am")
         self.assertFalse(self.window.date_apply_button.isEnabled())
@@ -254,6 +309,7 @@ class DateTimeTabTests(unittest.TestCase):
     def test_undo_and_redo_restore_the_exact_tags(self) -> None:
         self._open_date_tab()
         self._select(self.canon1, self.canon2)
+        self._choose_shift()
         self._set_corrected_time(datetime(2026, 10, 3, 10, 16, 12))
         QTest.mouseClick(self.window.date_apply_button, Qt.LeftButton)
         shifted = {path: dict(self.tags[path]) for path in (self.canon1, self.canon2)}
@@ -285,6 +341,7 @@ class DateTimeTabTests(unittest.TestCase):
     def test_undated_photos_are_skipped_with_a_warning(self) -> None:
         self._open_date_tab()
         self._select(self.canon1, self.scan)
+        self._choose_shift()
         self._set_corrected_time(datetime(2026, 10, 3, 10, 16, 12))
 
         self.assertIn("without a date will be skipped", self.window.date_hint_label.text())
@@ -298,6 +355,7 @@ class DateTimeTabTests(unittest.TestCase):
     def test_pick_the_photo_with_the_correct_time_from_the_photo_list(self) -> None:
         self._open_date_tab()
         self._select(self.canon1, self.canon2)
+        self._choose_shift()
 
         QTest.mouseClick(self.window.pick_time_button, Qt.LeftButton)
         self.assertTrue(self.window.is_picking_location)
@@ -349,6 +407,7 @@ class DateTimeTabTests(unittest.TestCase):
     def test_source_photo_is_left_out_when_also_selected(self) -> None:
         self._open_date_tab()
         self._select(self.canon1)
+        self._choose_shift()
         self.window.use_time_from_path(self.phone)
         self._click_item(self.phone)
 
@@ -409,7 +468,7 @@ class DateTimeTabTests(unittest.TestCase):
     def test_set_gives_every_selected_photo_one_date(self) -> None:
         self._open_date_tab()
         self._select(self.canon1, self.scan)
-        self.window.date_mode_combo.setCurrentIndex(1)
+        self._choose_set()
         self.assertTrue(self.window.date_shift_box.isHidden())
         picker = self.window.date_set_picker
         picker.date_edit.setDate(datetime(1987, 6, 1).date())
@@ -461,6 +520,7 @@ class DateTimeTabTests(unittest.TestCase):
     def test_choosing_a_zone_gives_it_to_the_photos(self) -> None:
         self._open_date_tab()
         self._select(self.canon1)
+        self._choose_shift()
 
         self._choose_zone("eastern")
 
@@ -480,6 +540,7 @@ class DateTimeTabTests(unittest.TestCase):
         self._reload()
         self._open_date_tab()
         self._select(self.phone)
+        self._choose_shift()
         self.assertEqual(self.window.date_reference_picker.zone_box.currentData(), "mountain")
         self.assertEqual(self.window.date_reference_detail.text(), "Current Date: 10/03/2026 10:16:12am MDT")
 
@@ -511,6 +572,7 @@ class DateTimeTabTests(unittest.TestCase):
     def test_a_failed_photo_stays_selected_and_is_reported(self) -> None:
         self._open_date_tab()
         self._select(self.canon1, self.canon2)
+        self._choose_shift()
         self.writer.failures[self.canon2] = RuntimeError("read-only")
         self._set_corrected_time(datetime(2026, 10, 3, 10, 16, 12))
         shown = []

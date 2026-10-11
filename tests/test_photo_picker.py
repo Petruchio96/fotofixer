@@ -162,7 +162,8 @@ class PhotoPickerTests(unittest.TestCase):
 
         self.assertFalse(item.isSelected())
         self.assertEqual(dialog.selected_paths(), [self.trip / "b.jpg", self.trip / "c.jpg"])
-        self.assertEqual(dialog.selected_folders(), [self.year])
+        # Select All picks photos only; folders are clicked one by one.
+        self.assertEqual(dialog.selected_folders(), [])
 
     def test_clicking_photos_selects_them_and_updates_add(self) -> None:
         dialog = self._open(self.trip)
@@ -359,6 +360,20 @@ class PhotoPickerTests(unittest.TestCase):
         self.assertTrue(dialog.include_subfolders())
         dialog.subfolders_check.click()
         self.assertFalse(dialog.include_subfolders())
+
+    def test_select_all_keeps_folders_as_they_are(self) -> None:
+        dialog = self._open(self.trip)
+        self._click(dialog, "2019")
+
+        QTest.keyClick(dialog.grid, Qt.Key_A, Qt.ControlModifier)
+
+        # The folder clicked stays selected; Ctrl+A added only the photos.
+        self.assertEqual(dialog.selected_folders(), [self.year])
+        self.assertEqual(len(dialog.selected_paths()), 3)
+        self.assertFalse(dialog.select_all_button.isEnabled())
+        # A click still deselects a folder.
+        self._click(dialog, "2019")
+        self.assertEqual(dialog.selected_folders(), [])
 
     def test_add_button_counts_photos_and_folders(self) -> None:
         dialog = self._open(self.trip)

@@ -22,7 +22,6 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QPushButton,
     QScrollArea,
-    QSizePolicy,
     QTabWidget,
     QTreeWidget,
     QVBoxLayout,
@@ -31,7 +30,7 @@ from PySide6.QtWidgets import (
 
 from gui.presenters.date_time_state import MODE_SET, MODE_SHIFT
 from gui.widgets.browser_panel import build_pane_header
-from gui.widgets.date_time_picker import ChevronComboBox, DateTimePicker
+from gui.widgets.date_time_picker import DateTimePicker
 from gui.widgets.icons import clock_icon, map_icon, pin_icon
 
 if TYPE_CHECKING:
@@ -307,33 +306,128 @@ def _build_time_source_card(window: "MainWindow") -> QFrame:
     return card
 
 
-def _build_date_group(window: "MainWindow") -> QGroupBox:
+class StepBox(QFrame):
     """
-    The Change Date and Time box (orange: what is about to change): the
-    mode, the reference photo or the new date, and the list of changes.
+    One numbered step of the Date & Time tab: a header (number, title, and
+    on the right a summary or "After step N") and a body that shows once the
+    step is reachable. set_state() switches between "active" (orange: do
+    this now), "done" (navy ✓), and "locked" (grey, body hidden).
     """
-    group = QGroupBox("Change Date and Time")
-    group.setObjectName("dateGroup")
-    layout = QVBoxLayout(group)
-    layout.setSpacing(10)
 
-    mode_row = QHBoxLayout()
-    mode_row.setSpacing(12)
-    mode_label = QLabel("Change")
-    mode_label.setObjectName("fieldLabel")
-    window.date_mode_combo = ChevronComboBox()
-    window.date_mode_combo.setObjectName("dateModeCombo")
-    window.date_mode_combo.addItem("Shift Date and Time", MODE_SHIFT)
-    window.date_mode_combo.addItem("Set a Single Date and Time", MODE_SET)
-    window.date_mode_combo.setToolTip(
-        "Shift every photo by the same amount, or give them all one date and time"
+    def __init__(self, number: int, title: str) -> None:
+        super().__init__()
+        self.number = number
+        self.setObjectName("stepBox")
+        self.setProperty("state", "locked")
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(14, 12, 14, 12)
+        layout.setSpacing(10)
+
+        header = QHBoxLayout()
+        header.setSpacing(10)
+        self.circle = QLabel(str(number))
+        self.circle.setObjectName("stepCircle")
+        self.circle.setAlignment(Qt.AlignCenter)
+        self.circle.setFixedSize(28, 28)
+        self.title = QLabel(title)
+        self.title.setObjectName("stepTitle")
+        self.summary = QLabel()
+        self.summary.setObjectName("stepSummary")
+        header.addWidget(self.circle)
+        header.addWidget(self.title)
+        header.addStretch(1)
+        header.addWidget(self.summary)
+        self.header = header
+        layout.addLayout(header)
+
+        # The step's contents, indented under the title.
+        self.body = QWidget()
+        self.body_layout = QVBoxLayout(self.body)
+        self.body_layout.setContentsMargins(38, 0, 0, 0)
+        self.body_layout.setSpacing(10)
+        layout.addWidget(self.body)
+
+    def set_state(self, state: str, summary: str = "") -> None:
+        """state: "active", "done", or "locked"."""
+        self.circle.setText("✓" if state == "done" else str(self.number))
+        self.body.setVisible(state != "locked")
+        self.summary.setText(f"After step {self.number - 1}" if state == "locked" else summary)
+        if self.property("state") != state:
+            self.setProperty("state", state)
+            for widget in (self, self.circle, self.title, self.summary):
+                widget.style().unpolish(widget)
+                widget.style().polish(widget)
+
+
+def _choice_card(title: str, detail: str, tooltip: str) -> QPushButton:
+    """
+    Step 2's two big choices: a checkable button with a bold title and a
+    line of explanation (labels inside pass clicks through to the button).
+    """
+    button = QPushButton()
+    button.setObjectName("choiceCard")
+    button.setCheckable(True)
+    button.setToolTip(tooltip)
+    button.setCursor(Qt.PointingHandCursor)
+    layout = QVBoxLayout(button)
+    layout.setContentsMargins(12, 10, 12, 10)
+    layout.setSpacing(4)
+    for text, name in ((title, "choiceTitle"), (detail, "choiceDetail")):
+        label = QLabel(text)
+        label.setObjectName(name)
+        label.setWordWrap(True)
+        label.setAttribute(Qt.WA_TransparentForMouseEvents)
+        layout.addWidget(label)
+    # Room for a two-line title and three lines of explanation at the
+    # narrowest pane width.
+    button.setMinimumHeight(112)
+    return button
+
+
+def _build_select_step(window: "MainWindow") -> StepBox:
+    """1. Select the photos to change (with Add Photos when the list is empty)."""
+    step = StepBox(1, "Select the photos to change")
+    window.step_add_photos_button = QPushButton("+ Add Photos")
+    window.step_add_photos_button.setObjectName("stepAddButton")
+    window.step_add_photos_button.setToolTip("Choose photos to add to the Photo List")
+    window.step_add_photos_button.clicked.connect(window.add_photos)
+    step.header.addWidget(window.step_add_photos_button)
+    window.step_select_hint = QLabel()
+    window.step_select_hint.setObjectName("stepHint")
+    window.step_select_hint.setWordWrap(True)
+    step.body_layout.addWidget(window.step_select_hint)
+    return step
+
+
+def _build_mode_step(window: "MainWindow") -> StepBox:
+    """2. Choose the kind of change: Shift or Set (nothing chosen at first)."""
+    step = StepBox(2, "Choose the kind of change")
+    window.date_shift_choice = _choice_card(
+        "Shift Date and Time",
+        "The time was off. Correct one photo; the rest move by the same amount.",
+        "Move every selected photo by the same amount, keeping the time between them",
     )
-    window.date_mode_combo.currentIndexChanged.connect(window.set_date_change_mode)
-    mode_row.addWidget(mode_label)
-    mode_row.addWidget(window.date_mode_combo, 1)
-    window.date_mode_help = QLabel()
-    window.date_mode_help.setObjectName("dateModeHelp")
-    window.date_mode_help.setWordWrap(True)
+    window.date_set_choice = _choice_card(
+        "Set a Single Date and Time",
+        "Every selected photo gets the same date and time (for example scans).",
+        "Give every selected photo one date and time",
+    )
+    window.date_shift_choice.clicked.connect(lambda: window.choose_date_change_mode(MODE_SHIFT))
+    window.date_set_choice.clicked.connect(lambda: window.choose_date_change_mode(MODE_SET))
+    row = QHBoxLayout()
+    row.setSpacing(10)
+    row.addWidget(window.date_shift_choice, 1)
+    row.addWidget(window.date_set_choice, 1)
+    step.body_layout.addLayout(row)
+    return step
+
+
+def _build_correct_step(window: "MainWindow") -> StepBox:
+    """
+    3. Correct the date and time (Shift: the reference photo, its correct
+    date, time and zone, or copy the time from a photo) or enter it (Set).
+    """
+    step = StepBox(3, "Correct the date and time")
 
     # Shift: reference photo, its correct date and time, copy from a photo.
     window.date_shift_box = QWidget()
@@ -376,22 +470,24 @@ def _build_date_group(window: "MainWindow") -> QGroupBox:
     set_layout = QVBoxLayout(window.date_set_box)
     set_layout.setContentsMargins(0, 0, 0, 0)
     set_layout.setSpacing(8)
-    set_label = QLabel("New date and time")
-    set_label.setObjectName("fieldLabel")
     window.date_set_picker = DateTimePicker(what="date and time to give every selected photo")
     window.date_set_picker.changed.connect(window.date_set_value_edited)
     window.date_set_picker.zone_chosen.connect(window.date_zone_chosen)
-    set_layout.addWidget(set_label)
     set_layout.addWidget(window.date_set_picker)
     window.date_set_box.hide()
-    # Only the changes list grows and shrinks with the window; these always
-    # keep their full size (squeezing them would overlap their rows).
-    for box in (window.date_shift_box, window.date_set_box):
-        box.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
 
-    # Every selected photo with its current date, and the new one if it changes.
-    changes_label = QLabel("Changing date to:")
-    changes_label.setObjectName("dateChangesTitle")
+    step.body_layout.addWidget(window.date_shift_box)
+    step.body_layout.addWidget(window.date_set_box)
+    return step
+
+
+def _build_apply_step(window: "MainWindow") -> StepBox:
+    """4. Check the changes (every selected photo, new dates in orange) and apply."""
+    step = StepBox(4, "Check the changes and apply")
+    window.date_hint_label = QLabel()
+    window.date_hint_label.setObjectName("applyHint")
+    window.date_hint_label.setWordWrap(True)
+
     window.date_changes_list = QTreeWidget()
     window.date_changes_list.setObjectName("dateChangesList")
     window.date_changes_list.setColumnCount(3)
@@ -401,39 +497,8 @@ def _build_date_group(window: "MainWindow") -> QGroupBox:
     window.date_changes_list.setSelectionMode(QAbstractItemView.NoSelection)
     window.date_changes_list.setFocusPolicy(Qt.NoFocus)
     window.date_changes_list.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-    window.date_changes_list.setMinimumHeight(56)
-
-    layout.addLayout(mode_row)
-    layout.addWidget(window.date_mode_help)
-    layout.addWidget(window.date_shift_box)
-    layout.addWidget(window.date_set_box)
-    layout.addWidget(changes_label)
-    # The list takes the room left, and scrolls past that.
-    layout.addWidget(window.date_changes_list, 1)
-    return group
-
-
-class _ShrinkFirstContent(QWidget):
-    """
-    The Date & Time box inside its scroll area. With wrapping text inside,
-    Qt's scroll area sizes it to its preferred height (heightForWidth), so it
-    scrolled before the changes list had shrunk. Answering with the minimum
-    height lets the list shrink first; it scrolls only when that's not enough.
-    """
-
-    def heightForWidth(self, width: int) -> int:
-        return self.layout().minimumHeightForWidth(width)
-
-
-def _build_date_time_tab(window: "MainWindow") -> QWidget:
-    page = QWidget()
-    layout = QVBoxLayout(page)
-    layout.setContentsMargins(20, 16, 20, 20)
-    layout.setSpacing(10)
-
-    window.date_hint_label = QLabel()
-    window.date_hint_label.setObjectName("applyHint")
-    window.date_hint_label.setWordWrap(True)
+    window.date_changes_list.setMinimumHeight(90)
+    window.date_changes_list.setMaximumHeight(220)
 
     window.date_apply_button = QPushButton("Shift Selected Photos")
     window.date_apply_button.setObjectName("accentButton")
@@ -442,24 +507,46 @@ def _build_date_time_tab(window: "MainWindow") -> QWidget:
     window.date_apply_button.setToolTip("Write the new dates into the selected photos")
     window.date_apply_button.clicked.connect(window.apply_date_change)
 
-    # On a short window the box scrolls instead of squeezing its rows
-    # together; otherwise the changes list fills the room left.
-    scroll = QScrollArea()
-    scroll.setObjectName("dateScroll")
-    scroll.setWidgetResizable(True)
-    scroll.setFrameShape(QFrame.NoFrame)
-    scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-    scroll.viewport().setAutoFillBackground(False)
-    content = _ShrinkFirstContent()
+    step.body_layout.addWidget(window.date_hint_label)
+    step.body_layout.addWidget(window.date_changes_list)
+    step.body_layout.addWidget(window.date_apply_button)
+    return step
+
+
+def _build_date_time_tab(window: "MainWindow") -> QWidget:
+    """
+    The Date & Time tab as four steps, one after another: select photos,
+    choose Shift or Set, correct the date and time, check and apply. Later
+    steps stay grey until the earlier ones are done, and the pane scrolls to
+    each step as it opens (see DateTimeEditorMixin._apply_date_time_state).
+    """
+    page = QWidget()
+    layout = QVBoxLayout(page)
+    layout.setContentsMargins(0, 0, 0, 0)
+
+    window.date_scroll = QScrollArea()
+    window.date_scroll.setObjectName("dateScroll")
+    window.date_scroll.setWidgetResizable(True)
+    window.date_scroll.setFrameShape(QFrame.NoFrame)
+    window.date_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+    window.date_scroll.viewport().setAutoFillBackground(False)
+    content = QWidget()
     content.setObjectName("dateScrollContent")
     content_layout = QVBoxLayout(content)
-    content_layout.setContentsMargins(0, 0, 0, 0)
-    content_layout.addWidget(_build_date_group(window))
-    scroll.setWidget(content)
+    content_layout.setContentsMargins(20, 14, 20, 20)
+    content_layout.setSpacing(10)
+    window.date_steps = [
+        _build_select_step(window),
+        _build_mode_step(window),
+        _build_correct_step(window),
+        _build_apply_step(window),
+    ]
+    for step in window.date_steps:
+        content_layout.addWidget(step)
+    content_layout.addStretch(1)
+    window.date_scroll.setWidget(content)
 
-    layout.addWidget(scroll, 1)
-    layout.addWidget(window.date_hint_label)
-    layout.addWidget(window.date_apply_button)
+    layout.addWidget(window.date_scroll, 1)
     return page
 
 

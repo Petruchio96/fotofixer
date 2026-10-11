@@ -22,14 +22,13 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QBrush, QColor
 from PySide6.QtWidgets import QHeaderView, QMessageBox, QTreeWidgetItem
 
 from core.photo_dates import format_display_datetime
 from core.time_zones import ZONES_BY_KEY, computer_utc_offset, offset_at_local
 from gui.presenters.date_time_state import (
-    MODE_HELP,
     MODE_SET,
     MODE_SHIFT,
     DateTimeState,
@@ -76,9 +75,11 @@ class DateTimeEditorMixin:
         self._render_current_photo_session()
         self.select_browser_paths(selected)
 
-    def set_date_change_mode(self, _index: int = 0) -> None:
-        mode = self.date_mode_combo.currentData() or MODE_SHIFT
+    def choose_date_change_mode(self, mode: str) -> None:
+        """Step 2: Shift or Set (a choice card was clicked)."""
         if mode == self._date_change_mode:
+            # Clicking the chosen card again keeps it chosen.
+            self.update_details_panel()
             return
         if self.is_picking_location:
             self.stop_picking_location()
@@ -292,10 +293,11 @@ class DateTimeEditorMixin:
 
     def reset_date_change(self) -> None:
         """
-        Start the Date & Time change over: no shift, the earliest photo as
-        the reference, no source photo, each photo's own time zone. (Shift or
-        Set, and Set's date, stay as they are.)
+        Start the Date & Time change over, back to step 1 or 2: no kind of
+        change chosen, no shift, the earliest photo as the reference, no
+        source photo, each photo's own time zone. (Set's date stays.)
         """
+        self._date_change_mode = None
         self._date_shift = timedelta(0)
         self._date_reference = None
         self._date_zone = None
@@ -324,10 +326,9 @@ class DateTimeEditorMixin:
 
     def _apply_date_time_state(self, state: DateTimeState) -> None:
         shift_mode = self._date_change_mode == MODE_SHIFT
-        self.date_mode_help.setText(MODE_HELP[self._date_change_mode])
+        self._apply_date_steps(state)
         self.date_shift_box.setVisible(shift_mode)
-        self.date_set_box.setVisible(not shift_mode)
-        self.date_mode_combo.setEnabled(True)
+        self.date_set_box.setVisible(self._date_change_mode == MODE_SET)
 
         # Reference card.
         has_reference = state.reference is not None
@@ -384,6 +385,48 @@ class DateTimeEditorMixin:
         self._set_tone(self.date_hint_label, state.hint_tone)
         self.date_apply_button.setText(state.apply_label)
         self.date_apply_button.setEnabled(state.can_apply)
+
+    def _apply_date_steps(self, state: DateTimeState) -> None:
+        """
+        The four steps: each done (✓), active (orange: do this now), or
+        locked (grey, closed) until the steps before it are done. The pane
+        scrolls to the step that just became active.
+        """
+        has_photos = bool(self.session.selected_paths)
+        selected = state.selected_count
+        mode = self._date_change_mode
+        done = [selected > 0, selected > 0 and mode is not None, False]
+        done[2] = done[1] and state.can_apply
+
+        select_step, mode_step, correct_step, apply_step = self.date_steps
+        select_step.set_state(
+            "done" if done[0] else "active",
+            f"{selected} photo{'' if selected == 1 else 's'} selected" if done[0] else "",
+        )
+        self.step_add_photos_button.setVisible(not has_photos)
+        self.step_select_hint.setText(
+            "The Photo List is empty. Add photos first, then select the ones to change."
+            if not has_photos
+            else "Click photos in the Photo List, or a camera's checkbox to select all of its photos."
+        )
+        self.step_select_hint.setVisible(not done[0])
+
+        mode_step.set_state("locked" if not done[0] else "done" if done[1] else "active")
+        for card, card_mode in ((self.date_shift_choice, MODE_SHIFT), (self.date_set_choice, MODE_SET)):
+            card.setChecked(mode == card_mode)
+            card.setEnabled(True)
+
+        correct_step.title.setText("Enter the date and time" if mode == MODE_SET else "Correct the date and time")
+        correct_step.set_state("locked" if not done[1] else "done" if done[2] else "active")
+        apply_step.set_state("active" if done[2] else "locked")
+
+        # Scroll to the step to do now (once, when it changes).
+        active = 3 if done[2] else 2 if done[1] else 1 if done[0] else 0
+        if active != self._date_active_step:
+            self._date_active_step = active
+            target = self.date_steps[active]
+            # After the layout has caught up with the steps opening.
+            QTimer.singleShot(0, lambda: self.date_scroll.ensureWidgetVisible(target, 0, 10))
 
     def _refresh_time_source_card(self, state: DateTimeState) -> None:
         source = self._time_source
@@ -470,8 +513,9 @@ class DateTimeEditorMixin:
         else:
             self._clear_gps_edit_history()
 
-        # Start over for the next change.
+        # Start over for the next change (back to step 1).
         shift_text = describe_shift(state.shift)
+        state_mode = self._date_change_mode
         self.reset_date_change()
 
         # Deselect what changed; keep failures selected to retry.
@@ -481,7 +525,7 @@ class DateTimeEditorMixin:
         if succeeded:
             count = len(succeeded)
             photos = f"{count} photo{'' if count == 1 else 's'}"
-            if self._date_change_mode == MODE_SHIFT:
+            if state_mode == MODE_SHIFT:
                 message = f"Shifted {photos} ({shift_text})."
             else:
                 message = f"Set the date on {photos} to {format_display_datetime(state.plan.new_dates[succeeded[0]])}."

@@ -400,7 +400,14 @@ class PickerGrid(QListWidget):
         ]
 
     def select_all(self) -> None:
-        self._set_selected(self.selectable_items(), True)
+        """
+        Select every photo shown (Select All, Ctrl+A). Folders are left as
+        they are: they are chosen one by one with a click.
+        """
+        self._set_selected(
+            [item for item in self.selectable_items() if not item.data(IS_FOLDER_ROLE)],
+            True,
+        )
 
     def _set_selected(self, items: list[QListWidgetItem], selected: bool) -> None:
         changed = False
@@ -650,8 +657,8 @@ class PhotoPickerDialog(QDialog):
         dot.setObjectName("selectionDot")
         self.selection_count_label = QLabel("0 selected")
         self.selection_count_label.setObjectName("selectionCount")
-        self.select_all_button = QPushButton("Select All")
-        self.select_all_button.setToolTip("Select every photo and folder shown (Ctrl+A)")
+        self.select_all_button = QPushButton("Select All Photos")
+        self.select_all_button.setToolTip("Select every photo shown (Ctrl+A); click folders to choose them")
         self.select_all_button.clicked.connect(self.grid_select_all)
         self.deselect_all_button = QPushButton("Deselect All")
         self.deselect_all_button.setToolTip("Deselect everything, in every folder")
@@ -1188,7 +1195,9 @@ class PhotoPickerDialog(QDialog):
                 widget.style().unpolish(widget)
                 widget.style().polish(widget)
         selectable = self.grid.selectable_items()
-        self.select_all_button.setEnabled(any(not item.isSelected() for item in selectable))
+        self.select_all_button.setEnabled(
+            any(not item.isSelected() and not item.data(IS_FOLDER_ROLE) for item in selectable)
+        )
         self.deselect_all_button.setEnabled(has_selection)
         self.subfolders_check.setVisible(folder_count > 0 and not self._single)
         self.add_button.setEnabled(has_selection)

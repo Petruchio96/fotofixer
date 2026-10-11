@@ -6,8 +6,13 @@ import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from core.exiftool_wrapper import ExifToolWrapper
+from core.exiftool_wrapper import METADATA_READ_OPTIONS, ExifToolWrapper
 from core.models import EmbeddedPreview
+
+
+def _gps(metadata: dict) -> dict:
+    """Just the GPS part of a metadata read (it also has dates and camera)."""
+    return {"latitude": metadata["latitude"], "longitude": metadata["longitude"]}
 
 
 class ExifToolWrapperTests(unittest.TestCase):
@@ -37,7 +42,7 @@ class ExifToolWrapperTests(unittest.TestCase):
 
         result = wrapper.read_gps(Path("/tmp/photo.jpg"))
 
-        self.assertEqual(result, {"latitude": 40.5, "longitude": -111.8})
+        self.assertEqual(_gps(result), {"latitude": 40.5, "longitude": -111.8})
         self.assertEqual(
             execute_mock.call_args.args[0],
             [
@@ -47,6 +52,7 @@ class ExifToolWrapperTests(unittest.TestCase):
                 "-n",
                 "-GPSLatitude",
                 "-GPSLongitude",
+                *METADATA_READ_OPTIONS,
                 str(Path("/tmp/photo.jpg")),
             ],
         )
@@ -56,7 +62,9 @@ class ExifToolWrapperTests(unittest.TestCase):
 
         result = wrapper.read_gps(Path("/tmp/photo.jpg"))
 
-        self.assertEqual(result, {"latitude": None, "longitude": None})
+        self.assertEqual(_gps(result), {"latitude": None, "longitude": None})
+        self.assertEqual(result["date_tags"]["DateTimeOriginal"], None)
+        self.assertIsNone(result["make"])
 
     def test_read_gps_raises_runtime_error_on_failure(self) -> None:
         wrapper, _ = self._wrapper_with_reply(status=1, errors="bad read")
@@ -92,7 +100,7 @@ class ExifToolWrapperTests(unittest.TestCase):
         result = wrapper.read_gps_many([first, second])
 
         self.assertEqual(
-            result,
+            {path: _gps(metadata) for path, metadata in result.items()},
             {
                 first: {"latitude": 40.5, "longitude": -111.8},
                 second: {"latitude": None, "longitude": None},
@@ -101,6 +109,65 @@ class ExifToolWrapperTests(unittest.TestCase):
         arguments = execute_mock.call_args.args[0]
         self.assertEqual(arguments[2:6], ["-json", "-n", "-GPSLatitude", "-GPSLongitude"])
         self.assertEqual(arguments[-2:], [str(first), str(second)])
+
+    def test_reads_return_date_tags_and_camera(self) -> None:
+        payload = json.dumps([{
+            "SourceFile": "/tmp/photo.jpg",
+            "DateTimeOriginal": "2026:10:03 09:14:02",
+            "CreateDate": "2026:10:03 09:14:02",
+            "FileModifyDate": "2026:10:04 08:00:00-06:00",
+            "Make": "Canon",
+            "Model": "Canon EOS R6",
+        }])
+        wrapper, _ = self._wrapper_with_reply(output=payload)
+
+        result = wrapper.read_gps_many([Path("/tmp/photo.jpg")])[Path("/tmp/photo.jpg")]
+
+        self.assertEqual(
+            result["date_tags"],
+            {
+                "DateTimeOriginal": "2026:10:03 09:14:02",
+                "CreateDate": "2026:10:03 09:14:02",
+                "ModifyDate": None,
+                "FileModifyDate": "2026:10:04 08:00:00-06:00",
+                "OffsetTimeOriginal": None,
+                "OffsetTimeDigitized": None,
+                "OffsetTime": None,
+            },
+        )
+        self.assertEqual((result["make"], result["model"]), ("Canon", "Canon EOS R6"))
+
+    def test_write_date_tags_sets_and_removes_tags(self) -> None:
+        wrapper, execute_mock = self._wrapper_with_reply()
+
+        wrapper.write_date_tags(
+            Path("/tmp/photo.jpg"),
+            {
+                "DateTimeOriginal": "2026:10:03 10:16:12",
+                "CreateDate": None,
+                "FileModifyDate": None,
+            },
+        )
+
+        # None removes a tag, but the file's own date is left as it is.
+        self.assertEqual(
+            execute_mock.call_args.args[0][2:],
+            [
+                "-overwrite_original",
+                "-DateTimeOriginal=2026:10:03 10:16:12",
+                "-CreateDate=",
+                str(Path("/tmp/photo.jpg")),
+            ],
+        )
+
+    def test_date_changes_never_make_a_backup(self) -> None:
+        wrapper, _ = self._wrapper_with_reply()
+        wrapper.keep_backups = True
+
+        with patch.object(wrapper, "_back_up_original") as back_up:
+            wrapper.write_date_tags(Path("/tmp/photo.jpg"), {"DateTimeOriginal": "2026:10:03 10:16:12"})
+
+        back_up.assert_not_called()
 
     def test_read_gps_many_raises_runtime_error_on_failure(self) -> None:
         wrapper, _ = self._wrapper_with_reply(status=1, errors="bad bulk read")
@@ -203,7 +270,7 @@ class ExifToolWrapperTests(unittest.TestCase):
             gps = wrapper.read_gps_many([cr3, jpg, dng])
             previews = wrapper.read_embedded_previews([cr3, dng])
 
-        self.assertEqual(gps[cr3], {"latitude": 1.0, "longitude": 2.0})
+        self.assertEqual(_gps(gps[cr3]), {"latitude": 1.0, "longitude": 2.0})
         self.assertEqual(previews, {cr3: EmbeddedPreview(b"small-jpeg", 8), dng: EmbeddedPreview(b"small-jpeg", 1)})
 
         calls = [call.args[0] for call in wrapper._execute.call_args_list]
@@ -391,9 +458,31 @@ class ExifToolWrapperIntegrationTests(unittest.TestCase):
 
         self.wrapper.clear_gps(photo)
         self.assertEqual(
-            self.wrapper.read_gps(photo),
+            _gps(self.wrapper.read_gps(photo)),
             {"latitude": None, "longitude": None},
         )
+
+    def test_date_write_read_and_restore_round_trip(self) -> None:
+        photo = self._make_photo("dates.jpg")
+        before = self.wrapper.read_gps(photo)["date_tags"]
+
+        self.wrapper.write_date_tags(
+            photo,
+            {
+                "DateTimeOriginal": "2026:10:03 10:16:12",
+                "CreateDate": "2026:10:03 10:16:12",
+                "ModifyDate": "2026:10:03 10:16:12",
+                "FileModifyDate": "2026:10:03 10:16:12",
+            },
+        )
+        after = self.wrapper.read_gps(photo)["date_tags"]
+        self.assertEqual(after["DateTimeOriginal"], "2026:10:03 10:16:12")
+        self.assertEqual(after["ModifyDate"], "2026:10:03 10:16:12")
+        self.assertTrue(after["FileModifyDate"].startswith("2026:10:03 10:16:12"))
+
+        # Undo writes back exactly what was read before.
+        self.wrapper.write_date_tags(photo, before)
+        self.assertEqual(self.wrapper.read_gps(photo)["date_tags"], before)
 
     def test_backup_keeps_untouched_original_across_edits(self) -> None:
         photo = self._make_photo("backup.jpg")

@@ -661,9 +661,12 @@ QTabWidget#editorTabs QTabBar::tab {
 QTabWidget#editorTabs QTabBar::tab:hover {
     color: #17304a;
 }
+/* The tab shown is the mode the app is in: orange, like the selection. */
 QTabWidget#editorTabs QTabBar::tab:selected {
-    color: #17304a;
-    border-bottom: 3px solid #26425f;
+    background: #d97706;
+    color: #ffffff;
+    border-top-left-radius: 10px;
+    border-top-right-radius: 10px;
 }
 QFrame#tabPlaceholder {
     background: #f5f8fb;
@@ -684,6 +687,125 @@ QGroupBox#locationGroup {
 }
 QGroupBox#locationGroup::title {
     color: #1f5fc4;
+}
+/* Date & Time tab: orange box, since it holds what is about to change. */
+QGroupBox#dateGroup {
+    background: #fffaf3;
+    border: 1px solid #f0c48a;
+}
+QGroupBox#dateGroup::title {
+    color: #b45f06;
+}
+QComboBox#dateModeCombo {
+    background: #ffffff;
+    color: #7a4100;
+    border: 1px solid #f0c48a;
+    border-radius: 10px;
+    padding: 6px 10px;
+    min-height: 22px;
+}
+QScrollArea#dateScroll,
+QWidget#dateScrollContent {
+    background: transparent;
+}
+QLabel#dateModeHelp {
+    color: #556579;
+    font-size: 13px;
+}
+QDateEdit#dateField,
+QComboBox#timeField {
+    background: #ffffff;
+    color: #162131;
+    border: 1px solid #cad6e2;
+    border-radius: 8px;
+    font-size: 16px;
+    min-height: 30px;
+}
+QDateEdit#dateField {
+    padding: 2px 8px;
+    min-width: 132px;
+}
+QComboBox#timeField {
+    padding: 2px 4px 2px 10px;
+    min-width: 30px;
+}
+/* Qt's own arrows are replaced by one drawn in code (date_time_picker.py). */
+QComboBox#timeField::drop-down,
+QComboBox#timeZoneCombo::drop-down,
+QComboBox#dateModeCombo::drop-down,
+QDateEdit#dateField::drop-down {
+    width: 22px;
+    border: none;
+}
+QComboBox#timeField::down-arrow,
+QComboBox#timeZoneCombo::down-arrow,
+QComboBox#dateModeCombo::down-arrow,
+QDateEdit#dateField::down-arrow {
+    image: none;
+    width: 0px;
+    height: 0px;
+}
+QDateEdit#dateField:focus,
+QComboBox#timeField:focus {
+    border-color: #1f6feb;
+}
+QComboBox#timeZoneCombo {
+    background: #ffffff;
+    color: #162131;
+    border: 1px solid #cad6e2;
+    border-radius: 8px;
+    font-size: 14px;
+    padding: 6px 10px;
+    min-height: 22px;
+}
+/* The photos have more than one time zone: choosing one changes them all. */
+QComboBox#timeZoneCombo[mixed="true"] {
+    color: #c62828;
+    border-color: #e8a0a0;
+    background: #fff5f5;
+}
+QLabel#timeColon,
+QLabel#amPmLabel {
+    color: #31445a;
+    font-size: 16px;
+}
+QLabel#timeColon {
+    font-weight: 700;
+}
+QPushButton#referenceArrow {
+    background: #ffffff;
+    color: #1f5fc4;
+    border: 1px solid #b9d0f5;
+    border-radius: 6px;
+    padding: 0px;
+    font-size: 16px;
+}
+QPushButton#referenceArrow:hover {
+    background: #eaf2fe;
+}
+QPushButton#referenceArrow:disabled {
+    color: #a8b3bf;
+    border-color: #dde5ee;
+}
+QLabel#dateChangesTitle {
+    color: #7a4100;
+    font-weight: 700;
+}
+QTreeWidget#dateChangesList {
+    background: #ffffff;
+    border: 1px solid #f0d9b8;
+    border-radius: 8px;
+    font-size: 13px;
+    outline: none;
+}
+QTreeWidget#dateChangesList::item {
+    padding: 3px 2px;
+    border-bottom: 1px solid #f6ead8;
+}
+/* Camera groups in the Photo List (Date & Time mode): navy, the list's color. */
+QLabel#thumbnailGroupHeader[group="camera"],
+QLabel#groupDot[group="camera"] {
+    color: #26425f;
 }
 QPushButton#pickButton {
     background: #ffffff;

@@ -1,2 +1,4 @@
 PySide6
 Pillow
+# Time zone rules for zoneinfo; Windows has no system copy.
+tzdata

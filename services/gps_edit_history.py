@@ -1,5 +1,5 @@
 """
-Session-only undo/redo memory for GPS edits.
+Session-only undo/redo memory for GPS and date edits.
 """
 
 from __future__ import annotations
@@ -9,6 +9,12 @@ from pathlib import Path
 
 # GPS state of one file: (latitude, longitude), or (None, None) for no GPS.
 type GpsState = tuple[float | None, float | None]
+# Date state of one file: its date tags (tag -> ExifTool text, or None).
+type DateState = dict[str, str | None]
+
+# What an edit changed, so undo knows how to write the states back.
+EDIT_GPS = "gps"
+EDIT_DATE = "date"
 
 
 @dataclass(frozen=True)
@@ -24,7 +30,10 @@ class PhotoListSnapshot:
 
 class GpsEditHistory:
     """
-    Remember the most recent GPS apply or clear so it can be undone and redone.
+    Remember the most recent edit (a GPS apply or clear, or a date change)
+    so it can be undone and redone. One history covers both kinds, so Undo
+    always undoes the last change, whichever tab it was made on; kind says
+    which it was.
 
     Along with the GPS states it keeps the photo list as it was at the time,
     so undo and redo can put the list back too (photos added or removed
@@ -36,8 +45,9 @@ class GpsEditHistory:
     """
 
     def __init__(self) -> None:
-        self._before: dict[Path, GpsState] = {}
-        self._after: dict[Path, GpsState] = {}
+        self._before: dict[Path, object] = {}
+        self._after: dict[Path, object] = {}
+        self._kind = EDIT_GPS
         self._photo_list: PhotoListSnapshot | None = None
         self._backups: tuple[Path, ...] = ()
         self._undone = False
@@ -45,10 +55,11 @@ class GpsEditHistory:
     def record(
         self,
         *,
-        before: dict[Path, GpsState],
-        after: dict[Path, GpsState],
+        before: dict[Path, GpsState] | dict[Path, DateState],
+        after: dict[Path, GpsState] | dict[Path, DateState],
         photo_list: PhotoListSnapshot | None = None,
         backups: tuple[Path, ...] = (),
+        kind: str = EDIT_GPS,
     ) -> None:
         """
         Remember an edit. Only files present in both mappings are kept, so
@@ -60,13 +71,21 @@ class GpsEditHistory:
                 the list, so this is the list both before and after it).
             backups:
                 Backup files ("<name>_original.<ext>") the edit created.
+            kind:
+                EDIT_GPS (states are GpsState) or EDIT_DATE (DateState).
         """
         paths = [path for path in after if path in before]
         self._before = {path: before[path] for path in paths}
         self._after = {path: after[path] for path in paths}
         self._photo_list = photo_list if paths else None
         self._backups = tuple(backups) if paths else ()
+        self._kind = kind
         self._undone = False
+
+    @property
+    def kind(self) -> str:
+        """EDIT_GPS or EDIT_DATE: what the remembered edit changed."""
+        return self._kind
 
     def clear(self) -> None:
         self._before = {}
@@ -103,15 +122,17 @@ class GpsEditHistory:
     def can_redo(self) -> bool:
         return bool(self._after) and self._undone
 
-    def undo_states(self) -> dict[Path, GpsState]:
+    def undo_states(self) -> dict:
         """
-        GPS states to write to undo the edit. Empty if there is nothing to undo.
+        States to write to undo the edit (see kind). Empty if there is
+        nothing to undo.
         """
         return dict(self._before) if self.can_undo else {}
 
-    def redo_states(self) -> dict[Path, GpsState]:
+    def redo_states(self) -> dict:
         """
-        GPS states to write to redo the edit. Empty if there is nothing to redo.
+        States to write to redo the edit (see kind). Empty if there is
+        nothing to redo.
         """
         return dict(self._after) if self.can_redo else {}
 

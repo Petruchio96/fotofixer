@@ -23,7 +23,7 @@ from PySide6.QtWidgets import QApplication, QLineEdit, QListWidgetItem, QMessage
 
 from core.models import GpsCoordinates
 from gui.presenters.inspector_state import format_coordinates
-from gui.widgets.editor_panel import PICK_BUTTON_TEXT, PICK_BUTTON_TIP
+from gui.widgets.editor_panel import PICK_BUTTON_TEXT, PICK_BUTTON_TIP, PICK_TIME_BUTTON_TEXT
 from gui.widgets.thumbnail_delegate import PICK_DISABLED_ROLE, SOURCE_ROLE
 from gui.window_mixins.photo_list import THUMBNAIL_LATITUDE_ROLE
 from services.coordinate_service import (
@@ -156,6 +156,7 @@ class LocationEditorMixin:
         """
         if not self._photos_with_gps_count():
             return
+        self._pick_kind = "location"
         # Only Show Selected Photos steps aside while picking, then comes back.
         self._only_selected_before_pick = self.is_only_selected
         if self._only_selected_before_pick:
@@ -175,9 +176,16 @@ class LocationEditorMixin:
         self._apply_pick_mode_lock()
 
     def stop_picking_location(self) -> None:
+        """
+        Leave pick mode, whichever tab started it (a location or, on the
+        Date & Time tab, a time; see DateTimeEditorMixin.start_picking_time).
+        """
         self._picking_location = False
+        self._pick_kind = "location"
         self.pick_location_button.setChecked(False)
         self.pick_location_button.setText(PICK_BUTTON_TEXT)
+        self.pick_time_button.setChecked(False)
+        self.pick_time_button.setText(PICK_TIME_BUTTON_TEXT)
         self.pick_banner.hide()
         self.list_widget.viewport().unsetCursor()
         self._pick_escape_shortcut.setEnabled(False)
@@ -191,10 +199,12 @@ class LocationEditorMixin:
             self.show_map_button,
             self.source_card_clear,
             *self.grid_filter_buttons.values(),
+            *self.camera_filter_buttons.values(),
         ):
             widget.setEnabled(True)
         if self._map_window is not None:
             self._map_window.setEnabled(True)
+        self._set_camera_checkboxes_enabled(True)
 
         # Back to the Show filter used before picking, ready to select the
         # photos to change.
@@ -222,6 +232,10 @@ class LocationEditorMixin:
             # A group heading, not a photo.
             return
 
+        if self._pick_kind == "time":
+            if self.use_time_from_path(Path(path_text)):
+                self.stop_picking_location()
+            return
         if self.use_location_from_path(Path(path_text)):
             self.stop_picking_location()
 
@@ -233,6 +247,15 @@ class LocationEditorMixin:
         Runs when picking starts and whenever the photos change while picking.
         """
         if not self._picking_location:
+            return
+        if self._pick_kind == "time":
+            # Any photo with a date that isn't being changed can be picked;
+            # the view stays as it is.
+            if not self._time_pickable_paths():
+                self.stop_picking_location()
+                return
+            self._refresh_pick_marks()
+            self._apply_pick_mode_lock()
             return
         if not self._photos_with_gps_count():
             self.stop_picking_location()
@@ -264,12 +287,19 @@ class LocationEditorMixin:
 
     def _refresh_pick_marks(self) -> None:
         """
-        Dim photos without GPS while picking; clear the dimming otherwise.
+        Dim the photos that can't be picked while picking ("No GPS"; for a
+        time "No Date" or "Being Changed"); clear the dimming otherwise.
         """
-        for item in self._grid_items_by_path.values():
-            unpickable = self._picking_location and item.data(THUMBNAIL_LATITUDE_ROLE) is None
-            if bool(item.data(PICK_DISABLED_ROLE)) != unpickable:
-                item.setData(PICK_DISABLED_ROLE, unpickable)
+        selected = set(self.get_selected_paths()) if self._pick_kind == "time" else set()
+        for path_text, item in self._grid_items_by_path.items():
+            if not self._picking_location:
+                label = ""
+            elif self._pick_kind == "time":
+                label = self._time_pick_label(Path(path_text), selected)
+            else:
+                label = "No GPS" if item.data(THUMBNAIL_LATITUDE_ROLE) is None else ""
+            if (item.data(PICK_DISABLED_ROLE) or "") != label:
+                item.setData(PICK_DISABLED_ROLE, label or None)
 
     def _apply_pick_mode_lock(self) -> None:
         """
@@ -297,8 +327,21 @@ class LocationEditorMixin:
             self.source_card_clear,
             self.apply_button,
             self.remove_gps_button,
+            *self.camera_filter_buttons.values(),
+            self.date_mode_combo,
+            self.date_reference_picker,
+            self.date_reference_back,
+            self.date_reference_forward,
+            self.time_from_photo_button,
+            self.time_source_clear,
+            self.date_set_picker,
+            self.date_apply_button,
         ):
             widget.setEnabled(False)
+        # The other tab's pick button: only the one that started picking
+        # (now "Cancel") stays on.
+        (self.pick_location_button if self._pick_kind == "time" else self.pick_time_button).setEnabled(False)
+        self._set_camera_checkboxes_enabled(False)
         # The map is another way to set New Location: off while picking.
         if self._map_window is not None:
             self._map_window.setEnabled(False)
@@ -339,9 +382,11 @@ class LocationEditorMixin:
 
     def _refresh_source_marker(self) -> None:
         """
-        Mark the location source photo in the grid (blue outline).
+        Mark the source photo in the grid (blue outline, SOURCE): where the
+        location came from, or on the Date & Time tab, the time.
         """
-        source_text = str(self._location_source) if self._location_source else None
+        source = self._time_source if self.is_date_mode else self._location_source
+        source_text = str(source) if source else None
         for path_text, item in self._grid_items_by_path.items():
             is_source = path_text == source_text
             if bool(item.data(SOURCE_ROLE)) != is_source:

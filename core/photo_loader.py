@@ -22,6 +22,7 @@ from pathlib import Path
 from core.exiftool_wrapper import ExifToolWrapper
 from core.file_types import is_supported_file
 from core.models import PhotoInfo
+from core.photo_dates import camera_name, date_taken_from_tags, time_offset_from_tags
 
 
 class PhotoLoader:
@@ -67,9 +68,7 @@ class PhotoLoader:
             return info
 
         try:
-            gps_data = self.exiftool.read_gps(path)
-            info.current_latitude = gps_data.get("latitude")
-            info.current_longitude = gps_data.get("longitude")
+            _apply_metadata(info, self.exiftool.read_gps(path))
         except Exception as exc:
             info.gps_error = str(exc)
 
@@ -109,11 +108,19 @@ class PhotoLoader:
                 missing_paths.append(path)
                 continue
 
-            info = photo_infos_by_path[path]
-            info.current_latitude = gps_data.get("latitude")
-            info.current_longitude = gps_data.get("longitude")
+            _apply_metadata(photo_infos_by_path[path], gps_data)
 
         for path in missing_paths:
             photo_infos_by_path[path] = self.load_photo_info(path)
 
         return [photo_infos_by_path[path] for path in paths]
+
+
+def _apply_metadata(info: PhotoInfo, metadata: dict) -> None:
+    """Copy one file's metadata (GPS, dates, camera) into its PhotoInfo."""
+    info.current_latitude = metadata.get("latitude")
+    info.current_longitude = metadata.get("longitude")
+    info.date_tags = dict(metadata.get("date_tags") or {})
+    info.date_taken = date_taken_from_tags(info.date_tags)
+    info.time_offset = time_offset_from_tags(info.date_tags)
+    info.camera = camera_name(metadata.get("make"), metadata.get("model"))

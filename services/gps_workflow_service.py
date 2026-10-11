@@ -91,6 +91,21 @@ def restore_gps_states(
     return _write_each(list(states), restore)
 
 
+def write_date_tags_to_paths(
+    values_by_path: Mapping[Path, Mapping[str, str | None]],
+    *,
+    writer,
+) -> ApplyExecutionResult:
+    """
+    Write date tags to each file (a date change, or its undo/redo) and
+    collect failures. Every file is attempted.
+    """
+    return _write_each(
+        list(values_by_path),
+        lambda path: writer.write_date_tags(path, dict(values_by_path[path])),
+    )
+
+
 def _write_each(paths: list[Path], write) -> ApplyExecutionResult:
     """
     Run one write per file. A failure on one file never stops the others;

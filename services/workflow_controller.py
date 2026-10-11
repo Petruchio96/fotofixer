@@ -11,6 +11,7 @@ from services.gps_workflow_service import (
     clear_gps_from_paths,
     prepare_apply_gps,
     restore_gps_states,
+    write_date_tags_to_paths,
 )
 from services.models import (
     ApplyPreparation,
@@ -173,6 +174,31 @@ def restore_gps_states_workflow(
     Every file is attempted even if some fail; failures are in the result.
     """
     execution_result = restore_gps_states(states, writer=writer)
+    refreshed_session = refresh_photo_workflow(session, loader, cache)
+    return ApplyWorkflowResult(
+        session=refreshed_session,
+        execution_result=execution_result,
+    )
+
+
+def write_date_tags_workflow(
+    *,
+    session: WorkflowSession,
+    values_by_path: dict[Path, dict[str, str | None]],
+    writer,
+    loader,
+    cache=None,
+) -> ApplyWorkflowResult:
+    """
+    Write date tags (a date change, or its undo/redo) and refresh the
+    selected-photo state afterward. Every file is attempted even if some
+    fail; failures are in the result.
+    """
+    execution_result = write_date_tags_to_paths(values_by_path, writer=writer)
+    if cache is not None:
+        # The file's modified time is part of the cache key and was just set
+        # (undo can set it back to an earlier value): read these files again.
+        cache.forget(list(values_by_path))
     refreshed_session = refresh_photo_workflow(session, loader, cache)
     return ApplyWorkflowResult(
         session=refreshed_session,

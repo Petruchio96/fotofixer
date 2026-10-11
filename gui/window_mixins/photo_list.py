@@ -6,24 +6,33 @@ from PySide6.QtCore import QSignalBlocker, QSize, Qt
 from PySide6.QtGui import QAction, QIcon, QPixmap
 from PySide6.QtWidgets import (
     QApplication,
+    QButtonGroup,
+    QCheckBox,
     QFrame,
     QHBoxLayout,
     QLabel,
     QListWidgetItem,
     QMenu,
     QMessageBox,
+    QPushButton,
     QVBoxLayout,
     QWidget,
 )
 
+from core.photo_dates import UNKNOWN_CAMERA, format_display_datetime
 from gui.background import CancelToken
 from gui.presenters.thumbnail_items import build_thumbnail_item_data_list, reselect_paths
 from gui.widgets.thumbnail_delegate import FADED_ROLE, GROUP_HEADER_ROLE, SHIMMER_ROLE
+from services.date_time_service import group_by_camera
 from services.models import WorkflowSession
 
 THUMBNAIL_PATH_ROLE = Qt.UserRole
 THUMBNAIL_LATITUDE_ROLE = Qt.UserRole + 1
 THUMBNAIL_LONGITUDE_ROLE = Qt.UserRole + 2
+# Date & Time mode: the photo's camera group (past the delegate's roles).
+THUMBNAIL_CAMERA_ROLE = Qt.UserRole + 10
+# Group heading keys in Date & Time mode start with this, then the camera.
+CAMERA_GROUP_PREFIX = "camera:"
 THUMBNAIL_ITEM_SIZE = QSize(170, 190)
 # Group heading heights: just the title, or the title with a divider line
 # above it (separating it from the group shown above).
@@ -58,6 +67,8 @@ class PhotoListMixin:
 
     def clear_photo_selection(self) -> None:
         self.list_widget.clearSelection()
+        # Deselect All also starts the Date & Time change over.
+        self.reset_date_change()
         self.update_details_panel()
 
     def remove_selected_from_list(self) -> None:
@@ -230,19 +241,21 @@ class PhotoListMixin:
             self.list_widget.clear()
             self._group_header_items = []
             self._grid_items_by_path = {}
+            if self.is_date_mode:
+                self._add_camera_groups(pending)
             gps_header_added = False
             gps_count = sum(1 for item_data in self.session.thumbnail_items if item_data.has_gps)
             no_gps_count = len(self.session.thumbnail_items) - gps_count
 
             # Photos without GPS are listed first, under their own heading.
-            if no_gps_count:
+            if no_gps_count and not self.is_date_mode:
                 self._build_group_header_item(
                     f"Photos without GPS Coordinates ({no_gps_count})",
                     with_divider=False,
                     group="no_gps",
                 )
 
-            for item_data in self.session.thumbnail_items:
+            for item_data in [] if self.is_date_mode else self.session.thumbnail_items:
                 if item_data.has_gps and not gps_header_added:
                     self._build_group_header_item(
                         f"Photos with GPS Coordinates ({gps_count})",
@@ -272,12 +285,145 @@ class PhotoListMixin:
         finally:
             self.list_widget.setUpdatesEnabled(True)
 
+        self._show_filter_bars()
         self._apply_grid_filter()
         self._refresh_source_marker()
         self._refresh_pick_marks()
         self._apply_pick_filter_rules()
         self.update_details_panel()
         self._start_thumbnail_job(pending)
+
+    def _add_camera_groups(self, pending: list[tuple[Path, QListWidgetItem, bool]]) -> None:
+        """
+        Date & Time mode: one group per camera, photos in date order, each
+        tile showing its date under the name. No GPS badges here.
+        """
+        infos = self.session.loaded_photo_infos
+        data_by_path = {item_data.path: item_data for item_data in self.session.thumbnail_items}
+        groups = group_by_camera(infos, list(data_by_path))
+        for index, (camera, paths) in enumerate(groups):
+            self._build_group_header_item(
+                f"{camera} ({len(paths)})",
+                with_divider=index > 0,
+                group=CAMERA_GROUP_PREFIX + camera,
+                camera=camera,
+            )
+            for path in paths:
+                item_data = data_by_path[path]
+                info = infos.get(path)
+                taken = info.date_taken if info is not None else None
+                icon = self.thumbnail_loader.cached_icon(path, has_gps=False)
+                item = QListWidgetItem(
+                    icon if icon is not None else self._blank_thumbnail_icon(),
+                    f"{item_data.filename}\n{format_display_datetime(taken)}",
+                )
+                if icon is None:
+                    pending.append((path, item, False))
+                item.setData(THUMBNAIL_PATH_ROLE, str(path))
+                item.setData(THUMBNAIL_LATITUDE_ROLE, item_data.latitude)
+                item.setData(THUMBNAIL_LONGITUDE_ROLE, item_data.longitude)
+                item.setData(THUMBNAIL_CAMERA_ROLE, camera)
+                item.setToolTip(
+                    f"{item_data.filename}\n{camera}\n"
+                    + (f"Taken {format_display_datetime(taken)}" if taken else "No date taken")
+                )
+                item.setSizeHint(THUMBNAIL_ITEM_SIZE)
+                self.list_widget.addItem(item)
+                self._grid_items_by_path[str(path)] = item
+        self._rebuild_camera_filter([camera for camera, _ in groups])
+
+    # --- Date & Time mode: camera filter and camera checkboxes ---------------
+
+    def _show_filter_bars(self) -> None:
+        """
+        Location: the Show filter. Date & Time: the camera filter, only when
+        there is more than one camera.
+        """
+        date_mode = self.is_date_mode
+        self.gps_filter_bar.setVisible(not date_mode)
+        self.camera_filter_bar.setVisible(date_mode and len(self.camera_filter_buttons) > 2)
+
+    def _rebuild_camera_filter(self, cameras: list[str]) -> None:
+        """One button for All, then one per camera, with photo counts."""
+        if self._camera_filter != "all" and self._camera_filter not in cameras:
+            self._camera_filter = "all"
+        for button in self.camera_filter_buttons.values():
+            self.camera_filter_group.removeButton(button)
+            button.deleteLater()
+        self.camera_filter_buttons = {}
+        counts = {
+            camera: sum(
+                1 for item_data in self.session.thumbnail_items
+                if (self.session.loaded_photo_infos.get(item_data.path) is not None
+                    and (self.session.loaded_photo_infos[item_data.path].camera or UNKNOWN_CAMERA) == camera)
+            )
+            for camera in cameras
+        }
+        keys = ["all", *cameras]
+        for position, key in enumerate(keys):
+            count = len(self.session.thumbnail_items) if key == "all" else counts[key]
+            button = QPushButton(f"{'All' if key == 'all' else key} ({count})")
+            button.setObjectName("filterButton")
+            button.setCheckable(True)
+            button.setProperty(
+                "segment",
+                "first" if position == 0 else "last" if position == len(keys) - 1 else "middle",
+            )
+            button.setToolTip(
+                "Show photos from every camera" if key == "all" else f"Show only photos from the {key}"
+            )
+            button.setChecked(key == self._camera_filter)
+            button.clicked.connect(lambda _checked=False, key=key: self.set_camera_filter(key))
+            self.camera_filter_group.addButton(button)
+            self.camera_filter_buttons[key] = button
+            # Before the stretch at the end of the bar.
+            self.camera_filter_layout.insertWidget(self.camera_filter_layout.count() - 1, button)
+
+    def set_camera_filter(self, key: str) -> None:
+        """Date & Time mode: show every camera's photos, or one camera's."""
+        self._camera_filter = key
+        button = self.camera_filter_buttons.get(key)
+        if button is not None and not button.isChecked():
+            button.setChecked(True)
+        # The camera checkboxes are only in the All view.
+        selected = self.get_selected_paths()
+        self._render_photo_list()
+        self.select_browser_paths(selected)
+
+    def _camera_checkboxes(self) -> list[QCheckBox]:
+        boxes = []
+        for header in self._group_header_items:
+            widget = self.list_widget.itemWidget(header)
+            box = widget.findChild(QCheckBox, "cameraCheck") if widget is not None else None
+            if box is not None:
+                boxes.append(box)
+        return boxes
+
+    def _refresh_camera_checkboxes(self) -> None:
+        """Checked when every photo from that camera is selected."""
+        if not self.is_date_mode:
+            return
+        for box in self._camera_checkboxes():
+            camera = box.property("camera")
+            items = [
+                item for item in self._grid_items_by_path.values()
+                if item.data(THUMBNAIL_CAMERA_ROLE) == camera
+            ]
+            with QSignalBlocker(box):
+                box.setChecked(bool(items) and all(item.isSelected() for item in items))
+
+    def _set_camera_checkboxes_enabled(self, enabled: bool) -> None:
+        for box in self._camera_checkboxes():
+            box.setEnabled(enabled)
+
+    def select_camera_photos(self, camera: str, selected: bool) -> None:
+        """A camera checkbox: select (or deselect) every photo from that camera."""
+        with QSignalBlocker(self.list_widget):
+            for item in self._grid_items_by_path.values():
+                if item.data(THUMBNAIL_CAMERA_ROLE) == camera:
+                    item.setSelected(selected)
+        self.list_widget.viewport().update()
+        self.update_details_panel()
 
     def _choose_default_grid_filter(self) -> None:
         """
@@ -356,6 +502,9 @@ class PhotoListMixin:
         self.update_details_panel()
 
     def _apply_grid_filter(self) -> None:
+        if self.is_date_mode:
+            self._apply_camera_filter()
+            return
         show_no_gps = self._grid_filter in ("all", "needs")
         show_gps = self._grid_filter in ("all", "has")
         only_paths = self._only_selected_paths
@@ -396,6 +545,31 @@ class PhotoListMixin:
         else:
             message = "None of these photos have GPS yet."
         self.list_widget.set_empty_message(message)
+
+    def _apply_camera_filter(self) -> None:
+        """Date & Time mode: show every camera, or only the chosen one."""
+        camera_filter = self._camera_filter
+        with QSignalBlocker(self.list_widget):
+            for item in self._photo_items():
+                item.setHidden(
+                    camera_filter != "all" and item.data(THUMBNAIL_CAMERA_ROLE) != camera_filter
+                )
+        shown_groups = {
+            CAMERA_GROUP_PREFIX + item.data(THUMBNAIL_CAMERA_ROLE)
+            for item in self._photo_items() if not item.isHidden()
+        }
+        for header in self._group_header_items:
+            header.setHidden(header.data(GROUP_HEADER_ROLE) not in shown_groups)
+            divider = self._group_header_divider(header)
+            if divider is not None:
+                divider.setHidden(len(shown_groups) < 2)
+        self._refresh_faded_marks()
+        self._refresh_thumbnail_group_header_sizes()
+        self.list_widget.set_empty_message(
+            "" if shown_groups
+            else 'Click "+ Add Photos" to get started.' if not self._grid_items_by_path
+            else "No photos from this camera."
+        )
 
     def _photo_items(self) -> list[QListWidgetItem]:
         return list(self._grid_items_by_path.values())
@@ -463,6 +637,11 @@ class PhotoListMixin:
                 continue
             item, has_gps = entry
             item.setIcon(self.thumbnail_loader.icon_from_image(path, has_gps, image))
+            # A photo with GPS shows its badge on the Location tab and none on
+            # Date & Time: build the other version now, so switching tabs
+            # doesn't read the photos again.
+            if item.data(THUMBNAIL_LATITUDE_ROLE) is not None:
+                self.thumbnail_loader.icon_from_image(path, not has_gps, image)
             item.setData(SHIMMER_ROLE, False)
             hidden_changed = hidden_changed or item.isHidden()
             if path == self._location_source:
@@ -567,6 +746,7 @@ class PhotoListMixin:
         *,
         with_divider: bool,
         group: str,
+        camera: str | None = None,
     ) -> QListWidgetItem:
         item = QListWidgetItem()
         item.setFlags(Qt.NoItemFlags)
@@ -575,7 +755,7 @@ class PhotoListMixin:
         self.list_widget.addItem(item)
         self.list_widget.setItemWidget(
             item,
-            self._build_group_header_widget(title, with_divider=with_divider, group=group),
+            self._build_group_header_widget(title, with_divider=with_divider, group=group, camera=camera),
         )
         self._group_header_items.append(item)
         return item
@@ -603,6 +783,7 @@ class PhotoListMixin:
         *,
         with_divider: bool,
         group: str,
+        camera: str | None = None,
     ) -> QWidget:
         widget = QWidget()
         layout = QVBoxLayout(widget)
@@ -620,13 +801,23 @@ class PhotoListMixin:
         layout.addStretch(1)
 
         # Blue for "has GPS" (what exists), orange for "needs GPS" (what will
-        # change); see styles.py.
-        dot = QLabel("●")
-        dot.setObjectName("groupDot")
-        dot.setProperty("group", group)
+        # change); see styles.py. Camera groups (Date & Time mode) are navy,
+        # the Photo List's color, and in the All view have a checkbox that
+        # selects every photo from that camera instead of the dot.
+        if camera is not None and self._camera_filter == "all":
+            dot = QCheckBox()
+            dot.setObjectName("cameraCheck")
+            dot.setProperty("camera", camera)
+            dot.setToolTip(f"Select or deselect every photo from the {camera}")
+            dot.setCursor(Qt.PointingHandCursor)
+            dot.toggled.connect(lambda checked, camera=camera: self.select_camera_photos(camera, checked))
+        else:
+            dot = QLabel("●")
+            dot.setObjectName("groupDot")
+            dot.setProperty("group", "camera" if camera is not None else group)
         label = QLabel(title)
         label.setObjectName("thumbnailGroupHeader")
-        label.setProperty("group", group)
+        label.setProperty("group", "camera" if camera is not None else group)
         label.setWordWrap(False)
         label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
 

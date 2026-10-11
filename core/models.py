@@ -1,4 +1,5 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional
 
@@ -16,6 +17,15 @@ class PhotoInfo:
     current_latitude: Optional[float] = None
     current_longitude: Optional[float] = None
     gps_error: Optional[str] = None
+    # When the photo was taken (DateTimeOriginal, or CreateDate without it).
+    date_taken: Optional[datetime] = None
+    # The photo's time zone offset (OffsetTimeOriginal), None if it has none.
+    time_offset: Optional[timedelta] = None
+    # Readable camera name from Make and Model (see core/photo_dates.py).
+    camera: Optional[str] = None
+    # The date tags exactly as read (tag -> ExifTool text, None if missing),
+    # so undo can put back precisely what was there.
+    date_tags: dict[str, Optional[str]] = field(default_factory=dict)
 
 
 @dataclass

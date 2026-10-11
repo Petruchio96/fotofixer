@@ -26,6 +26,7 @@ from services.workflow_controller import (
     prepare_apply_workflow,
     refresh_photo_workflow,
     restore_gps_states_workflow,
+    write_date_tags_workflow,
 )
 
 
@@ -127,6 +128,24 @@ class PhotoWorkflowFacade:
         return restore_gps_states_workflow(
             session=session,
             states=states,
+            writer=self.writer,
+            loader=self.loader,
+            cache=self.metadata_cache,
+        )
+
+    def write_date_tags_workflow(
+        self,
+        *,
+        session: WorkflowSession,
+        values_by_path: dict[Path, dict[str, str | None]],
+    ) -> ApplyWorkflowResult:
+        """
+        Write date tags to photos (see services/date_time_service.py for
+        building them) and refresh the session.
+        """
+        return write_date_tags_workflow(
+            session=session,
+            values_by_path=values_by_path,
             writer=self.writer,
             loader=self.loader,
             cache=self.metadata_cache,

@@ -33,8 +33,9 @@ GROUP_HEADER_ROLE = Qt.UserRole + 4
 # Item data role: True on the photo the New Location was taken from.
 SOURCE_ROLE = Qt.UserRole + 5
 
-# Item data role: True while picking a location, on photos that cannot be
-# picked because they have no GPS. They are drawn dimmed with "No GPS".
+# Item data role: while picking, on photos that cannot be picked. They are
+# drawn dimmed with this label ("No GPS"; for a time "No Date" or "Being
+# Changed"); True means "No GPS".
 PICK_DISABLED_ROLE = Qt.UserRole + 6
 
 # Item data role: True in "Only Show Selected Photos" on a photo that was
@@ -75,8 +76,9 @@ class ThumbnailDelegate(QStyledItemDelegate):
         if option.rect.isEmpty():
             return
         super().paint(painter, option, index)
-        if index.data(PICK_DISABLED_ROLE):
-            _paint_washed_out(painter, option, "No GPS")
+        pick_disabled = index.data(PICK_DISABLED_ROLE)
+        if pick_disabled:
+            _paint_washed_out(painter, option, pick_disabled if isinstance(pick_disabled, str) else "No GPS")
         elif index.data(IN_LIST_ROLE):
             _paint_washed_out(painter, option, "In Photo List")
         elif index.data(FADED_ROLE):

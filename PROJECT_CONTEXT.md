@@ -3,8 +3,8 @@
 ## Snapshot
 
 Last updated: 2026-10-10
-Version: 1.5.0 (not released yet; bumped on branch `picker-folders`). 1.4.1 is the latest release (Linux, Windows, macOS). 1.4: the app's own Add Photos picker, the map (Pick from a Map, street map and satellite imagery), Edit > Settings, and the same pinned ExifTool on every system. 1.4.1: the blue pin GPS badge, the blue = existing / orange = new color theme, the map's Clear button, and no blocking dialogs. 1.5 (unreleased): the Add Photos picker shows folders with the photos and folders can be chosen to add their photos (branch `picker-folders`), plus PR #10, merged earlier: deselect after Apply, the map's Back button and zoom from a photo's preview, backups named `<name>_original.<ext>` (only for photos that had GPS), tighter window spacing, and a clearer window edge on Windows 11
-Status: Two-pane layout (Photo List and Photos to Change, with Location and Date & Time tabs), the app's own photo picker (folder tree; folders and photos, either can be chosen), a pop-out map for picking a location (OpenStreetMap, USGS, or Esri with the user's key), fast thumbnails (shared Linux thumbnail cache, embedded JPEG thumbnails), background loading, failure-tolerant writes, undo/redo that restores the photo list, optional backups, an error log, and CI builds for Linux, Windows, and macOS.
+Version: 1.6.0 (not released yet; bumped on branch `date-time-editing`; 1.5.0 was merged in PR #11 and never released on its own). 1.4.1 is the latest release (Linux, Windows, macOS). 1.4: the app's own Add Photos picker, the map (Pick from a Map, street map and satellite imagery), Edit > Settings, and the same pinned ExifTool on every system. 1.4.1: the blue pin GPS badge, the blue = existing / orange = new color theme, the map's Clear button, and no blocking dialogs. 1.5 (unreleased): the Add Photos picker shows folders with the photos and folders can be chosen to add their photos (branch `picker-folders`), plus PR #10, merged earlier: deselect after Apply, the map's Back button and zoom from a photo's preview, backups named `<name>_original.<ext>` (only for photos that had GPS), tighter window spacing, and a clearer window edge on Windows 11. 1.6 (unreleased, branch `date-time-editing`): Date & Time editing (shift the selected photos' dates or set one date; the Photo List groups photos by camera on that tab)
+Status: Two-pane layout (Photo List and Photos to Change, with Location and Date & Time tabs; Date & Time shifts or sets photo dates), the app's own photo picker (folder tree; folders and photos, either can be chosen), a pop-out map for picking a location (OpenStreetMap, USGS, or Esri with the user's key), fast thumbnails (shared Linux thumbnail cache, embedded JPEG thumbnails), background loading, failure-tolerant writes, undo/redo that restores the photo list, optional backups, an error log, and CI builds for Linux, Windows, and macOS.
 
 Repository: https://github.com/Petruchio96/photo-gps-editor
 
@@ -32,7 +32,9 @@ Key objectives:
 - `core/places.py`: the picker's places and folder listings (bookmarks from the Linux file manager, network share names, system mounts to skip, hidden files per system); no Qt
 - `core/exiftool_wrapper.py`: ExifTool read/write/clear integration through one long-running `-stay_open` process; reads embedded RAW previews (small thumbnails are captured during the bulk GPS read to avoid reopening files); optional `keep_backups`
 - `core/process_guard.py`: starts helper processes (ExifTool) so they cannot outlive the app after a crash (shell watchdog on Linux/macOS, job object on Windows)
-- `core/photo_loader.py`: converts paths into `PhotoInfo` using single-file and bulk metadata reads
+- `core/photo_loader.py`: converts paths into `PhotoInfo` using single-file and bulk metadata reads (GPS, the date tags, and the camera's Make/Model in the same ExifTool read)
+- `core/time_zones.py`: the time zone list (one named zone per distinct offset/daylight-saving pattern, east at the top to west at the bottom), offsets per date via `zoneinfo` (the `tzdata` package supplies the rules on Windows), matching a photo's offset to a zone (US zones first), and the default zone; no Qt
+- `core/photo_dates.py`: EXIF date parsing and formatting (the app shows dates as `10/03/2026 9:14:02am`), date taken (`DateTimeOriginal`, else `CreateDate`), and camera names from Make/Model (`Canon EOS R6`, `Apple iPhone 15 Pro`); no Qt
 
 ### Services
 
@@ -40,7 +42,8 @@ Key objectives:
 - Handles source resolution, target-file rules, session refresh, overwrite detection, coordinate parsing, and GPS apply orchestration
 - `services/workflow_facade.py`: single backend workflow entry point used by the desktop frontend
 - `services/photo_metadata_cache.py`: backend-owned in-memory metadata cache for unchanged selected photos
-- `services/gps_edit_history.py`: single-step undo/redo memory, including a snapshot of the photo list and selection
+- `services/gps_edit_history.py`: single-step undo/redo memory, including a snapshot of the photo list and selection; one history for GPS and date edits (each edit has a kind), so Undo undoes the last change from either tab
+- `services/date_time_service.py`: what a date Shift or Set changes (`DatePlan`), the tag values written, and camera groups for the Photo List; no Qt
 - Apply, clear, and undo/redo attempt every file and report failures instead of stopping at the first one
 - Intended to remain reusable for possible future desktop, API, web, or container workflows
 
@@ -54,8 +57,9 @@ Key objectives:
 - `gui/gc_guard.py`: automatic garbage collection is off; a timer collects on the GUI thread between events
 - `gui/window_frame.py`: on Windows 11, a visible slate border (DWM border color) for the map, the picker, and Settings, which Windows otherwise draws too faint to tell apart from the main window; no-op elsewhere
 - `gui/widgets/`: browser panel (Photo List pane: header, Show filter, selection bar, grid with click-to-add selection), editor panel (Photos to Change pane with tabs), `photo_picker.py` (the Add Photos picker), `map_view.py` (the map widget: tiles drawn with QPainter, downloaded by QNetworkAccessManager on the GUI thread into a disk cache; pin and photo dots), `map_window.py` (the pop-out map window and photo preview), `settings_dialog.py` (Edit > Settings: backups and the ArcGIS key), loading indicator, thumbnail delegate (shimmer placeholders, SOURCE marker, "No GPS" dimming, faded deselected photos), `icons.py` (line icons drawn in code)
-- `gui/presenters/`: UI-facing view-state builders; `inspector_state.py` holds the inspector logic with no Qt code
-- `gui/window_mixins/`: focused behavior for the photo list, inspector, New Location / pick mode, the map (`map_picker.py`), and apply/remove workflows
+- `gui/presenters/`: UI-facing view-state builders; `inspector_state.py` holds the inspector logic and `date_time_state.py` the Date & Time tab's, with no Qt code
+- `gui/widgets/date_time_picker.py`: the compact date and time picker (date box with a calendar, hour/minute/second drop-downs, am/pm label; arrows drawn in code)
+- `gui/window_mixins/`: focused behavior for the photo list, inspector, New Location / pick mode, the map (`map_picker.py`), apply/remove workflows, and the Date & Time tab (`date_time_editor.py`)
 
 ## Current UI
 
@@ -83,9 +87,17 @@ callback) and the right-click menu uses `popup()`; the blocking `QMessageBox.war
 - Right-click: `Copy GPS Coordinates`, `Use This Location`, `Remove from List` (does not change the selection)
 - Status row under the grid appears only for action results (with an `Undo` link), errors, and loading progress
 
+### Photo List in Date & Time mode
+
+- The tab shown is filled orange (white text and icon), so the mode is clear
+- The Photo List follows the active tab. On `Date & Time`: no GPS badges and no GPS groups; one group per camera (`Canon EOS R6 (42)`, sorted by name, `Unknown Camera` last; navy), photos in date order with photos without a date last, and each tile shows its date under the name
+- In the All view each camera heading has a checkbox that selects (or deselects) every photo from that camera
+- The Show filter is replaced by a camera filter (`All`, then one button per camera) when the list has more than one camera, and hidden otherwise; `Only Show Selected Photos` is not offered
+- Switching tabs keeps the selection; thumbnails of photos with GPS are kept with and without the badge, so switching doesn't read the photos again
+
 ### Right: Photos to Change
 
-- Brown `PHOTOS TO CHANGE` header, then `N Photos Selected` and `X without GPS · Y with GPS` (one photo: its name and GPS), `Copy` for a single photo with GPS
+- Brown `PHOTOS TO CHANGE` header, then (on the Location tab) `N Photos Selected` and `X without GPS · Y with GPS` (one photo: its name and GPS), `Copy` for a single photo with GPS
 - `Location` tab:
 - `New Location`: `Copy location` with `From a Photo in the Photo List` and `From a Photo on Your Computer`; latitude/longitude fields (decimal, DMS, DDM; a pasted pair auto-splits); `Paste`, `Clear`
 - `From a Photo in the Photo List` enters pick mode: the button becomes `Cancel`, a blue banner explains the mode, the grid switches to `Has GPS` (view buttons locked), and everything except `Add Photos`, `Clear List`, and `Cancel` is disabled; afterwards the previous view (and Only Show Selected Photos) returns, and the selection is kept. Disabled, with a hover hint, when no photo in the list has GPS
@@ -94,7 +106,18 @@ callback) and the right-click menu uses `popup()`; the blocking `QMessageBox.war
 - `Apply Location to N Photos` (orange); a note warns when existing GPS will be replaced; the confirmation offers `Skip Photos with GPS`, `Replace`, or `Cancel`
 - After Apply or Remove GPS, the photos are deselected except ones that failed (to retry); changed photos can move to a group the view hides and would otherwise be included in the next Apply. Undo brings the old selection back
 - `Remove GPS from Selected N Photos` (red outline, counts the selected photos that have GPS), with confirmation
-- `Date & Time` tab: placeholder until date/time editing is designed
+- `Date & Time` tab (modeled on Synology Photos' Edit date and time): an orange `Change Date and Time` box with `Change`: `Shift Date and Time` (default) or `Set a Single Date and Time`, and a one-line description
+- Shift (the camera's clock was off; the gaps between photos are right): a blue reference card (name · camera, `Current Date: …`, `The earliest selected`, `‹ 1 of 12 ›` arrows to choose another selected photo by date), `Correct date and time for this photo` (date box with a calendar, then hour : minute : second drop-downs; the hour list reads `9 am`, the box shows `9`, and am/pm sits after the seconds); every selected photo with a date moves by the same amount
+- `Or copy the time from a photo taken at the same moment`: `From a Photo in the Photo List` (pick mode like Location's: banner, lock, Esc; photos being changed and photos without a date show `Being Changed` / `No Date`) and `From a Photo on Your Computer` (the picker in one-photo mode; pop-ups for a photo with no date or an unreadable one). The photo shows on a blue source card (✕ to stop using it) and, in the list, as a blue `SOURCE` outline; it is never changed itself, even when selected; editing the date or time by hand drops it
+- Set: `New date and time`; every selected photo gets it, including photos with no date
+- Time zone drop-down under the date and time (both modes): named zones with their abbreviation on that date (`Mountain Time (Denver) — MDT`, `MST` in winter; zones without one show their offset, `Gulf (Dubai) — UTC+4`), east at the top. Blank and off until a photo is selected. Default, from the selected photos: their zone if they share one, else the most common (a tie goes to the earliest photo's zone); `No time zone` when none has one (then it is offered as an entry); never further east than US Eastern (picking one by hand still works). In red, with a warning hover hint, when the selected photos have more than one zone
+- Left alone, each photo keeps its own zone (offset tags untouched). Choosing a zone converts the times shown to it (the same moment) and every photo changed gets it (`OffsetTimeOriginal`, `OffsetTimeDigitized`, `OffsetTime`), with daylight saving worked out per photo; a photo without a zone keeps its clock time and just gets the zone. Typed times are in the chosen zone. Copying the time from a photo compares the real moments when both photos have a zone
+- Zones show on the reference card (`Current Date: 10/03/2026 9:14:02am MDT`) and in `Changing date to:` (`9:14:02am MDT → 11:14:02am EDT`); the box scrolls on short windows rather than squeezing (the changes list shrinks first)
+- `Changing date to:` fills the rest of the box and scrolls: every selected photo with its current date and, only where it changes, `→` and the new date in orange; `Source, not changed`; `Skipped` (Shift, no date)
+- Hints: the photos come from more than one camera (Shift only), photos without a date are skipped. The orange button reads `Shift N Photos` or `Set Date on N Photos`; no confirmation (Undo covers it)
+- What is written: `DateTimeOriginal`, `CreateDate`, `ModifyDate`, and the file's `FileModifyDate`, all set to each photo's new value (the file date as plain clock time), plus the offset tags only when a zone was chosen; sub-seconds are left alone. Date changes never make backup copies; undo writes back the exact tags read before (removing ones that weren't there)
+- After a change the photos are deselected (failures stay selected), the status row offers Undo, and the shift/source start over
+- The summary above the tabs shows dates on this tab (`1 Photo Selected · IMG_4101.CR3 · Taken 10/03/2026 9:14:02am`; for several, the range and the cameras); `Copy` (GPS) is hidden
 - Pop-ups for a browsed photo with no GPS and for an unreadable photo
 
 ### Map window
@@ -129,12 +152,13 @@ callback) and the right-click menu uses `popup()`; the blocking `QMessageBox.war
 - Help:
 - `About` includes the GitHub repository link
 
-## GPS Edit Undo / Redo
+## GPS and Date Edit Undo / Redo
 
-- Single-step in-memory undo/redo for GPS write actions
+- Single-step in-memory undo/redo for GPS and date write actions (one history: Undo undoes the last change from either tab)
 - Applies to:
 - `Apply Location to N Photos`
 - `Remove GPS from Selected N Photos`
+- `Shift N Photos` / `Set Date on N Photos` (restores the exact date tags read before; no backups)
 - Stores prior GPS state for each successfully changed photo
 - Restores prior coordinates or blank/no-GPS state on undo
 - Also puts the photo list and selection back as they were at the edit (photos added since disappear, removed ones come back; files that no longer exist are left out)
@@ -164,9 +188,8 @@ callback) and the right-click menu uses `popup()`; the blocking `QMessageBox.war
 
 Next up, in order:
 
-1. Date & Time editing: the next feature (the Date & Time tab is a placeholder). Start with a design discussion before code: set an exact date/time or shift by an amount (camera clock off), which tags (`DateTimeOriginal`, `CreateDate`, `ModifyDate`, time zones/offsets, RAW vs JPG), whether to copy the time from another photo like New Location does, how it shows in the Photos to Change pane and the grid, undo/redo and backups (reuse the GPS ones), and the blue = existing / orange = new colors. Likely a version bump (significant feature)
-2. Check on Windows (and macOS when possible) the changes merged in PR #10, from the latest `main` CI build or the next release: the slate border on the map, picker, and Settings windows; spacing; Back/zoom on the map; backups added to the list and deleted by Undo
-3. In-app update check: look for a newer version on GitHub Releases (at startup or from Help) and link to the download
+1. Check on Windows (and macOS when possible) the changes merged in PR #10, from the latest `main` CI build or the next release: the slate border on the map, picker, and Settings windows; spacing; Back/zoom on the map; backups added to the list and deleted by Undo. Also the Date & Time tab (date writes to CR3/CR2/DNG were only tested with JPEGs)
+2. In-app update check: look for a newer version on GitHub Releases (at startup or from Help) and link to the download
 
 Later:
 

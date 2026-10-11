@@ -1,7 +1,7 @@
 # Photo GPS Editor
 
-Python + PySide6 desktop app for viewing and editing GPS metadata in photos
-(JPG, CR2, CR3, DNG) through ExifTool. Runs on Linux Mint, Windows 11, and
+Python + PySide6 desktop app for viewing and editing GPS metadata and dates in
+photos (JPG, CR2, CR3, DNG) through ExifTool. Runs on Linux Mint, Windows 11, and
 macOS (Apple Silicon).
 
 Read `PROJECT_CONTEXT.md` before starting work. It is the source of truth for
@@ -41,6 +41,11 @@ status, architecture, the current UI, and future ideas.
   queued signals carrying Python objects (that crashed on Windows). Don't open
   dialogs with blocking `exec()`; use `open()` plus a callback.
 - When updating `PROJECT_CONTEXT.md`, change only the parts that changed.
+- Mockups and trials of UI changes: build them as a Design-type Artifact
+  (Artifact quickstart with intent "design", then a canvas of `.dc.html`
+  artboards), which opens in the app's right-hand pane. Make it look like the
+  real app (colors and sizes from `gui/styles.py`) and interactive where that
+  helps. Don't use inline chat widgets or downloadable HTML files for mockups.
 
 ## Git
 

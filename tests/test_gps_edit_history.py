@@ -1,7 +1,7 @@
 import unittest
 from pathlib import Path
 
-from services.gps_edit_history import GpsEditHistory, PhotoListSnapshot
+from services.gps_edit_history import EDIT_DATE, EDIT_GPS, GpsEditHistory, PhotoListSnapshot
 
 FIRST = Path("/tmp/first.jpg")
 SECOND = Path("/tmp/second.jpg")
@@ -125,6 +125,23 @@ class GpsEditHistoryBackupTests(unittest.TestCase):
         history.record(before={}, after={}, backups=(Path("/tmp/a_original.jpg"),))
 
         self.assertEqual(history.backups, ())
+
+
+class EditKindTests(unittest.TestCase):
+    def test_the_last_edit_wins_whatever_its_kind(self) -> None:
+        history = GpsEditHistory()
+        path = Path("/photos/a.jpg")
+        history.record(before={path: (None, None)}, after={path: (1.0, 2.0)})
+        self.assertEqual(history.kind, EDIT_GPS)
+
+        before = {"DateTimeOriginal": "2026:10:03 09:14:02"}
+        after = {"DateTimeOriginal": "2026:10:03 10:16:12"}
+        history.record(before={path: before}, after={path: after}, kind=EDIT_DATE)
+
+        self.assertEqual(history.kind, EDIT_DATE)
+        self.assertEqual(history.undo_states(), {path: before})
+        history.mark_undone()
+        self.assertEqual(history.redo_states(), {path: after})
 
 
 if __name__ == "__main__":

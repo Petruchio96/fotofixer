@@ -35,8 +35,12 @@ from typing import IO
 
 from core.file_types import is_raw_file
 from core.models import EmbeddedPreview
+from core.photo_dates import ALL_DATE_TAGS
 from core.process_guard import NO_WINDOW_FLAGS, start_guarded_process, stop_process_tree
 from core.runtime_paths import default_exiftool_executable
+
+# Read along with GPS: the date tags and the camera (Make and Model).
+METADATA_READ_OPTIONS = [f"-{tag}" for tag in (*ALL_DATE_TAGS, "Make", "Model")]
 
 # Embedded JPEG previews to try for RAW thumbnails, smallest/fastest first.
 # Many RAW files have a small ThumbnailImage; others only have a larger
@@ -139,24 +143,12 @@ class ExifToolWrapper:
                 If ExifTool fails, such as when the file cannot be read.
         """
         output = self._run(
-            ["-json", "-n", "-GPSLatitude", "-GPSLongitude"],
+            ["-json", "-n", "-GPSLatitude", "-GPSLongitude", *METADATA_READ_OPTIONS],
             [path],
             "Failed to read metadata.",
         )
         data = json.loads(output)
-
-        if not data:
-            return {
-                "latitude": None,
-                "longitude": None,
-            }
-
-        record = data[0]
-
-        return {
-            "latitude": record.get("GPSLatitude"),
-            "longitude": record.get("GPSLongitude"),
-        }
+        return _metadata_from_record(data[0] if data else {})
 
     def read_gps_many(self, paths: list[Path]) -> dict[Path, dict]:
         """
@@ -192,7 +184,7 @@ class ExifToolWrapper:
             ["-b", "-ThumbnailImage", "-Orientation", "-ImageSize"] if with_thumbnails else []
         )
         output = self._run(
-            ["-json", "-n", *extra_options, "-GPSLatitude", "-GPSLongitude"],
+            ["-json", "-n", *extra_options, "-GPSLatitude", "-GPSLongitude", *METADATA_READ_OPTIONS],
             paths,
             "Failed to read metadata.",
         )
@@ -205,10 +197,7 @@ class ExifToolWrapper:
                 continue
 
             path = Path(source_file)
-            gps_by_path[path] = {
-                "latitude": record.get("GPSLatitude"),
-                "longitude": record.get("GPSLongitude"),
-            }
+            gps_by_path[path] = _metadata_from_record(record)
 
             if with_thumbnails:
                 self._remember_thumbnail(path, _decode_preview(record, "ThumbnailImage"))
@@ -369,6 +358,32 @@ class ExifToolWrapper:
             ],
             [path],
             "Failed to clear metadata.",
+        )
+
+    def write_date_tags(self, path: Path, values: dict[str, str | None]) -> None:
+        """
+        Write date tags to a file: {tag: "2026:10:03 09:14:02"}. None removes
+        the tag (used by undo when the photo didn't have it), except the
+        file's own modified date, which every file has and is then left as is.
+
+        Date changes never make a backup copy: undo puts back the exact
+        values read before the change.
+
+        Raises:
+            RuntimeError:
+                If ExifTool fails to write the metadata.
+        """
+        assignments = [
+            f"-{tag}={value if value is not None else ''}"
+            for tag, value in values.items()
+            if value is not None or tag != "FileModifyDate"
+        ]
+        if not assignments:
+            return
+        self._run(
+            [*self._overwrite_options(), *assignments],
+            [path],
+            "Failed to write the date.",
         )
 
     def _overwrite_options(self) -> list[str]:
@@ -617,6 +632,23 @@ class ExifToolWrapper:
                 stream.close()
             except OSError:
                 pass
+
+
+def _metadata_from_record(record: dict) -> dict:
+    """
+    One file's ExifTool record -> {"latitude", "longitude", "date_tags",
+    "make", "model"}. date_tags maps each date tag to its text, or None.
+    """
+    return {
+        "latitude": record.get("GPSLatitude"),
+        "longitude": record.get("GPSLongitude"),
+        "date_tags": {
+            tag: str(record[tag]) if record.get(tag) not in (None, "") else None
+            for tag in ALL_DATE_TAGS
+        },
+        "make": record.get("Make"),
+        "model": record.get("Model"),
+    }
 
 
 def _decode_preview(record: dict, tag: str) -> EmbeddedPreview | None:

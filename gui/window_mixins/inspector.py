@@ -41,6 +41,16 @@ class InspectorMixin:
 
         self.remove_gps_button.setText(state.remove_gps_label)
         self.remove_gps_button.setEnabled(state.can_remove_gps)
+
+        # The Date & Time tab, and the summary above the tabs while it shows
+        # (dates instead of GPS; Copy is for GPS only). Only worked out while
+        # it shows: switching to it updates it (see editor_tab_changed).
+        if self.is_date_mode:
+            date_state = self._build_date_time_state()
+            self._apply_date_time_state(date_state)
+            self.selection_title_label.setText(date_state.title)
+            self.selection_gps_label.setText(date_state.summary)
+            self.copy_location_button.setVisible(False)
         self._refresh_map()
         self._apply_pick_mode_lock()
 

@@ -365,8 +365,11 @@ def build_browser_panel(window: "MainWindow") -> QWidget:
     layout.setContentsMargins(20, 16, 20, 20)
     layout.setSpacing(12)
 
-    # Show filter (All / Needs GPS / Has GPS), a segmented control.
-    filter_row = QHBoxLayout()
+    # Show filter (All / Needs GPS / Has GPS), a segmented control. On the
+    # Date & Time tab a camera filter takes its place (see below).
+    window.gps_filter_bar = QWidget()
+    filter_row = QHBoxLayout(window.gps_filter_bar)
+    filter_row.setContentsMargins(0, 0, 0, 0)
     filter_row.setSpacing(0)
     show_label = QLabel("Show")
     show_label.setObjectName("filterLabel")
@@ -401,6 +404,23 @@ def build_browser_panel(window: "MainWindow") -> QWidget:
     window.only_selected_button.toggled.connect(window.set_only_selected)
     filter_row.addWidget(window.only_selected_button)
     filter_row.addStretch(1)
+
+    # Date & Time mode: All, then one button per camera. Built when the
+    # photos are shown (see PhotoListMixin._rebuild_camera_filter), and only
+    # shown when the list has photos from more than one camera.
+    window.camera_filter_bar = QWidget()
+    window.camera_filter_layout = QHBoxLayout(window.camera_filter_bar)
+    window.camera_filter_layout.setContentsMargins(0, 0, 0, 0)
+    window.camera_filter_layout.setSpacing(0)
+    camera_label = QLabel("Camera")
+    camera_label.setObjectName("filterLabel")
+    window.camera_filter_layout.addWidget(camera_label)
+    window.camera_filter_layout.addSpacing(10)
+    window.camera_filter_layout.addStretch(1)
+    window.camera_filter_group = QButtonGroup(panel)
+    window.camera_filter_group.setExclusive(True)
+    window.camera_filter_buttons = {}
+    window.camera_filter_bar.hide()
 
     # Banner shown while picking a location source from the grid.
     window.pick_banner = QFrame()
@@ -461,7 +481,8 @@ def build_browser_panel(window: "MainWindow") -> QWidget:
     window.loading_indicator.showing_changed.connect(window._update_status_row)
     window.loading_indicator.hide()
 
-    layout.addLayout(filter_row)
+    layout.addWidget(window.gps_filter_bar)
+    layout.addWidget(window.camera_filter_bar)
     layout.addWidget(window.pick_banner)
     layout.addWidget(grid_box, 1)
     layout.addWidget(window.loading_indicator)

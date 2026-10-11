@@ -36,6 +36,16 @@ class PhotoMetadataCache:
 
         self._items[key] = replace(info)
 
+    def forget(self, paths: list[Path]) -> None:
+        """
+        Drop cached entries for files just written. A date change also sets
+        the file's modified time, so after undo a file can come back to an
+        earlier time and size that would otherwise find stale metadata.
+        """
+        targets = set(paths)
+        for key in [key for key in self._items if key[0] in targets]:
+            del self._items[key]
+
     def get_many(self, paths: list[Path]) -> dict[Path, PhotoInfo]:
         return {
             path: info

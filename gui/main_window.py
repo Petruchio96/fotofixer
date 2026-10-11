@@ -5,6 +5,7 @@ Main application window.
 from __future__ import annotations
 
 import html
+from datetime import timedelta
 from collections.abc import Callable
 from pathlib import Path
 
@@ -32,15 +33,16 @@ from gui.widgets.editor_panel import build_editor_panel
 from gui.widgets.photo_picker import PhotoPickerDialog
 from gui.widgets.settings_dialog import SettingsDialog
 from gui.window_mixins.apply_workflow import ApplyWorkflowMixin
+from gui.window_mixins.date_time_editor import DateTimeEditorMixin
 from gui.window_mixins.inspector import InspectorMixin
 from gui.window_mixins.location_editor import LocationEditorMixin
 from gui.window_mixins.map_picker import ESRI_KEY_SETTING, MapPickerMixin
 from gui.window_mixins.photo_list import THUMBNAIL_BATCH_SIZE, PhotoListMixin
-from services.gps_edit_history import GpsEditHistory, PhotoListSnapshot
+from services.gps_edit_history import EDIT_DATE, EDIT_GPS, GpsEditHistory, PhotoListSnapshot
 from services.models import OverwriteEntry, WorkflowSession
 from services.workflow_facade import PhotoWorkflowFacade
 
-APP_VERSION = "1.5.0"
+APP_VERSION = "1.6.0"
 
 # QSettings key for the "Keep Backup Copies of Originals" option.
 KEEP_BACKUPS_SETTING = "keep_backup_copies"
@@ -57,6 +59,7 @@ STATUS_MESSAGE_MS = 12000
 class MainWindow(
     InspectorMixin,
     LocationEditorMixin,
+    DateTimeEditorMixin,
     MapPickerMixin,
     PhotoListMixin,
     ApplyWorkflowMixin,
@@ -97,7 +100,22 @@ class MainWindow(
         # Where the New Location came from (a photo), and pick-mode state.
         self._location_source = None
         self._picking_location = False
+        # What pick mode picks: "location" (Location tab) or "time" (Date & Time).
+        self._pick_kind = "location"
         self._filter_before_pick = None
+        # Date & Time tab (see DateTimeEditorMixin): Shift or Set, the
+        # reference photo chosen with the arrows (None: the earliest), the
+        # shift entered, the photo the correct time came from, and Set's date.
+        self._date_change_mode = "shift"
+        self._date_reference = None
+        self._date_shift = timedelta(0)
+        self._time_source = None
+        self._time_source_info = None
+        self._date_set_value = None
+        # The time zone chosen in the drop-down, or None (each photo keeps its own).
+        self._date_zone = None
+        # Date & Time mode's camera filter: "all" or one camera's name.
+        self._camera_filter = "all"
         # Message boxes open right now (see show_message).
         self._open_messages: list[QMessageBox] = []
         self._last_status_message = ""
@@ -362,6 +380,7 @@ class MainWindow(
         self.remove_from_list_button.setEnabled(has_selection)
 
         self._update_pick_button()
+        self._refresh_camera_checkboxes()
         self.clear_list_button.setEnabled(loaded_count > 0)
         if hasattr(self, "select_all_action"):
             self.select_all_action.setEnabled(loaded_count > 0)
@@ -390,11 +409,13 @@ class MainWindow(
         before_states: dict[Path, tuple[float | None, float | None]],
         after_states: dict[Path, tuple[float | None, float | None]],
         backups: list[Path] | None = None,
+        kind: str = EDIT_GPS,
     ) -> None:
         self.gps_history.record(
             before=before_states,
             after=after_states,
             backups=tuple(backups or ()),
+            kind=kind,
             photo_list=PhotoListSnapshot(
                 paths=tuple(self.session.selected_paths),
                 selected=tuple(self.get_selected_paths()),
@@ -418,34 +439,51 @@ class MainWindow(
         if not states:
             return
 
-        failed_paths, _backups = self._restore_gps_states(states)
+        what = "date" if self.gps_history.kind == EDIT_DATE else "GPS"
+        failed_paths, _backups = self._restore_edit_states(states)
         failed_paths += self._delete_backups(self.gps_history.backups)
         self.gps_history.mark_undone()
         self._update_undo_redo_actions()
-        self._report_write_failures("undo the GPS change for", failed_paths)
-        self._set_status_message("GPS change undone.", "info")
+        self._report_write_failures(f"undo the {what} change for", failed_paths)
+        self._set_status_message(f"{what[0].upper()}{what[1:]} change undone.", "info")
 
     def redo_gps_edit(self) -> None:
         states = self.gps_history.redo_states()
         if not states:
             return
 
-        failed_paths, backups = self._restore_gps_states(states)
+        what = "date" if self.gps_history.kind == EDIT_DATE else "GPS"
+        failed_paths, backups = self._restore_edit_states(states)
         # Redo made the backups again: the next undo deletes these.
         self.gps_history.set_backups(tuple(backups))
         self.gps_history.mark_redone()
         self._update_undo_redo_actions()
-        self._report_write_failures("redo the GPS change for", failed_paths)
-        self._set_status_message("GPS change redone.", "info")
+        self._report_write_failures(f"redo the {what} change for", failed_paths)
+        self._set_status_message(f"{what[0].upper()}{what[1:]} change redone.", "info")
+
+    def _restore_edit_states(self, states: dict) -> tuple[list[str], list[Path]]:
+        """Write the remembered states back, GPS or dates (see gps_history.kind)."""
+        if self.gps_history.kind == EDIT_DATE:
+            return self._restore_date_states(states)
+        return self._restore_gps_states(states)
 
     def _restore_gps_states(
         self,
         states: dict[Path, tuple[float | None, float | None]],
     ) -> tuple[list[str], list[Path]]:
+        return self._restore_states(
+            lambda: self.workflow.restore_gps_states_workflow(
+                session=self.session,
+                states=states,
+            )
+        )
+
+    def _restore_states(self, write) -> tuple[list[str], list[Path]]:
         """
-        Write remembered GPS states back to files, and put the photo list
-        back the way it was when the edit was made. Returns failure messages,
-        and the backups the writes made (added to the list).
+        Write remembered states back to files (write() does it and returns
+        the workflow result), and put the photo list back the way it was
+        when the edit was made. Returns failure messages, and the backups
+        the writes made (added to the list).
         """
         # A load still running would replace the list put back here.
         self.cancel_loading()
@@ -458,10 +496,7 @@ class MainWindow(
                 path for path in self.session.target_paths if path in kept
             ]
 
-        result = self.workflow.restore_gps_states_workflow(
-            session=self.session,
-            states=states,
-        )
+        result = write()
         self.session = result.session
         self._render_current_photo_session()
         if snapshot is not None:

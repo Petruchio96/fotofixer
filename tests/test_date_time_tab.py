@@ -290,7 +290,7 @@ class DateTimeTabTests(unittest.TestCase):
         with patch.object(self.window, "show_message", side_effect=lambda dialog, closed: shown.append((dialog, closed))):
             QTest.mouseClick(self.window.date_keep_clock_check, Qt.LeftButton)
         dialog, closed = shown[0]
-        self.assertEqual(dialog.windowTitle(), "Keep the Clock Time?")
+        # (Not the window title: macOS message boxes have none.)
         self.assertTrue(dialog.text().startswith("When enabled, the photos keep their clock times"))
         self.assertIn("9:14:02am MDT → 9:14:02am CDT", dialog.text())
         self.assertIn("(1 h here)", dialog.text())

@@ -1,7 +1,8 @@
 # Test and package Photo GPS Editor on Linux, Windows, and macOS.
 #
 # - Every push to any branch: run the tests and build all three apps.
-#   Download the builds from the workflow run's "Artifacts" section.
+#   Download the builds from the workflow run's "Artifacts" section; each
+#   download is the release file itself (no extra zip around it).
 # - Pushing a tag like v1.2.0: also attach the builds to that GitHub release
 #   (a draft release is created if one does not exist yet).
 # - "Run workflow" on the Actions tab runs it manually.
@@ -120,10 +121,44 @@ jobs:
           ditto -c -k --keepParent "dist/Photo GPS Editor.app" \
             "release-files/photo-gps-editor-macos-$(uname -m).zip"
 
-      - uses: actions/upload-artifact@v7
+      # Each file is uploaded as-is (archive: false), so a download from the
+      # run's Artifacts section is the file itself, not a zip around it (the
+      # Windows and macOS builds are already zips). archive: false takes one
+      # file per upload, hence a step per file.
+      - name: Upload build (Linux AppImage)
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v7
         with:
-          name: photo-gps-editor-${{ matrix.name }}
-          path: release-files/
+          path: release-files/Photo_GPS_Editor-x86_64.AppImage
+          archive: false
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload build (Linux tarball)
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v7
+        with:
+          path: release-files/photo-gps-editor-linux-x86_64.tar.gz
+          archive: false
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload build (Windows)
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v7
+        with:
+          path: release-files/photo-gps-editor-windows-x86_64.zip
+          archive: false
+          if-no-files-found: error
+          retention-days: 30
+
+      # macos-latest runs on Apple Silicon, so the zip is named ...-arm64.zip.
+      - name: Upload build (macOS)
+        if: runner.os == 'macOS'
+        uses: actions/upload-artifact@v7
+        with:
+          path: release-files/photo-gps-editor-macos-arm64.zip
+          archive: false
           if-no-files-found: error
           retention-days: 30
 
@@ -140,6 +175,17 @@ jobs:
         with:
           path: release-files
           merge-multiple: true
+
+      # Stop before touching the release if any build file is missing.
+      - name: Check all four build files are here
+        run: |
+          ls -l release-files
+          for file in Photo_GPS_Editor-x86_64.AppImage \
+              photo-gps-editor-linux-x86_64.tar.gz \
+              photo-gps-editor-windows-x86_64.zip \
+              photo-gps-editor-macos-arm64.zip; do
+            test -f "release-files/$file" || { echo "Missing: $file"; exit 1; }
+          done
 
       - name: Upload builds to the GitHub release
         env:

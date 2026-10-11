@@ -65,6 +65,7 @@ def build_inspector_state(
     photo_infos: Mapping[Path, PhotoInfo],
     latitude_text: str,
     longitude_text: str,
+    source_path: Path | None = None,
 ) -> InspectorState:
     """
     Work out everything the inspector panel shows for the current selection.
@@ -77,6 +78,9 @@ def build_inspector_state(
             Loaded metadata for the photos, keyed by path.
         latitude_text / longitude_text:
             Contents of the New location fields.
+        source_path:
+            The photo the New location was copied from, if any. Apply never
+            writes to it (it already has that location), even when selected.
     """
     count = len(selected_paths)
     gps_by_path = {path: _gps_of(photo_infos.get(path)) for path in selected_paths}
@@ -104,14 +108,27 @@ def build_inspector_state(
     new_location = GpsCoordinates(*parsed) if parsed is not None else None
     fields_empty = not latitude_text.strip() and not longitude_text.strip()
 
-    # Apply
-    can_apply = count > 0 and new_location is not None
+    # Apply: every selected photo except the source photo.
+    source_selected = source_path is not None and source_path in gps_by_path
+    targets = [path for path in selected_paths if path != source_path]
+    target_count = len(targets)
+    can_apply = target_count > 0 and new_location is not None
     apply_label = (
-        f"Apply Location to {_photos(count)}" if count else "Apply Location to Selected Photos"
+        f"Apply Location to {_photos(target_count)}"
+        if target_count
+        else "Apply Location to Selected Photos"
     )
-    overwrite_count = len(with_gps) if can_apply else 0
+    overwrite_count = (
+        sum(1 for path in targets if gps_by_path[path] is not None) if can_apply else 0
+    )
     if count == 0:
         apply_hint, apply_hint_tone = "Select the photos to change in the Photo List.", "info"
+    elif target_count == 0:
+        apply_hint = (
+            "The selected photo is the source of the new location, so it isn't changed. "
+            "Select the photos to give its location to."
+        )
+        apply_hint_tone = "info"
     elif new_location is None and fields_empty:
         apply_hint = "Set a new location above: copy it from a photo, type, or paste one."
         apply_hint_tone = "info"
@@ -124,6 +141,8 @@ def build_inspector_state(
             f"{'has' if overwrite_count == 1 else 'have'} GPS, which will be replaced."
         )
         apply_hint_tone = "warning"
+    elif source_selected:
+        apply_hint, apply_hint_tone = "The source photo isn't changed.", "info"
     else:
         apply_hint, apply_hint_tone = "", "info"
 

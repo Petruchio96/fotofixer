@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QSize, Qt
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QFormLayout,
@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QPushButton,
     QScrollArea,
+    QSizePolicy,
     QTabWidget,
     QTreeWidget,
     QVBoxLayout,
@@ -31,7 +32,7 @@ from PySide6.QtWidgets import (
 from gui.presenters.date_time_state import MODE_SET, MODE_SHIFT
 from gui.widgets.browser_panel import build_pane_header
 from gui.widgets.date_time_picker import DateTimePicker
-from gui.widgets.icons import clock_icon, map_icon, pin_icon
+from gui.widgets.icons import calendar_icon, clock_icon, clock_shift_icon, map_icon, pin_icon
 
 if TYPE_CHECKING:
     from gui.main_window import MainWindow
@@ -359,29 +360,82 @@ class StepBox(QFrame):
                 widget.style().polish(widget)
 
 
-def _choice_card(title: str, detail: str, tooltip: str) -> QPushButton:
+# Step 2's card icons: orange, like the step to do now.
+CHOICE_ICON_COLOR = "#d97706"
+CHOICE_ICON_SIZE = 18
+
+
+class ChoiceCard(QPushButton):
     """
-    Step 2's two big choices: a checkable button with a bold title and a
-    line of explanation (labels inside pass clicks through to the button).
+    Step 2's two big choices: a checkable button with an icon, a bold
+    one-line title, and an explanation that wraps (labels inside pass clicks
+    through to the button). A plain QPushButton ignores the layout inside it
+    when sizing itself, so this one takes its size from that layout: only as
+    tall as its text needs at the width it gets, and never narrower than its
+    title.
     """
-    button = QPushButton()
-    button.setObjectName("choiceCard")
-    button.setCheckable(True)
-    button.setToolTip(tooltip)
-    button.setCursor(Qt.PointingHandCursor)
-    layout = QVBoxLayout(button)
-    layout.setContentsMargins(12, 10, 12, 10)
-    layout.setSpacing(4)
-    for text, name in ((title, "choiceTitle"), (detail, "choiceDetail")):
-        label = QLabel(text)
-        label.setObjectName(name)
-        label.setWordWrap(True)
-        label.setAttribute(Qt.WA_TransparentForMouseEvents)
-        layout.addWidget(label)
-    # Room for a two-line title and three lines of explanation at the
-    # narrowest pane width.
-    button.setMinimumHeight(112)
-    return button
+
+    def __init__(self, title: str, detail: str, tooltip: str, icon) -> None:
+        super().__init__()
+        self.setObjectName("choiceCard")
+        self.setCheckable(True)
+        self.setToolTip(tooltip)
+        self.setCursor(Qt.PointingHandCursor)
+        policy = QSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
+        policy.setHeightForWidth(True)
+        self.setSizePolicy(policy)
+
+        layout = QVBoxLayout(self)
+        # 12px inside the 2px border.
+        layout.setContentsMargins(14, 13, 14, 13)
+        layout.setSpacing(6)
+
+        title_row = QHBoxLayout()
+        title_row.setSpacing(7)
+        icon_label = QLabel()
+        icon_label.setPixmap(icon.pixmap(CHOICE_ICON_SIZE, CHOICE_ICON_SIZE))
+        icon_label.setFixedSize(CHOICE_ICON_SIZE, CHOICE_ICON_SIZE)
+        self.title_label = QLabel(title)
+        self.title_label.setObjectName("choiceTitle")
+        title_row.addWidget(icon_label)
+        title_row.addWidget(self.title_label, 1)
+        layout.addLayout(title_row)
+
+        self.detail_label = QLabel(detail)
+        self.detail_label.setObjectName("choiceDetail")
+        self.detail_label.setWordWrap(True)
+        layout.addWidget(self.detail_label)
+        # Both cards share the taller one's height; the text stays at the top.
+        layout.addStretch(1)
+        for label in (icon_label, self.title_label, self.detail_label):
+            label.setAttribute(Qt.WA_TransparentForMouseEvents)
+        # The card next to this one: both keep the same narrowest width.
+        self._partner: ChoiceCard | None = None
+
+    def pair_with(self, other: "ChoiceCard") -> None:
+        self._partner = other
+        other._partner = self
+
+    def hasHeightForWidth(self) -> bool:
+        return True
+
+    def heightForWidth(self, width: int) -> int:
+        return self.layout().totalHeightForWidth(width)
+
+    def sizeHint(self) -> QSize:
+        hint = self.layout().totalSizeHint()
+        return QSize(hint.width(), self.heightForWidth(hint.width()))
+
+    def _own_minimum_width(self) -> int:
+        # The title never wraps, so it sets the narrowest the card can be.
+        return self.layout().totalMinimumSize().width()
+
+    def minimumSizeHint(self) -> QSize:
+        width = self._own_minimum_width()
+        if self._partner is not None:
+            # Side by side, the longer title sets both, so they stay equal.
+            width = max(width, self._partner._own_minimum_width())
+        return QSize(width, self.heightForWidth(width))
 
 
 def _build_select_step(window: "MainWindow") -> StepBox:
@@ -400,24 +454,30 @@ def _build_select_step(window: "MainWindow") -> StepBox:
 
 
 def _build_mode_step(window: "MainWindow") -> StepBox:
-    """2. Choose the kind of change: Shift or Set (nothing chosen at first)."""
-    step = StepBox(2, "Choose the kind of change")
-    window.date_shift_choice = _choice_card(
+    """2. Choose how to change Date & Time: Shift or Set (nothing chosen at first)."""
+    step = StepBox(2, "Choose how to change Date & Time")
+    window.date_shift_choice = ChoiceCard(
         "Shift Date and Time",
         "The time was off. Correct one photo; the rest move by the same amount.",
         "Move every selected photo by the same amount, keeping the time between them",
+        clock_shift_icon(CHOICE_ICON_COLOR),
     )
-    window.date_set_choice = _choice_card(
-        "Set a Single Date and Time",
-        "Every selected photo gets the same date and time (for example scans).",
+    window.date_set_choice = ChoiceCard(
+        "Set One Date and Time",
+        "Every selected photo gets the same date and time.",
         "Give every selected photo one date and time",
+        calendar_icon(CHOICE_ICON_COLOR),
     )
     window.date_shift_choice.clicked.connect(lambda: window.choose_date_change_mode(MODE_SHIFT))
     window.date_set_choice.clicked.connect(lambda: window.choose_date_change_mode(MODE_SET))
+    window.date_shift_choice.pair_with(window.date_set_choice)
     row = QHBoxLayout()
-    row.setSpacing(10)
+    row.setSpacing(8)
     row.addWidget(window.date_shift_choice, 1)
     row.addWidget(window.date_set_choice, 1)
+    # The cards use the step's full width (not indented under the title),
+    # leaving room for the larger titles.
+    step.body_layout.setContentsMargins(0, 0, 0, 0)
     step.body_layout.addLayout(row)
     return step
 

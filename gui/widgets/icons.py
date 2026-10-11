@@ -135,3 +135,33 @@ def clock_icon(color: str) -> QIcon:
         painter.drawLine(QPointF(8, 8), QPointF(10.2, 9.4))
 
     return _icon(color, draw)
+
+
+def clock_shift_icon(color: str) -> QIcon:
+    """Clock with a turn arrow, for Shift Date and Time."""
+
+    def draw(painter: QPainter) -> None:
+        painter.drawEllipse(QPointF(7.2, 8.8), 5.2, 5.2)
+        painter.drawLine(QPointF(7.2, 6), QPointF(7.2, 8.8))
+        painter.drawLine(QPointF(7.2, 8.8), QPointF(9.2, 10))
+        # The arrow at the top right: the time moves.
+        painter.drawLine(QPointF(13.2, 2.4), QPointF(13.2, 5.2))
+        painter.drawLine(QPointF(13.2, 5.2), QPointF(10.8, 5.2))
+
+    return _icon(color, draw)
+
+
+def calendar_icon(color: str) -> QIcon:
+    """Calendar page with a check mark, for Set One Date and Time."""
+
+    def draw(painter: QPainter) -> None:
+        painter.drawRoundedRect(QRectF(2.5, 3.2, 11, 10.4), 1.6, 1.6)
+        painter.drawLine(QPointF(2.5, 6.4), QPointF(13.5, 6.4))
+        painter.drawLine(QPointF(5.6, 2), QPointF(5.6, 4.2))
+        painter.drawLine(QPointF(10.4, 2), QPointF(10.4, 4.2))
+        path = QPainterPath(QPointF(6, 10))
+        path.lineTo(QPointF(7.4, 11.4))
+        path.lineTo(QPointF(10.2, 8.5))
+        painter.drawPath(path)
+
+    return _icon(color, draw)

@@ -2,8 +2,8 @@
 
 ## Snapshot
 
-Last updated: 2026-10-10
-Version: 1.6.0 (not released yet; bumped on branch `date-time-editing`; 1.5.0 was merged in PR #11 and never released on its own). 1.4.1 is the latest release (Linux, Windows, macOS). 1.4: the app's own Add Photos picker, the map (Pick from a Map, street map and satellite imagery), Edit > Settings, and the same pinned ExifTool on every system. 1.4.1: the blue pin GPS badge, the blue = existing / orange = new color theme, the map's Clear button, and no blocking dialogs. 1.5 (unreleased): the Add Photos picker shows folders with the photos and folders can be chosen to add their photos (branch `picker-folders`), plus PR #10, merged earlier: deselect after Apply, the map's Back button and zoom from a photo's preview, backups named `<name>_original.<ext>` (only for photos that had GPS), tighter window spacing, and a clearer window edge on Windows 11. 1.6 (unreleased, branch `date-time-editing`): Date & Time editing (shift the selected photos' dates or set one date; the Photo List groups photos by camera on that tab)
+Last updated: 2026-10-11
+Version: 1.6.1 (being released from branch `release-1.6.1`; 1.5.0 and 1.6.0 were merged but never released, so 1.6.1 is the first release with their changes). 1.4.1 is the latest published release (Linux, Windows, macOS). 1.4: the app's own Add Photos picker, the map (Pick from a Map, street map and satellite imagery), Edit > Settings, and the same pinned ExifTool on every system. 1.4.1: the blue pin GPS badge, the blue = existing / orange = new color theme, the map's Clear button, and no blocking dialogs. 1.5: the Add Photos picker shows folders with the photos and folders can be chosen to add their photos, plus deselect after Apply, the map's Back button and zoom from a photo's preview, backups named `<name>_original.<ext>` (only for photos that had GPS), tighter window spacing, and a clearer window edge on Windows 11. 1.6: Date & Time editing (shift the selected photos' dates or set one date, time zones; the Photo List groups photos by camera on that tab), laid out as four steps, and the picker's Select All Photos. 1.6.1: release fixes (Apply never writes to the location source photo, single-file CI downloads, updated release checklist)
 Status: Two-pane layout (Photo List and Photos to Change, with Location and Date & Time tabs; Date & Time shifts or sets photo dates), the app's own photo picker (folder tree; folders and photos, either can be chosen), a pop-out map for picking a location (OpenStreetMap, USGS, or Esri with the user's key), fast thumbnails (shared Linux thumbnail cache, embedded JPEG thumbnails), background loading, failure-tolerant writes, undo/redo that restores the photo list, optional backups, an error log, and CI builds for Linux, Windows, and macOS.
 
 Repository: https://github.com/Petruchio96/photo-gps-editor
@@ -55,7 +55,7 @@ Key objectives:
 - `gui/system_thumbnails.py`: reads and writes the freedesktop.org thumbnail cache (`~/.cache/thumbnails`) shared with Nemo/Nautilus; PNG labels are read directly because Qt can't read `Thumb::MTime`
 - `gui/error_log.py`: `error-log.txt` in the app's data folder (Windows: `%LOCALAPPDATA%\Photo GPS Editor\Photo GPS Editor`); unexpected errors (with a pop-up), Qt warnings/fatals, hard-crash call stacks (faulthandler), and low-level stderr in windowed builds
 - `gui/gc_guard.py`: automatic garbage collection is off; a timer collects on the GUI thread between events
-- `gui/window_frame.py`: on Windows 11, a visible slate border (DWM border color) for the map, the picker, and Settings, which Windows otherwise draws too faint to tell apart from the main window; no-op elsewhere
+- `gui/window_frame.py`: on Windows, a visible slate border for the map, the picker, and Settings, which Windows otherwise draws too faint to tell apart from the main window: the DWM border color on Windows 11, or, where Windows refuses it (Windows 10, some virtual machines, found in testing with no border or shadow at all), a 1-pixel slate frame the app draws just inside the window; no-op elsewhere
 - `gui/widgets/`: browser panel (Photo List pane: header, Show filter, selection bar, grid with click-to-add selection), editor panel (Photos to Change pane with tabs), `photo_picker.py` (the Add Photos picker), `map_view.py` (the map widget: tiles drawn with QPainter, downloaded by QNetworkAccessManager on the GUI thread into a disk cache; pin and photo dots), `map_window.py` (the pop-out map window and photo preview), `settings_dialog.py` (Edit > Settings: backups and the ArcGIS key), loading indicator, thumbnail delegate (shimmer placeholders, SOURCE marker, "No GPS" dimming, faded deselected photos), `icons.py` (line icons drawn in code)
 - `gui/presenters/`: UI-facing view-state builders; `inspector_state.py` holds the inspector logic and `date_time_state.py` the Date & Time tab's, with no Qt code
 - `gui/widgets/date_time_picker.py`: the compact date and time picker (date box with a calendar, hour/minute/second drop-downs, am/pm label; arrows drawn in code)
@@ -102,12 +102,12 @@ callback) and the right-click menu uses `popup()`; the blocking `QMessageBox.war
 - `New Location`: `Copy location` with `From a Photo in the Photo List` and `From a Photo on Your Computer`; latitude/longitude fields (decimal, DMS, DDM; a pasted pair auto-splits); `Paste`, `Clear`
 - `From a Photo in the Photo List` enters pick mode: the button becomes `Cancel`, a blue banner explains the mode, the grid switches to `Has GPS` (view buttons locked), and everything except `Add Photos`, `Clear List`, and `Cancel` is disabled; afterwards the previous view (and Only Show Selected Photos) returns, and the selection is kept. Disabled, with a hover hint, when no photo in the list has GPS
 - `Pick from a Map` opens the map window (below)
-- The location source shows on a blue card and as a blue `SOURCE` outline in the grid; editing the fields by hand drops it
+- The location source shows on a blue card and as a blue `SOURCE` outline in the grid; editing the fields by hand drops it; Apply never writes to the source photo, even when it is selected (left out of the count; when it is the only photo selected, Apply is disabled with a hint)
 - `Apply Location to N Photos` (orange); a note warns when existing GPS will be replaced; the confirmation offers `Skip Photos with GPS`, `Replace`, or `Cancel`
 - After Apply or Remove GPS, the photos are deselected except ones that failed (to retry); changed photos can move to a group the view hides and would otherwise be included in the next Apply. Undo brings the old selection back
 - `Remove GPS from Selected N Photos` (red outline, counts the selected photos that have GPS), with confirmation
 - `Date & Time` tab (modeled on Synology Photos' Edit date and time), laid out as four numbered steps that open one after another: the step to do now is orange, finished ones show a navy ✓, later ones are grey and closed (`After step N`); the pane scrolls to each step as it opens. Deselect All, or applying a change, goes back to step 1
-- 1 `Select the photos to change` (`N photos selected` when done; with an empty Photo List a blue `+ Add Photos` button and a hint). 2 `Choose the kind of change`: two cards, `Shift Date and Time` ("The time was off. Correct one photo; the rest move by the same amount.") or `Set a Single Date and Time`; nothing is chosen at first. 3 `Correct the date and time` (`Enter the date and time` for Set). 4 `Check the changes and apply`: hints, the changes list, and the orange button
+- 1 `Select the photos to change` (`N photos selected` when done; with an empty Photo List a blue `+ Add Photos` button and a hint). 2 `Choose how to change Date & Time`: two equal cards across the step's full width, each an orange line icon, a bold one-line title, and an explanation, only as tall as the text needs (`ChoiceCard`): `Shift Date and Time` ("The time was off. Correct one photo; the rest move by the same amount.") or `Set One Date and Time`; nothing is chosen at first. 3 `Correct the date and time` (`Enter the date and time` for Set). 4 `Check the changes and apply`: hints, the changes list, and the orange button
 - Shift (the camera's clock was off; the gaps between photos are right): a blue reference card (name · camera, `Current Date: …`, `The earliest selected`, `‹ 1 of 12 ›` arrows to choose another selected photo by date), `Correct date and time for this photo` (date box with a calendar, then hour : minute : second drop-downs; the hour list reads `9 am`, the box shows `9`, and am/pm sits after the seconds); every selected photo with a date moves by the same amount
 - `Or copy the time from a photo taken at the same moment`: `From a Photo in the Photo List` (pick mode like Location's: banner, lock, Esc; photos being changed and photos without a date show `Being Changed` / `No Date`) and `From a Photo on Your Computer` (the picker in one-photo mode; pop-ups for a photo with no date or an unreadable one). The photo shows on a blue source card (✕ to stop using it) and, in the list, as a blue `SOURCE` outline; it is never changed itself, even when selected; editing the date or time by hand drops it
 - Set: `New date and time`; every selected photo gets it, including photos with no date
@@ -187,23 +187,14 @@ callback) and the right-click menu uses `popup()`; the blocking `QMessageBox.war
 
 ## Future Ideas
 
-Next up, in order:
-
-1. Check on Windows (and macOS when possible) the changes merged in PR #10, from the latest `main` CI build or the next release: the slate border on the map, picker, and Settings windows; spacing; Back/zoom on the map; backups added to the list and deleted by Undo. Also the Date & Time tab (date writes to CR3/CR2/DNG were only tested with JPEGs)
-2. In-app update check: look for a newer version on GitHub Releases (at startup or from Help) and link to the download
-
-Later:
-
-- Windows installer for releases (instead of only the zip): compare options such as an MSI (WiX), Inno Setup, or MSIX, including Start menu shortcut, uninstall, upgrades over an older version, and signing/SmartScreen
-- Add drag-and-drop support for loading photos
-- Explore a future API/web/container layer (Docker on a Synology NAS) on top of the reusable `services/` backend
+Upcoming work, its order, and the plans for it (Windows installer, update checker, Docker/web version on the NAS) live in `docs/ROADMAP.md`, not here.
 
 ## Development Notes
 
 - Use the project virtual environment when running the app or tests
 - Run the app with `.venv/bin/python app.py`
 - Run tests with `.venv/bin/python -m unittest discover -s tests` (add `QT_QPA_PLATFORM=offscreen` to run without a display)
-- GitHub Actions (`.github/workflows/build.yml`) runs the tests and builds Linux, Windows, and macOS apps on every push; pushing a `v*` tag attaches the builds to that release
+- GitHub Actions (`.github/workflows/build.yml`) runs the tests and builds Linux, Windows, and macOS apps on every push (each run's downloads are the release files themselves, not zips around them); pushing a `v*` tag attaches the builds to that release
 - On Linux, `app.py` sets `XCURSOR_SIZE`/`XCURSOR_THEME` from the desktop's gsettings (Cinnamon, then GNOME) before Qt starts, unless already set: otherwise Qt sizes the pointer from the font DPI and it looks a little smaller inside the app
 - All three builds bundle the same pinned ExifTool (`packaging/fetch_exiftool.py`, currently 13.59); Linux and macOS use ExifTool's Perl distribution with the system Perl
 - Pull requests are merged with GitHub's merge button (merge commit)
@@ -243,4 +234,4 @@ Phase outcomes:
 Current verification:
 - Full test suite passes with `.venv/bin/python -m unittest discover -s tests`.
 - Desktop launch flow remains `.venv/bin/python app.py`.
-- Future Docker/API work can reuse the shared backend layer but has not been implemented yet.
+- Future Docker/API work can reuse the shared backend layer but has not been implemented yet (plan: `docs/ROADMAP.md`).

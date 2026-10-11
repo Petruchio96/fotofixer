@@ -11,9 +11,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from PySide6.QtCore import QSize, Qt
+from PySide6.QtCore import QEvent, QSize, Qt
+from PySide6.QtGui import QFont, QFontMetrics
 from PySide6.QtWidgets import (
     QAbstractItemView,
+    QCheckBox,
     QFormLayout,
     QFrame,
     QGroupBox,
@@ -24,15 +26,16 @@ from PySide6.QtWidgets import (
     QScrollArea,
     QSizePolicy,
     QTabWidget,
+    QToolTip,
     QTreeWidget,
     QVBoxLayout,
     QWidget,
 )
 
-from gui.presenters.date_time_state import MODE_SET, MODE_SHIFT
+from gui.presenters.date_time_state import MODE_SET, MODE_SHIFT, MODE_ZONE
 from gui.widgets.browser_panel import build_pane_header
-from gui.widgets.date_time_picker import DateTimePicker
-from gui.widgets.icons import calendar_icon, clock_icon, clock_shift_icon, map_icon, pin_icon
+from gui.widgets.date_time_picker import ChevronComboBox, DateTimePicker
+from gui.widgets.icons import calendar_icon, clock_icon, clock_shift_icon, globe_icon, map_icon, pin_icon
 
 if TYPE_CHECKING:
     from gui.main_window import MainWindow
@@ -360,6 +363,15 @@ class StepBox(QFrame):
                 widget.style().polish(widget)
 
 
+# The hover hint of Change Time Zone's "Keep the clock time" checkbox.
+KEEP_CLOCK_TIP = (
+    "Off: the photos keep the moment they were taken; their clock times change to "
+    "show that moment in the new zone (11:16 am MDT → 12:16 pm CDT).\n"
+    "On: the clock times stay as they are and only the zone changes (11:16 am MDT → "
+    "11:16 am CDT), which moves the moment. Use it when the times were right for "
+    "where the photos were taken but the zone was set wrong."
+)
+
 # Step 2's card icons: orange, like the step to do now.
 CHOICE_ICON_COLOR = "#d97706"
 CHOICE_ICON_SIZE = 18
@@ -367,29 +379,33 @@ CHOICE_ICON_SIZE = 18
 
 class ChoiceCard(QPushButton):
     """
-    Step 2's two big choices: a checkable button with an icon, a bold
+    One of step 2's choices: a checkable button with an icon, a bold
     one-line title, and an explanation that wraps (labels inside pass clicks
     through to the button). A plain QPushButton ignores the layout inside it
     when sizing itself, so this one takes its size from that layout: only as
     tall as its text needs at the width it gets, and never narrower than its
-    title.
+    title. "Change ▾" on the right shows while step 2 is folded up to the
+    chosen card (see set_folded).
     """
 
     def __init__(self, title: str, detail: str, tooltip: str, icon) -> None:
         super().__init__()
         self.setObjectName("choiceCard")
         self.setCheckable(True)
+        self.choose_tooltip = tooltip
         self.setToolTip(tooltip)
         self.setCursor(Qt.PointingHandCursor)
         policy = QSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
         policy.setHeightForWidth(True)
         self.setSizePolicy(policy)
 
-        layout = QVBoxLayout(self)
-        # 12px inside the 2px border.
-        layout.setContentsMargins(14, 13, 14, 13)
-        layout.setSpacing(6)
+        layout = QHBoxLayout(self)
+        # 12px (10px tall) inside the 2px border.
+        layout.setContentsMargins(14, 12, 14, 12)
+        layout.setSpacing(10)
 
+        text = QVBoxLayout()
+        text.setSpacing(3)
         title_row = QHBoxLayout()
         title_row.setSpacing(7)
         icon_label = QLabel()
@@ -399,22 +415,28 @@ class ChoiceCard(QPushButton):
         self.title_label.setObjectName("choiceTitle")
         title_row.addWidget(icon_label)
         title_row.addWidget(self.title_label, 1)
-        layout.addLayout(title_row)
-
+        text.addLayout(title_row)
         self.detail_label = QLabel(detail)
         self.detail_label.setObjectName("choiceDetail")
         self.detail_label.setWordWrap(True)
-        layout.addWidget(self.detail_label)
-        # Both cards share the taller one's height; the text stays at the top.
-        layout.addStretch(1)
-        for label in (icon_label, self.title_label, self.detail_label):
-            label.setAttribute(Qt.WA_TransparentForMouseEvents)
-        # The card next to this one: both keep the same narrowest width.
-        self._partner: ChoiceCard | None = None
+        text.addWidget(self.detail_label)
+        text.addStretch(1)
+        layout.addLayout(text, 1)
 
-    def pair_with(self, other: "ChoiceCard") -> None:
-        self._partner = other
-        other._partner = self
+        self.change_label = QLabel("Change ▾")
+        self.change_label.setObjectName("choiceChange")
+        self.change_label.hide()
+        layout.addWidget(self.change_label, 0, Qt.AlignVCenter)
+        for label in (icon_label, self.title_label, self.detail_label, self.change_label):
+            label.setAttribute(Qt.WA_TransparentForMouseEvents)
+
+    def set_folded(self, folded: bool) -> None:
+        """
+        Step 2 folded up to this (the chosen) card: "Change ▾" shows, and a
+        click opens all the choices again.
+        """
+        self.change_label.setVisible(folded)
+        self.setToolTip("Show all three choices, to pick another" if folded else self.choose_tooltip)
 
     def hasHeightForWidth(self) -> bool:
         return True
@@ -426,15 +448,9 @@ class ChoiceCard(QPushButton):
         hint = self.layout().totalSizeHint()
         return QSize(hint.width(), self.heightForWidth(hint.width()))
 
-    def _own_minimum_width(self) -> int:
-        # The title never wraps, so it sets the narrowest the card can be.
-        return self.layout().totalMinimumSize().width()
-
     def minimumSizeHint(self) -> QSize:
-        width = self._own_minimum_width()
-        if self._partner is not None:
-            # Side by side, the longer title sets both, so they stay equal.
-            width = max(width, self._partner._own_minimum_width())
+        # The title never wraps, so it sets the narrowest the card can be.
+        width = self.layout().totalMinimumSize().width()
         return QSize(width, self.heightForWidth(width))
 
 
@@ -454,7 +470,11 @@ def _build_select_step(window: "MainWindow") -> StepBox:
 
 
 def _build_mode_step(window: "MainWindow") -> StepBox:
-    """2. Choose how to change Date & Time: Shift or Set (nothing chosen at first)."""
+    """
+    2. Choose how to change Date & Time: Shift, Set, or Change Time Zone
+    (nothing chosen at first). Three stacked cards; once one is chosen the
+    step folds up to it (see DateTimeEditorMixin._apply_date_steps).
+    """
     step = StepBox(2, "Choose how to change Date & Time")
     window.date_shift_choice = ChoiceCard(
         "Shift Date and Time",
@@ -468,24 +488,34 @@ def _build_mode_step(window: "MainWindow") -> StepBox:
         "Give every selected photo one date and time",
         calendar_icon(CHOICE_ICON_COLOR),
     )
+    window.date_zone_choice = ChoiceCard(
+        "Change Time Zone",
+        "Correct photos with the wrong time zone.",
+        "Give the selected photos another time zone (the same moment, or the same clock time)",
+        globe_icon(CHOICE_ICON_COLOR),
+    )
     window.date_shift_choice.clicked.connect(lambda: window.choose_date_change_mode(MODE_SHIFT))
     window.date_set_choice.clicked.connect(lambda: window.choose_date_change_mode(MODE_SET))
-    window.date_shift_choice.pair_with(window.date_set_choice)
-    row = QHBoxLayout()
-    row.setSpacing(8)
-    row.addWidget(window.date_shift_choice, 1)
-    row.addWidget(window.date_set_choice, 1)
+    window.date_zone_choice.clicked.connect(lambda: window.choose_date_change_mode(MODE_ZONE))
+    window.date_choice_cards = {
+        MODE_SHIFT: window.date_shift_choice,
+        MODE_SET: window.date_set_choice,
+        MODE_ZONE: window.date_zone_choice,
+    }
     # The cards use the step's full width (not indented under the title),
     # leaving room for the larger titles.
     step.body_layout.setContentsMargins(0, 0, 0, 0)
-    step.body_layout.addLayout(row)
+    step.body_layout.setSpacing(8)
+    for card in window.date_choice_cards.values():
+        step.body_layout.addWidget(card)
     return step
 
 
 def _build_correct_step(window: "MainWindow") -> StepBox:
     """
     3. Correct the date and time (Shift: the reference photo, its correct
-    date, time and zone, or copy the time from a photo) or enter it (Set).
+    date, time and zone, or copy the time from a photo), enter it (Set), or
+    choose the new time zone (Change Time Zone).
     """
     step = StepBox(3, "Correct the date and time")
 
@@ -536,9 +566,81 @@ def _build_correct_step(window: "MainWindow") -> StepBox:
     set_layout.addWidget(window.date_set_picker)
     window.date_set_box.hide()
 
+    # Change Time Zone: the new zone, and whether the clock times stay.
+    window.date_zone_box = QWidget()
+    zone_layout = QVBoxLayout(window.date_zone_box)
+    zone_layout.setContentsMargins(0, 0, 0, 0)
+    zone_layout.setSpacing(8)
+    zone_label = QLabel("New time zone")
+    zone_label.setObjectName("fieldLabel")
+    window.date_zone_combo = ChevronComboBox()
+    window.date_zone_combo.setObjectName("timeZoneCombo")
+    window.date_zone_combo.setMaxVisibleItems(16)
+    window.date_zone_combo.setProperty("mixed", False)
+    window.date_zone_combo.activated.connect(
+        lambda index: window.date_zone_chosen(window.date_zone_combo.itemData(index))
+    )
+    window.date_keep_clock_check = QCheckBox("Keep the clock time (change only the time zone)")
+    window.date_keep_clock_check.setObjectName("keepClockCheck")
+    window.date_keep_clock_check.setToolTip(KEEP_CLOCK_TIP)
+    window.date_keep_clock_check.clicked.connect(window.keep_clock_clicked)
+    keep_clock_note = QLabel("Apply the current time to the selected time zone.")
+    keep_clock_note.setObjectName("keepClockNote")
+    keep_clock_note.setToolTip(KEEP_CLOCK_TIP)
+    zone_layout.addWidget(zone_label)
+    zone_layout.addWidget(window.date_zone_combo)
+    zone_layout.addWidget(window.date_keep_clock_check)
+    zone_layout.addWidget(keep_clock_note)
+    window.date_zone_box.hide()
+
     step.body_layout.addWidget(window.date_shift_box)
     step.body_layout.addWidget(window.date_set_box)
+    step.body_layout.addWidget(window.date_zone_box)
     return step
+
+
+# Item data role on the changes list's rows: (name, original date, new date).
+CHANGE_ROW_ROLE = Qt.UserRole + 1
+
+
+class DateChangesList(QTreeWidget):
+    """
+    Step 4's list of changes (name, original date, → new date). The window
+    is often too narrow for a whole row, so a column may end in "…"; then
+    hovering the row shows it in full: the name, the original date and
+    time, and the new one. Rows that fit show no hover hint.
+    """
+
+    def viewportEvent(self, event) -> bool:
+        if event.type() != QEvent.ToolTip:
+            return super().viewportEvent(event)
+        item = self.itemAt(event.pos())
+        text = self.row_tooltip(item) if item is not None else ""
+        if text:
+            QToolTip.showText(event.globalPos(), text, self.viewport())
+        else:
+            QToolTip.hideText()
+            event.ignore()
+        return True
+
+    def row_tooltip(self, item) -> str:
+        """The row in full, or "" when nothing in it is cut short."""
+        data = item.data(0, CHANGE_ROW_ROLE)
+        if not data or not any(self._is_cut_short(item, column) for column in range(self.columnCount())):
+            return ""
+        name, original, new = data
+        return f"{name}\nOriginal: {original}\nNew: {new}"
+
+    def _is_cut_short(self, item, column: int) -> bool:
+        """Whether a cell's text is wider than its column (so it ends in "…")."""
+        text = item.text(column)
+        if not text:
+            return False
+        font = QFont(self.font())
+        font.setBold(item.font(column).bold())
+        # 2px of padding each side (dateChangesList::item in styles.py), plus
+        # a little room Qt keeps around the text.
+        return QFontMetrics(font).horizontalAdvance(text) > self.columnWidth(column) - 10
 
 
 def _build_apply_step(window: "MainWindow") -> StepBox:
@@ -548,7 +650,7 @@ def _build_apply_step(window: "MainWindow") -> StepBox:
     window.date_hint_label.setObjectName("applyHint")
     window.date_hint_label.setWordWrap(True)
 
-    window.date_changes_list = QTreeWidget()
+    window.date_changes_list = DateChangesList()
     window.date_changes_list.setObjectName("dateChangesList")
     window.date_changes_list.setColumnCount(3)
     window.date_changes_list.setHeaderHidden(True)

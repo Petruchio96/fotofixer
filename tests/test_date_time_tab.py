@@ -6,6 +6,7 @@ mouse clicks and key presses like a user would.
 import os
 import tempfile
 import unittest
+from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
 from unittest.mock import patch
@@ -201,21 +202,153 @@ class DateTimeTabTests(unittest.TestCase):
             QTest.mouseClick(self.window.step_add_photos_button, Qt.LeftButton)
         pick.assert_called_once()
 
-    def test_step_2_cards_are_equal_with_one_line_titles(self) -> None:
+    def test_step_2_cards_are_stacked_with_one_line_titles(self) -> None:
         self._open_date_tab()
         self._select(self.canon1)
         QApplication.processEvents()
-        shift, set_card = self.window.date_shift_choice, self.window.date_set_choice
+        cards = list(self.window.date_choice_cards.values())
 
         self.assertEqual(self.window.date_steps[1].title.text(), "Choose how to change Date & Time")
-        self.assertEqual(set_card.title_label.text(), "Set One Date and Time")
-        self.assertEqual(shift.width(), set_card.width())
-        for card in (shift, set_card):
-            # The title gets its whole width (one line), at the same height in both.
+        self.assertEqual(
+            [card.title_label.text() for card in cards],
+            ["Shift Date and Time", "Set One Date and Time", "Change Time Zone"],
+        )
+        for card in cards:
+            # Full width, one line per title, only as tall as the text needs.
+            self.assertEqual(card.width(), cards[0].width())
             self.assertGreaterEqual(card.title_label.width(), card.title_label.sizeHint().width())
-            self.assertEqual(card.title_label.geometry().top(), shift.title_label.geometry().top())
-            # Only as tall as the text needs (no fixed minimum height).
-            self.assertEqual(card.height(), max(shift.heightForWidth(shift.width()), set_card.heightForWidth(set_card.width())))
+            self.assertEqual(card.height(), card.heightForWidth(card.width()))
+            self.assertFalse(card.change_label.isVisible())
+
+    def test_step_2_folds_up_to_the_choice_and_opens_again(self) -> None:
+        # Already in the default zone: step 3 waits for another zone.
+        self._give_zone(self.canon1, "-06:00")
+        self._open_date_tab()
+        self._select(self.canon1)
+        zone_card = self.window.date_zone_choice
+        QTest.mouseClick(zone_card, Qt.LeftButton)
+
+        # Folded: only the chosen card, with "Change ▾"; step 3 is next.
+        self.assertTrue(self.window.date_shift_choice.isHidden())
+        self.assertTrue(self.window.date_set_choice.isHidden())
+        self.assertTrue(zone_card.change_label.isVisible())
+        self.assertEqual(self._step_states()[1:3], ["done", "active"])
+        self.assertEqual(self.window.date_steps[2].title.text(), "Choose the new time zone")
+        self.assertFalse(self.window.date_zone_box.isHidden())
+
+        # Clicking it opens all three again (step 3 waits) ...
+        QTest.mouseClick(zone_card, Qt.LeftButton)
+        self.assertFalse(self.window.date_shift_choice.isHidden())
+        self.assertFalse(zone_card.change_label.isVisible())
+        self.assertEqual(self._step_states()[1:3], ["active", "locked"])
+
+        # ... and picking one folds up to it.
+        QTest.mouseClick(self.window.date_set_choice, Qt.LeftButton)
+        self.assertTrue(zone_card.isHidden())
+        self.assertTrue(self.window.date_set_choice.change_label.isVisible())
+        self.assertEqual(self.window.date_steps[2].title.text(), "Enter the date and time")
+
+    # --- Change Time Zone -------------------------------------------------------
+
+    def _give_zone(self, path: Path, offset_text: str) -> None:
+        """Give a loaded photo a time zone (as if read from OffsetTimeOriginal)."""
+        info = self.window.session.loaded_photo_infos[path]
+        tags = {**info.date_tags, "OffsetTimeOriginal": offset_text}
+        # In the "file" too, so undo has the same tags to go back to.
+        self.tags[path]["OffsetTimeOriginal"] = offset_text
+        self.original_tags[path]["OffsetTimeOriginal"] = offset_text
+        self.window.session.loaded_photo_infos[path] = replace(
+            info, time_offset=time_offset_from_tags(tags), date_tags=tags
+        )
+
+    def _choose_zone_mode(self, *paths: Path) -> None:
+        self._open_date_tab()
+        self._select(*paths)
+        QTest.mouseClick(self.window.date_zone_choice, Qt.LeftButton)
+
+    def test_change_time_zone_keeps_the_moment(self) -> None:
+        self._give_zone(self.canon1, "-06:00")
+        self._choose_zone_mode(self.canon1)
+        self.window.date_zone_chosen("central")
+
+        self.assertEqual(self.window.date_apply_button.text(), "Change Time Zone of 1 Photo")
+        QTest.mouseClick(self.window.date_apply_button, Qt.LeftButton)
+
+        self.assertEqual(self.tags[self.canon1]["DateTimeOriginal"], exif(2026, 10, 3, 10, 14, 2))
+        self.assertEqual(self.tags[self.canon1]["OffsetTimeOriginal"], "-05:00")
+        self.assertEqual(self.tags[self.canon1]["OffsetTime"], "-05:00")
+        self.assertIn("Changed the time zone of 1 photo", self.window.browser_hint.text())
+
+        self.window.undo_action.trigger()
+        self.assertEqual(self.tags[self.canon1], self.original_tags[self.canon1])
+
+    def test_keep_clock_time_asks_first(self) -> None:
+        self._give_zone(self.canon1, "-06:00")
+        self._choose_zone_mode(self.canon1)
+        self.window.date_zone_chosen("central")
+        shown = []
+        with patch.object(self.window, "show_message", side_effect=lambda dialog, closed: shown.append((dialog, closed))):
+            QTest.mouseClick(self.window.date_keep_clock_check, Qt.LeftButton)
+        dialog, closed = shown[0]
+        self.assertEqual(dialog.windowTitle(), "Keep the Clock Time?")
+        self.assertTrue(dialog.text().startswith("When enabled, the photos keep their clock times"))
+        self.assertIn("9:14:02am MDT → 9:14:02am CDT", dialog.text())
+        self.assertIn("(1 h here)", dialog.text())
+
+        # Cancel: unchecked, the moment is kept.
+        closed(dialog.button(QMessageBox.Cancel))
+        self.assertFalse(self.window.date_keep_clock_check.isChecked())
+
+        # Keep Clock Time: the clock stays, only the zone changes.
+        with patch.object(self.window, "show_message", side_effect=lambda dialog, closed: shown.append((dialog, closed))):
+            QTest.mouseClick(self.window.date_keep_clock_check, Qt.LeftButton)
+        dialog, closed = shown[1]
+        keep = next(button for button in dialog.buttons() if button.text() == "Keep Clock Time")
+        closed(keep)
+        self.assertTrue(self.window.date_keep_clock_check.isChecked())
+        QTest.mouseClick(self.window.date_apply_button, Qt.LeftButton)
+        self.assertEqual(self.tags[self.canon1]["DateTimeOriginal"], exif(2026, 10, 3, 9, 14, 2))
+        self.assertEqual(self.tags[self.canon1]["OffsetTimeOriginal"], "-05:00")
+        # The next change starts with the box off.
+        self.assertFalse(self.window.date_keep_clock_check.isChecked())
+
+    def test_zone_drop_down_hint_only_for_mixed_zones(self) -> None:
+        self._give_zone(self.canon1, "-06:00")
+        self._give_zone(self.canon2, "-06:00")
+        self._choose_zone_mode(self.canon1, self.canon2)
+        self.assertEqual(self.window.date_zone_combo.toolTip(), "")
+
+        self._give_zone(self.canon2, "-05:00")
+        self.window.update_details_panel()
+        self.assertTrue(self.window.date_zone_combo.property("mixed"))
+        self.assertIn("more than one time zone", self.window.date_zone_combo.toolTip())
+
+    def test_changes_list_hint_shows_cut_short_rows_in_full(self) -> None:
+        self._give_zone(self.canon1, "-06:00")
+        self._choose_zone_mode(self.canon1)
+        self.window.date_zone_chosen("central")
+        changes = self.window.date_changes_list
+
+        # Wide enough for the whole row: no hint.
+        self.window.resize(3200, 900)
+        QApplication.processEvents()
+        self.assertEqual(changes.row_tooltip(changes.topLevelItem(0)), "")
+
+        # Narrow: the original date ends in "…", so the hint shows the row.
+        self.window.resize(900, 900)
+        QApplication.processEvents()
+        item = changes.topLevelItem(0)
+        self.assertEqual(
+            changes.row_tooltip(item),
+            "IMG_4101.CR3\nOriginal: 10/03/2026 9:14:02am MDT\nNew: 10/03/2026 10:14:02am CDT",
+        )
+
+    def test_photo_without_a_zone_keeps_its_time_and_gets_the_zone(self) -> None:
+        self._choose_zone_mode(self.canon2)
+        self.window.date_zone_chosen("central")
+        QTest.mouseClick(self.window.date_apply_button, Qt.LeftButton)
+        self.assertEqual(self.tags[self.canon2]["DateTimeOriginal"], exif(2026, 10, 3, 9, 15, 40))
+        self.assertEqual(self.tags[self.canon2]["OffsetTimeOriginal"], "-05:00")
 
     def test_set_card_titles_step_3_enter(self) -> None:
         self._open_date_tab()

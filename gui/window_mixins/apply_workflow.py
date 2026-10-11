@@ -95,44 +95,53 @@ class ApplyWorkflowMixin:
             skipped_count = len(keep)
 
         before_states = self._gps_states_for_paths(preparation.target_paths)
-        apply_result = self.workflow.execute_apply_workflow(
-            session=self.session,
-            preparation=preparation,
-        )
-        self.session = apply_result.session
-        backups = self._take_new_backups()
+        # The writes run in the background with a progress bar (see _run_writes).
+        def done(apply_result) -> None:
+            self.session = apply_result.session
+            backups = self._take_new_backups()
 
-        result = apply_result.execution_result
-        if result.successful_paths:
-            coordinates = preparation.coordinates
-            self._remember_gps_edit(
-                before_states={
-                    path: before_states[path] for path in result.successful_paths
-                },
-                after_states={
-                    path: (coordinates.latitude, coordinates.longitude)
-                    for path in result.successful_paths
-                },
-                backups=backups,
-            )
-        else:
-            self._clear_gps_edit_history()
-
-        self._rerender_selecting(
-            self._failed_targets(selected_paths, preparation.target_paths, result.successful_paths)
-        )
-        self._add_backups_to_list(backups)
-        backup_count = len(backups)
-        if result.successful_paths:
-            message = f"Applied GPS to {_photos(len(result.successful_paths))}."
-            if skipped_count:
-                message += (
-                    f" Skipped {skipped_count} that already "
-                    f"{'has' if skipped_count == 1 else 'had'} GPS."
+            result = apply_result.execution_result
+            if result.successful_paths:
+                coordinates = preparation.coordinates
+                self._remember_gps_edit(
+                    before_states={
+                        path: before_states[path] for path in result.successful_paths
+                    },
+                    after_states={
+                        path: (coordinates.latitude, coordinates.longitude)
+                        for path in result.successful_paths
+                    },
+                    backups=backups,
                 )
-            message += _backup_note(backup_count)
-            self._set_status_message(message, "success", undo=True)
-        self._report_write_failures("apply GPS to", list(result.failed_paths))
+            else:
+                self._clear_gps_edit_history()
+
+            self._rerender_selecting(
+                self._failed_targets(selected_paths, preparation.target_paths, result.successful_paths)
+            )
+            self._add_backups_to_list(backups)
+            backup_count = len(backups)
+            if result.successful_paths:
+                message = f"Applied GPS to {_photos(len(result.successful_paths))}."
+                if skipped_count:
+                    message += (
+                        f" Skipped {skipped_count} that already "
+                        f"{'has' if skipped_count == 1 else 'had'} GPS."
+                    )
+                message += _backup_note(backup_count)
+                self._set_status_message(message, "success", undo=True)
+            self._report_write_failures("apply GPS to", list(result.failed_paths))
+
+        self._run_writes(
+            "Applying GPS",
+            len(preparation.target_paths),
+            lambda progress: self.workflow.execute_apply_workflow(
+                session=self.session,
+                preparation=preparation,
+                on_progress=progress,
+            ),
+            done,
+        )
 
     def _ask_overwrite_choice(
         self,
@@ -238,36 +247,45 @@ class ApplyWorkflowMixin:
         before_states = self._gps_states_for_paths(paths_with_gps)
         # The backend attempts every file and reports failures instead of
         # stopping at the first one.
-        clear_result = self.workflow.clear_gps_workflow(
-            session=self.session,
-            target_paths=paths_with_gps,
-        )
-        self.session = clear_result.session
-        backups = self._take_new_backups()
-        result = clear_result.execution_result
+        # The writes run in the background with a progress bar (see _run_writes).
+        def done(clear_result) -> None:
+            self.session = clear_result.session
+            backups = self._take_new_backups()
+            result = clear_result.execution_result
 
-        if result.successful_paths:
-            self._remember_gps_edit(
-                before_states=before_states,
-                after_states={path: (None, None) for path in result.successful_paths},
-                backups=backups,
-            )
-        else:
-            self._clear_gps_edit_history()
+            if result.successful_paths:
+                self._remember_gps_edit(
+                    before_states=before_states,
+                    after_states={path: (None, None) for path in result.successful_paths},
+                    backups=backups,
+                )
+            else:
+                self._clear_gps_edit_history()
 
-        self._rerender_selecting(
-            self._failed_targets(selected_paths, paths_with_gps, result.successful_paths)
-        )
-        self._add_backups_to_list(backups)
-        backup_count = len(backups)
-        if result.successful_paths:
-            self._set_status_message(
-                f"Removed GPS from {_photos(len(result.successful_paths))}."
-                + _backup_note(backup_count),
-                "success",
-                undo=True,
+            self._rerender_selecting(
+                self._failed_targets(selected_paths, paths_with_gps, result.successful_paths)
             )
-        self._report_write_failures("remove GPS from", list(result.failed_paths))
+            self._add_backups_to_list(backups)
+            backup_count = len(backups)
+            if result.successful_paths:
+                self._set_status_message(
+                    f"Removed GPS from {_photos(len(result.successful_paths))}."
+                    + _backup_note(backup_count),
+                    "success",
+                    undo=True,
+                )
+            self._report_write_failures("remove GPS from", list(result.failed_paths))
+
+        self._run_writes(
+            "Removing GPS",
+            len(paths_with_gps),
+            lambda progress: self.workflow.clear_gps_workflow(
+                session=self.session,
+                target_paths=paths_with_gps,
+                on_progress=progress,
+            ),
+            done,
+        )
 
     @staticmethod
     def _failed_targets(

@@ -6,7 +6,7 @@ from unittest.mock import patch
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PySide6.QtCore import QEvent, QPoint, QPointF, Qt
-from PySide6.QtGui import QColor, QImage, QMouseEvent, QWheelEvent
+from PySide6.QtGui import QColor, QFocusEvent, QImage, QKeyEvent, QMouseEvent, QWheelEvent
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication, QWidget
 
@@ -278,6 +278,54 @@ class MapViewTests(unittest.TestCase):
         QTest.mouseClick(self.view, Qt.LeftButton, Qt.NoModifier, tip - QPoint(0, 20))
 
         self.assertEqual(self.picked, [])
+
+    # --- Space bar: pan mode (as in Photoshop) -------------------------------
+
+    def _space(self, press: bool, *, repeat: bool = False) -> None:
+        kind = QEvent.KeyPress if press else QEvent.KeyRelease
+        QApplication.sendEvent(self.view, QKeyEvent(kind, Qt.Key_Space, Qt.NoModifier, " ", repeat))
+
+    def test_space_shows_the_open_hand_until_released(self) -> None:
+        self._space(True)
+        self.assertEqual(self.view.cursor().shape(), Qt.OpenHandCursor)
+        self._space(True, repeat=True)
+        self._space(False, repeat=True)
+        self.assertEqual(self.view.cursor().shape(), Qt.OpenHandCursor)
+        self._space(False)
+        self.assertNotEqual(self.view.cursor().shape(), Qt.OpenHandCursor)
+
+    def test_with_space_a_click_does_not_move_the_pin(self) -> None:
+        self._space(True)
+        QTest.mouseClick(self.view, Qt.LeftButton, Qt.NoModifier, QPoint(200, 150))
+        self._space(False)
+        self.assertEqual(self.picked, [])
+        self.assertIsNone(self.view.pin)
+
+    def test_with_space_dragging_from_the_pin_pans_the_map(self) -> None:
+        self.view.set_pin((40.5865, -111.6558))
+        tip = self.view.screen_point_for(40.5865, -111.6558).toPoint()
+        before = self.view.center
+
+        self._space(True)
+        mouse_drag(self.view, tip - QPoint(0, 20), tip + QPoint(-100, -70))
+        self._space(False)
+
+        self.assertEqual(self.picked, [])
+        self.assertEqual(self.view.pin, (40.5865, -111.6558))
+        self.assertNotEqual(self.view.center, before)
+
+    def test_with_space_a_photo_dot_click_does_nothing(self) -> None:
+        self.view.set_photo_pins([PhotoPin("/tmp/a.jpg", 40.58, -111.64)])
+        dot = self.view.screen_point_for(40.58, -111.64).toPoint()
+        self._space(True)
+        QTest.mouseClick(self.view, Qt.LeftButton, Qt.NoModifier, dot + QPoint(3, 2))
+        self.assertEqual(self.clicked, [])
+
+    def test_losing_focus_leaves_pan_mode(self) -> None:
+        self._space(True)
+        QApplication.sendEvent(self.view, QFocusEvent(QEvent.FocusOut))
+        QTest.mouseClick(self.view, Qt.LeftButton, Qt.NoModifier, QPoint(200, 150))
+        self.assertEqual(len(self.picked), 1)
 
     def test_clicking_a_photo_dot_reports_the_photo_not_a_location(self) -> None:
         self.view.set_photo_pins([PhotoPin("/tmp/a.jpg", 40.58, -111.64)])

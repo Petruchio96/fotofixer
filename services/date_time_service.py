@@ -2,13 +2,17 @@
 Date & Time workflow logic: what a shift or set changes, and camera groups.
 
 Why this file exists:
-    The Date & Time tab has two ways to change dates:
+    The Date & Time tab has three ways to change dates:
     1. Shift: the camera's clock was off, so every selected photo moves by
        the same amount (the gaps between them stay right). The amount comes
        from the correct date and time of one reference photo.
     2. Set: every selected photo gets one exact date and time.
-    Both end as "these photos get these new dates", written with
-    write_date_tags. The Photo List also groups photos by camera in this
+    3. Change time zone: the photos get another time zone. Normally the
+       moment they were taken stays the same (the clock times change to
+       show it in the new zone); optionally the clock times stay instead.
+    All end as "these photos get these new dates (and zones)", written with
+    write_date_tags. Every change works on the moment a photo was taken: a
+    photo's time zone only says how that moment is written down. The Photo List also groups photos by camera in this
     mode. None of this needs Qt, so it lives here.
 """
 
@@ -159,6 +163,45 @@ def plan_set(
             plan.new_dates[path] = value
             if zone is not None:
                 plan.new_offsets[path] = offset
+    return plan
+
+
+def plan_zone_change(
+    infos: Mapping[Path, PhotoInfo],
+    paths: Iterable[Path],
+    zone: Zone,
+    *,
+    keep_clock: bool = False,
+) -> DatePlan:
+    """
+    Give every photo with a date the time zone zone.
+
+    keep_clock False (the default): the moment stays the same and the clock
+    time changes to show it in the new zone (10:05 MDT -> 11:05 CDT).
+    keep_clock True: the clock time stays and only the zone changes (11:16
+    MDT -> 11:16 CDT), which moves the moment; for photos whose times were
+    right but whose zone was wrong. A photo without a zone has no known
+    moment either way, so it keeps its clock time and just gets the zone.
+    Daylight saving is worked out for each photo's own date.
+    """
+    path_list = list(paths)
+    if not keep_clock:
+        # The same moment in another zone is a shift of nothing in that zone.
+        return plan_shift(infos, path_list, timedelta(0), zone=zone)
+
+    plan = DatePlan()
+    for path in photos_by_date(infos, path_list):
+        info = infos[path]
+        offset = offset_at_local(zone, info.date_taken)
+        if offset == info.time_offset:
+            plan.unchanged.append(path)
+        else:
+            plan.new_dates[path] = info.date_taken
+            plan.new_offsets[path] = offset
+    plan.skipped_undated = [
+        path for path in path_list
+        if (info := infos.get(path)) is None or info.date_taken is None
+    ]
     return plan
 
 

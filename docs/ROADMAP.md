@@ -7,13 +7,18 @@ and remove finished items.
 
 ## Order
 
-1. **Release 1.6.1** (branch `release-1.6.1`, below). Everything merged since
-   1.4.1: the 1.5 picker changes, the PR #10 fixes, and Date & Time.
-2. **Windows installer** (Part 1), one branch.
-3. **In-app update checker** (Part 2), one branch. Depends on the installer
+1. **Improvements and fixes** (now, below). Small branches, released as
+   1.6.x or 1.7.x.
+2. **Rename the app** (below), one branch. "Photo GPS Editor" no longer fits:
+   it edits dates and times too. Do it before the installer and update
+   checker, which build the name into install folders, shortcuts, and
+   download file names.
+3. **Windows installer** (Part 1), one branch.
+4. **In-app update checker** (Part 2), one branch. Depends on the installer
    for one-click Windows updates.
-4. **Docker/web version** (Part 3), 4–5 branches, once the desktop features
-   have settled. Part 4 checks that the DS920+ can run it.
+5. **Docker/web version** (Part 3), 4–5 branches, once the desktop features
+   have settled. Part 4 checks that the DS920+ can run it. When it's done,
+   the app is feature complete: **version 2.0**.
 
 Not scheduled:
 
@@ -23,50 +28,71 @@ Not scheduled:
 - **Macs.** No release has been tested on a real Mac yet; test when one is
   available.
 
+## Versions
+
+- 1.6.1 (2026-10-11) is the latest release.
+- Until the Docker/web version is done, versions stay 1.x: **1.6.x** for
+  fixes and small improvements, **1.7.x** when a branch adds something
+  bigger (for example the rename, the installer, or the update checker).
+  The usual rules in `CLAUDE.md` still decide whether a branch gets a bump
+  at all.
+- **2.0** marks the Docker/web version: the desktop app plus the browser
+  version on the NAS, feature complete.
+
 ---
 
-## Now: release 1.6.1
+## Now: improvements and fixes
 
-Version 1.6.1 releases everything since 1.4.1. 1.5.0 and 1.6.0 were merged
-but never released.
+1.6.1 is released. Next, small branches (1.6.x / 1.7.x):
 
-On the branch:
+- **Change Time Zone** (branch `change-time-zone`, version 1.6.2, not released yet): a third
+  Date & Time choice. Every change works on the moment a photo was taken;
+  Change Time Zone keeps the moment by default, with "Keep the clock time"
+  for photos whose times were right but whose zone was wrong (the Central
+  wedding photos Synology Photos stamped with Mountain time). Step 2 is
+  three stacked cards that fold up to the one chosen.
+- **Safer zone fallback.** A photo with no `OffsetTimeOriginal` falls back
+  to `OffsetTime` (`core/photo_dates.py`, `time_offset_from_tags`). That
+  tag goes with the "last changed" date, so it can hold an editing
+  program's zone. Try `OffsetTimeDigitized` before it (it goes with the
+  digitized date, which cameras set to the moment taken).
+- **CI release download.** The `v1.6.1` release job failed:
+  `actions/download-artifact` unzipped the Windows and macOS zips (uploaded
+  with `archive: false`), so the four-file check stopped it before
+  uploading. Add `skip-decompress: true` to the release job's download
+  step. (1.6.1's files were attached by hand: `gh api
+  repos/.../actions/artifacts/<id>/zip` fetches a file without unzipping
+  it; `gh run download` unzips too.)
+- **Re-test 1.6.1 on Windows:** the step 2 cards, the map window's border,
+  and that Apply skips the source photo.
 
-- Version bump to 1.6.1 (`pyproject.toml`, `APP_VERSION`, the
-  `PROJECT_CONTEXT.md` snapshot).
-- Commit this roadmap; `PROJECT_CONTEXT.md` points here instead of keeping
-  its own Future Ideas list.
-- `RELEASE_CHECKLIST.md` brought up to date (it still described the system
-  file picker), including the items below that were never tested.
-- `WINDOWS_BUILD_STEPS.md` brought up to date (it checked out an old
-  branch).
-- CI builds download as single files: `actions/upload-artifact` with
-  `archive: false`, so the Windows download is no longer a zip inside a zip.
-  Check on the `v1.6.1` tag that all four files reach the draft release.
-- Date & Time step 2 redesigned (mockup: the "Step 2 cards" board):
-  "Choose how to change Date & Time"; two equal cards with an icon, a
-  16px one-line title ("Set a Single Date and Time" is now "Set One Date
-  and Time"), and the explanation, only as tall as the text needs, using
-  the step's full width. "(for example scans)" removed.
-- Bug fix (found in Windows testing): Apply no longer writes to the location
-  source photo, and is disabled when the source is the only photo selected.
-- Bug fix (found in Windows testing): the map window had no visible border
-  or shadow in the Windows VM (Windows refused the border color). Where
-  Windows refuses it, the app now draws its own slate edge. Re-test on the
-  VM with this branch's build.
+---
 
-Test on Windows before tagging (use copies; date changes make no backups):
+## Rename the app
 
-- Date writes to CR3, CR2, and DNG. Only JPEGs have been tested.
-- Time zones: named zones with abbreviations, the default from the selected
-  photos, conversion, red when mixed (checks the bundled `tzdata`).
-- One Undo/Redo history across the Location and Date & Time tabs.
-- The PR #10 changes: the slate border on the map, picker, and Settings
-  windows; spacing; the map's Back/Clear and zoom from a preview; backups
-  added to the list and deleted by Undo.
-- The picker: drives, network shares, folders, subfolders, Select All Photos.
+"Photo GPS Editor" describes only half of what the app does now that it
+edits dates and times as well as GPS. Pick a new name first (the user's
+choice), then change it everywhere in one branch, with a version bump.
 
-Then: merge, tag `v1.6.1`, write the release notes, publish.
+What the name touches (about 50 places outside the tests):
+
+- **Window titles and menus:** the main window, map, picker, Settings, About.
+- **App identity:** `setApplicationName`/`setOrganizationName` in `app.py`.
+  These decide where settings and the error log live (registry
+  `HKCU\Software\Photo GPS Editor`, `%LOCALAPPDATA%\Photo GPS Editor`,
+  `~/.config/Photo GPS Editor`). Changing them would lose the saved
+  settings (backups option, Esri key, last folder, map size). So either
+  copy the old settings across once at startup, or keep the old internal
+  identity and change only what users see.
+- **Builds:** `photo_gps_editor.spec` (exe and `.app` names), the AppImage
+  (`packaging/build_appimage.sh`, its `.desktop` file), and the download
+  file names in `.github/workflows/build.yml`.
+- **Project:** `pyproject.toml` name, the README, `PROJECT_CONTEXT.md`,
+  `CLAUDE.md`, the map tile User-Agent (OpenStreetMap asks apps to identify
+  themselves), and optionally the GitHub repository (GitHub redirects the
+  old address).
+- **Release notes** for the version that renames it: say what the app used
+  to be called, so people find it.
 
 ---
 

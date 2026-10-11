@@ -4,12 +4,15 @@ Use-case services for applying GPS coordinates to target files.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from pathlib import Path
 
 from core.models import PhotoInfo
 from services.target_paths_service import get_overwrite_entries, get_target_paths
 from services.models import ApplyExecutionResult, ApplyPreparation, SourceResolution
+
+# on_progress(done, total): called after each file a write goes through.
+Progress = Callable[[int, int], None]
 
 
 def prepare_apply_gps(
@@ -54,6 +57,7 @@ def apply_gps_to_paths(
     latitude: float,
     longitude: float,
     writer,
+    on_progress: Progress | None = None,
 ) -> ApplyExecutionResult:
     """
     Write GPS metadata to each target path and collect failures.
@@ -61,20 +65,27 @@ def apply_gps_to_paths(
     return _write_each(
         target_paths,
         lambda path: writer.write_gps(path, latitude, longitude),
+        on_progress,
     )
 
 
-def clear_gps_from_paths(target_paths: list[Path], *, writer) -> ApplyExecutionResult:
+def clear_gps_from_paths(
+    target_paths: list[Path],
+    *,
+    writer,
+    on_progress: Progress | None = None,
+) -> ApplyExecutionResult:
     """
     Remove GPS metadata from each target path and collect failures.
     """
-    return _write_each(target_paths, writer.clear_gps)
+    return _write_each(target_paths, writer.clear_gps, on_progress)
 
 
 def restore_gps_states(
     states: Mapping[Path, tuple[float | None, float | None]],
     *,
     writer,
+    on_progress: Progress | None = None,
 ) -> ApplyExecutionResult:
     """
     Write each file back to a remembered GPS state (used by undo and redo).
@@ -88,13 +99,14 @@ def restore_gps_states(
         else:
             writer.write_gps(path, latitude, longitude)
 
-    return _write_each(list(states), restore)
+    return _write_each(list(states), restore, on_progress)
 
 
 def write_date_tags_to_paths(
     values_by_path: Mapping[Path, Mapping[str, str | None]],
     *,
     writer,
+    on_progress: Progress | None = None,
 ) -> ApplyExecutionResult:
     """
     Write date tags to each file (a date change, or its undo/redo) and
@@ -103,23 +115,27 @@ def write_date_tags_to_paths(
     return _write_each(
         list(values_by_path),
         lambda path: writer.write_date_tags(path, dict(values_by_path[path])),
+        on_progress,
     )
 
 
-def _write_each(paths: list[Path], write) -> ApplyExecutionResult:
+def _write_each(paths: list[Path], write, on_progress: Progress | None = None) -> ApplyExecutionResult:
     """
     Run one write per file. A failure on one file never stops the others;
-    every failure is reported in the result.
+    every failure is reported in the result. on_progress(done, total) is
+    called after each file (for a progress bar).
     """
     successful_paths: list[Path] = []
     failed_paths: list[str] = []
 
-    for path in paths:
+    for index, path in enumerate(paths, start=1):
         try:
             write(path)
             successful_paths.append(path)
         except Exception as exc:
             failed_paths.append(f"{path.name}: {exc}")
+        if on_progress is not None:
+            on_progress(index, len(paths))
 
     return ApplyExecutionResult(
         success_count=len(successful_paths),

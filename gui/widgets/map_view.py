@@ -13,6 +13,10 @@ Mouse:
       so a sloppy click-and-hold doesn't move the pin by accident.
     - Drag the pin: move it; the new place is reported when it is dropped.
     - Drag anywhere else: pan. Wheel (or + and -): zoom.
+    - Hold the space bar (as in Photoshop): an open hand; dragging then
+      always pans (even from the pin or a photo dot) and a click does
+      nothing, so the pin can't move by accident. Pointing at the map gives
+      it the keyboard, so the space bar never presses a focused button.
     - Hover a photo dot: its file name. Click it: photo_pins_clicked.
 
 Zoom levels can be in between whole levels (opening on the photos fits them
@@ -345,6 +349,10 @@ class MapView(QWidget):
         self._press_on_pin = False
         self._pin_grab_offset = QPointF()
         self._dragging = False
+        # The space bar is held down (pan mode), and whether it was when the
+        # button went down (that press only pans).
+        self._space_held = False
+        self._press_with_space = False
         self._wheel_remainder = 0
 
         self._retry_timer = QTimer(self)
@@ -774,13 +782,15 @@ class MapView(QWidget):
         self._press_time = time.perf_counter()
         self._press_window_active = self._window_active
         self._press_center = (self._center_x, self._center_y)
-        self._press_on_pin = self._is_on_pin(position)
+        self._press_with_space = self._space_held
+        # With the space bar held, even a press on the pin grabs the map.
+        self._press_on_pin = not self._space_held and self._is_on_pin(position)
         if self._press_on_pin:
             self._pin_grab_offset = self.screen_point_for(*self._pin) - position
         self._dragging = False
         # The closed hand right away: holding the button grabs the map (or
         # the pin). A photo dot keeps the pointing hand: a click opens it.
-        if self._press_on_pin or not self.photo_paths_at(position):
+        if self._press_on_pin or self._space_held or not self.photo_paths_at(position):
             self.setCursor(Qt.ClosedHandCursor)
         event.accept()
 
@@ -812,10 +822,16 @@ class MapView(QWidget):
         position = event.position()
         was_dragging = self._dragging
         on_pin = self._press_on_pin
+        with_space = self._press_with_space
         self._press_pos = None
         self._dragging = False
         self._press_on_pin = False
+        self._press_with_space = False
         self._update_hover_cursor(position)
+
+        if with_space:
+            # Space bar pan mode: a drag only panned, and a click does nothing.
+            return
 
         if was_dragging:
             if on_pin and self._pin is not None:
@@ -854,12 +870,45 @@ class MapView(QWidget):
         event.accept()
 
     def keyPressEvent(self, event) -> None:
-        if event.key() in (Qt.Key_Plus, Qt.Key_Equal):
+        if event.key() == Qt.Key_Space:
+            # Holding the key repeats the press: only the first one counts.
+            if not event.isAutoRepeat():
+                self._set_space_held(True)
+            event.accept()
+        elif event.key() in (Qt.Key_Plus, Qt.Key_Equal):
             self.zoom_by(1)
         elif event.key() == Qt.Key_Minus:
             self.zoom_by(-1)
         else:
             super().keyPressEvent(event)
+
+    def keyReleaseEvent(self, event) -> None:
+        if event.key() == Qt.Key_Space:
+            if not event.isAutoRepeat():
+                # A drag still going on finishes as a pan.
+                self._set_space_held(False)
+            event.accept()
+        else:
+            super().keyReleaseEvent(event)
+
+    def focusOutEvent(self, event) -> None:
+        # The key's release goes elsewhere now: leave pan mode.
+        self._set_space_held(False)
+        super().focusOutEvent(event)
+
+    def enterEvent(self, event) -> None:
+        # Pointing at the map gives it the keyboard (+/-, the space bar), so
+        # the space bar never presses a focused button such as Done.
+        if self._window_active and not self.hasFocus():
+            self.setFocus(Qt.MouseFocusReason)
+        super().enterEvent(event)
+
+    def _set_space_held(self, held: bool) -> None:
+        if held == self._space_held:
+            return
+        self._space_held = held
+        if self._press_pos is None:
+            self._update_hover_cursor(QPointF(self.mapFromGlobal(QCursor.pos())))
 
     def event(self, event) -> bool:
         if event.type() == QEvent.ToolTip:
@@ -904,7 +953,9 @@ class MapView(QWidget):
         if not self._window_active:
             self.setCursor(Qt.ArrowCursor)
             return
-        if self._is_on_pin(position):
+        if self._space_held:
+            self.setCursor(Qt.OpenHandCursor)
+        elif self._is_on_pin(position):
             self.setCursor(Qt.OpenHandCursor)
         elif self.photo_paths_at(position):
             self.setCursor(Qt.PointingHandCursor)

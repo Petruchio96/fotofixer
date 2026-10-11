@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 from core.models import PhotoInfo
-from gui.presenters.date_time_state import MODE_SET, MODE_SHIFT, build_date_time_state, describe_shift
+from gui.presenters.date_time_state import MODE_SET, MODE_SHIFT, MODE_ZONE, build_date_time_state, describe_shift
 
 
 def photo(name: str, taken: datetime | None, camera: str | None = "Canon EOS R6", offset=None) -> PhotoInfo:
@@ -119,17 +119,18 @@ class TimeZoneStateTests(unittest.TestCase):
             )
         }
 
-    def state(self, names, *, zone=None, shift=timedelta(0)):
+    def state(self, names, *, zone=None, shift=timedelta(0), mode=MODE_SHIFT, keep_clock=False, source=None):
         from core.time_zones import ZONES_BY_KEY
 
         return build_date_time_state(
             selected_paths=[Path(f"/photos/{n}") for n in names],
             photo_infos=self.infos,
-            mode=MODE_SHIFT,
+            mode=mode,
+            keep_clock=keep_clock,
             reference=None,
             shift=shift,
             set_value=datetime(2026, 10, 3),
-            source=None,
+            source=Path(f"/photos/{source}") if source else None,
             zone=ZONES_BY_KEY[zone] if zone else None,
             now=datetime(2026, 10, 3, 12, 0),
             computer_offset=timedelta(hours=-6),
@@ -168,6 +169,39 @@ class TimeZoneStateTests(unittest.TestCase):
             [("10/03/2026 9:00:00am MDT", "10/03/2026 11:00:00am EDT")],
         )
         self.assertTrue(state.can_apply)
+
+
+    # --- Change Time Zone ------------------------------------------------------
+
+    def test_zone_mode_keeps_the_moment_by_default(self) -> None:
+        state = self.state(["m1.jpg", "bare.jpg"], mode=MODE_ZONE, zone="central")
+        self.assertEqual(
+            [(row.current, row.new) for row in state.rows],
+            [
+                ("10/03/2026 8:00:00am", "10/03/2026 8:00:00am CDT (time kept, time zone added)"),
+                ("10/03/2026 9:00:00am MDT", "10/03/2026 10:00:00am CDT"),
+            ],
+        )
+        self.assertEqual(state.apply_label, "Change Time Zone of 2 Photos")
+        self.assertTrue(state.can_apply)
+
+    def test_zone_mode_can_keep_the_clock_time(self) -> None:
+        state = self.state(["m1.jpg"], mode=MODE_ZONE, zone="central", keep_clock=True)
+        self.assertEqual(
+            [(row.current, row.new) for row in state.rows],
+            [("10/03/2026 9:00:00am MDT", "10/03/2026 9:00:00am CDT")],
+        )
+
+    def test_zone_mode_starts_on_the_default_zone_and_changes_nothing(self) -> None:
+        state = self.state(["m1.jpg", "m2.jpg"], mode=MODE_ZONE)
+        self.assertEqual(state.zone_key, "mountain")
+        self.assertFalse(state.can_apply)
+        self.assertIn("already in this time zone", state.hint)
+
+    def test_zone_mode_ignores_the_time_source(self) -> None:
+        state = self.state(["m1.jpg", "m2.jpg"], mode=MODE_ZONE, zone="central", source="m2.jpg")
+        self.assertFalse(state.source_selected)
+        self.assertEqual(len(state.plan.new_dates), 2)
 
 
 if __name__ == "__main__":

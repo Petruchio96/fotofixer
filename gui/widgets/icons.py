@@ -165,3 +165,14 @@ def calendar_icon(color: str) -> QIcon:
         painter.drawPath(path)
 
     return _icon(color, draw)
+
+
+def globe_icon(color: str) -> QIcon:
+    """Globe, for Change Time Zone."""
+
+    def draw(painter: QPainter) -> None:
+        painter.drawEllipse(QPointF(8, 8), 6, 6)
+        painter.drawLine(QPointF(2, 8), QPointF(14, 8))
+        painter.drawEllipse(QPointF(8, 8), 2.6, 6)
+
+    return _icon(color, draw)

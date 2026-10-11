@@ -61,6 +61,10 @@ date changes make no backups.
       the same amount; copying the time from a Photo List photo or the
       computer works.
 - [ ] Set One Date and Time gives every selected photo that date.
+- [ ] Change Time Zone: off, the moment stays (11:16 MDT → 12:16 CDT); with
+      Keep the clock time on (after its pop-up), only the zone changes
+      (11:16 MDT → 11:16 CDT). Step 2 folds up to the choice and opens again
+      when clicked.
 - [ ] Date writes work on JPG, CR3, CR2, and DNG; the photos open normally
       in another program afterwards and show the new date.
 - [ ] Time zones: named zones with abbreviations; the default comes from the

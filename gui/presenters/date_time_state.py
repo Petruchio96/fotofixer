@@ -268,7 +268,7 @@ def build_date_time_state(
             skipped = len(plan.skipped_undated)
             hints.append(
                 f"{_photos_lower(skipped)} without a date will be skipped "
-                f"(use Set a Single Date and Time for {'it' if skipped == 1 else 'them'})."
+                f"(use Set One Date and Time for {'it' if skipped == 1 else 'them'})."
             )
             tone = "warning"
 

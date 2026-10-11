@@ -175,6 +175,22 @@ class MapWindowTests(unittest.TestCase):
 
         self.assertEqual(self.window.exiftool.writes, [(self.without_gps, latitude, longitude)])
 
+    def test_apply_never_writes_to_the_source_photo(self) -> None:
+        self.window.use_location_from_path(self.with_gps)
+
+        # Only the source selected: nothing to apply to.
+        self.window.select_browser_paths([self.with_gps])
+        self.assertFalse(self.window.apply_button.isEnabled())
+        self.window.apply_coordinates_to_selected()
+        self.assertEqual(self.window.exiftool.writes, [])
+
+        # With another photo selected, only that photo is changed.
+        self.window.select_browser_paths([self.with_gps, self.without_gps])
+        self.assertTrue(self.window.apply_button.isEnabled())
+        self.assertEqual(self.window.apply_button.text(), "Apply Location to 1 Photo")
+        self.window.apply_coordinates_to_selected()
+        self.assertEqual(self.window.exiftool.writes, [(self.without_gps, 40.5865, -111.6558)])
+
     def test_pin_follows_coordinates_typed_or_pasted(self) -> None:
         map_window = self._open_map()
 

@@ -765,11 +765,11 @@ QPushButton#choiceCard:checked {
 }
 QLabel#choiceTitle {
     font-weight: 700;
-    font-size: 14px;
+    font-size: 16px;
     color: #162131;
 }
 QLabel#choiceDetail {
-    font-size: 12px;
+    font-size: 13px;
     color: #556579;
 }
 QDateEdit#dateField,

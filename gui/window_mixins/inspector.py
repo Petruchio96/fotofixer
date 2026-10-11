@@ -19,6 +19,7 @@ class InspectorMixin:
             photo_infos=self.session.loaded_photo_infos,
             latitude_text=self.latitude_input.text(),
             longitude_text=self.longitude_input.text(),
+            source_path=self._location_source,
         )
 
     def _apply_inspector_state(self, state: InspectorState) -> None:

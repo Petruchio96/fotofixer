@@ -10,7 +10,8 @@ for a PySide6 desktop app.
 
 - Every push to any branch runs the tests on Linux, Windows, and macOS and
   builds each app. Open the run on the repository's Actions tab and download
-  the builds from its Artifacts section.
+  the builds from its Artifacts section. Each download is the release file
+  itself (uploaded with `archive: false`), not a zip around it.
 - Pushing a `v*` tag also attaches the builds to that tag's GitHub release,
   creating a draft release if one does not exist.
 
@@ -67,7 +68,8 @@ python -m PyInstaller photo_gps_editor.spec --noconfirm
 ```
 
 The Windows output will be a one-folder app containing `Photo GPS Editor.exe`.
-Zip that folder for the first Windows release.
+Release zips come from CI (see above); see `WINDOWS_BUILD_STEPS.md` for the
+full Windows walkthrough.
 
 ## macOS
 

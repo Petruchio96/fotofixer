@@ -201,6 +201,22 @@ class DateTimeTabTests(unittest.TestCase):
             QTest.mouseClick(self.window.step_add_photos_button, Qt.LeftButton)
         pick.assert_called_once()
 
+    def test_step_2_cards_are_equal_with_one_line_titles(self) -> None:
+        self._open_date_tab()
+        self._select(self.canon1)
+        QApplication.processEvents()
+        shift, set_card = self.window.date_shift_choice, self.window.date_set_choice
+
+        self.assertEqual(self.window.date_steps[1].title.text(), "Choose how to change Date & Time")
+        self.assertEqual(set_card.title_label.text(), "Set One Date and Time")
+        self.assertEqual(shift.width(), set_card.width())
+        for card in (shift, set_card):
+            # The title gets its whole width (one line), at the same height in both.
+            self.assertGreaterEqual(card.title_label.width(), card.title_label.sizeHint().width())
+            self.assertEqual(card.title_label.geometry().top(), shift.title_label.geometry().top())
+            # Only as tall as the text needs (no fixed minimum height).
+            self.assertEqual(card.height(), max(shift.heightForWidth(shift.width()), set_card.heightForWidth(set_card.width())))
+
     def test_set_card_titles_step_3_enter(self) -> None:
         self._open_date_tab()
         self._select(self.canon1)

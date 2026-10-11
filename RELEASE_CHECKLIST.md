@@ -1,47 +1,87 @@
 # Release Checklist
 
-Use this checklist against the packaged application, not the source checkout.
+Use this checklist against the packaged application (the CI build or the
+draft release's files), not the source checkout. Test on copies of photos:
+date changes make no backups.
 
-## Build Verification
+## Before Tagging
 
-- [ ] Automated tests pass from source.
-- [ ] Linux PyInstaller bundle builds successfully.
-- [ ] Windows PyInstaller bundle builds successfully on Windows.
-- [ ] Packaged app launches on a machine without the project virtual environment.
-- [ ] Packaged app can find bundled ExifTool.
+- [ ] Version bumped in `pyproject.toml`, `APP_VERSION` in
+      `gui/main_window.py`, and the `PROJECT_CONTEXT.md` snapshot.
+- [ ] Automated tests pass from source and in CI on Linux, Windows, and macOS.
+- [ ] `docs/ROADMAP.md`: finished items removed, the order still right.
 
 ## Launch
 
-- [ ] App opens from the packaged executable.
-- [ ] App icon appears in the window/task switcher where supported.
-- [ ] About dialog opens and shows the project link.
-- [ ] No dependency error dialog appears at startup.
+- [ ] The app opens from the packaged build on a machine without Python or
+      ExifTool installed.
+- [ ] The window and taskbar/dock icon appear.
+- [ ] Help > About shows the new version and the project link.
+- [ ] No dependency or ExifTool error at startup.
 
-## Loading
+## Add Photos Picker
 
-- [ ] Add Photos opens the OS file picker.
-- [ ] JPG files load.
-- [ ] CR2, CR3, or DNG files load if sample files are available.
-- [ ] Unsupported files are ignored or handled gracefully.
-- [ ] Portrait thumbnails render correctly in the main app.
+- [ ] Add Photos opens the app's own picker in the last folder used.
+- [ ] The folder tree shows user folders, drives, and network shares
+      (Windows: mapped NAS drives; Linux: the mounted NAS share).
+- [ ] Choosing photos adds them; choosing a folder adds its photos;
+      "Add Photos in Subfolders" adds the subfolders' photos too.
+- [ ] Select All Photos selects only photos; photos already in the Photo
+      List show "In Photo List" and can't be chosen.
 
-## GPS Read
+## Photo List
 
-- [ ] Photos with GPS show GPS badges.
-- [ ] Photos without GPS appear before the GPS group.
-- [ ] Right-click copy GPS works from a tagged thumbnail.
+- [ ] JPG, CR2, CR3, and DNG photos load with real thumbnails (portrait
+      photos the right way up).
+- [ ] Photos with GPS show the blue pin badge; the Show filter (All, Needs
+      GPS, Has GPS) and Only Show Selected Photos work.
+- [ ] Edit > Copy GPS Coordinates and the Copy location button copy a
+      photo's coordinates.
 
-## GPS Write
+## Location Tab
 
-- [ ] Manual decimal coordinates validate.
-- [ ] Manual coordinates apply to selected photos.
-- [ ] Source photo coordinates apply to selected photos.
-- [ ] Overwrite warning appears before replacing existing GPS coordinates.
-- [ ] Clear GPS removes coordinates from tagged photos.
+- [ ] Typed and pasted coordinates (decimal, DMS, DDM) validate.
+- [ ] Apply writes the location to the selected photos; the overwrite
+      warning appears for photos that already have GPS; photos are
+      deselected after Apply.
+- [ ] A selected photo's location, or another photo file's, can be the
+      source. Apply leaves the source photo out, and is disabled when the
+      source is the only photo selected.
+- [ ] Clear GPS removes coordinates.
+- [ ] Pick from a Map: Street and satellite imagery load; clicking or
+      dragging the pin fills New Location; Back, Clear, Show All Photo
+      Locations, and zoom from a photo preview work.
+- [ ] Windows: the map, picker, and Settings windows have a visible slate
+      border, clearly separate from the main window.
 
-## Undo And Persistence
+## Date & Time Tab
 
-- [ ] Undo restores the previous GPS state.
-- [ ] Redo reapplies the GPS state.
-- [ ] After closing and reopening the app, metadata changes are still present.
-- [ ] Edited files still open normally in a standard photo viewer.
+- [ ] The four steps open in order and the pane scrolls to each.
+- [ ] Shift: correcting the reference photo moves every selected photo by
+      the same amount; copying the time from a Photo List photo or the
+      computer works.
+- [ ] Set One Date and Time gives every selected photo that date.
+- [ ] Date writes work on JPG, CR3, CR2, and DNG; the photos open normally
+      in another program afterwards and show the new date.
+- [ ] Time zones: named zones with abbreviations; the default comes from the
+      selected photos; changing the zone converts the time; the zone is red
+      when the selected photos have mixed zones.
+- [ ] The camera filter appears when the photos come from more than one
+      camera.
+
+## Undo, Backups, Settings
+
+- [ ] Undo and Redo work for GPS and date changes, as one history across
+      both tabs, and put the Photo List back the way it was.
+- [ ] With Keep Backup Copies of Originals on, changing GPS on a photo that
+      already had GPS makes `<name>_original.<ext>`, adds it to the Photo
+      List, and Undo deletes it.
+- [ ] Edit > Settings (backups, Esri key) and the last folder are remembered
+      after reopening the app.
+- [ ] After reopening the app, the changes are still in the files.
+
+## Publish
+
+- [ ] Tag `vX.Y.Z` on `main`; CI attaches the four files to a draft release.
+- [ ] Release notes added; title "Version X.Y" (or "Version X.Y.Z").
+- [ ] Publish the draft and mark it latest.

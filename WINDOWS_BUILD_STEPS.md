@@ -1,6 +1,8 @@
 # Windows Build Steps
 
-These steps start after booting into Windows.
+GitHub Actions builds the Windows app on every push (see
+`packaging/README.md`), so these steps are only needed to build and debug on
+a Windows machine by hand. They start after booting into Windows.
 
 ## 1. Install Required Tools
 
@@ -36,7 +38,6 @@ Clone the repository:
 ```powershell
 git clone https://github.com/Petruchio96/photo-gps-editor.git
 cd photo-gps-editor
-git checkout release-packaging
 ```
 
 If the repository already exists on Windows, use this instead:
@@ -44,7 +45,7 @@ If the repository already exists on Windows, use this instead:
 ```powershell
 cd "$HOME\Documents\Programming\photo-gps-editor"
 git fetch
-git checkout release-packaging
+git checkout main
 git pull
 ```
 
@@ -149,20 +150,9 @@ local testing. The app is not code-signed yet.
 
 ## 8. Manual Smoke Test
 
-Use copied test photos, not original photos.
-
-Check:
-
-- App opens.
-- Choose Photos opens the file picker.
-- JPG files load.
-- A GPS-tagged photo shows a GPS badge.
-- A no-GPS photo appears in the no-GPS group.
-- Manual coordinates apply to a copied photo.
-- GPS from a source photo applies to another copied photo.
-- Clear GPS works on a copied GPS-tagged photo.
-- Undo and redo work before closing the app.
-- After closing and reopening the app, metadata changes are still present.
+Use copied test photos, not original photos. Work through
+`RELEASE_CHECKLIST.md`; the app's error log is at
+`%LOCALAPPDATA%\Photo GPS Editor\Photo GPS Editor\error-log.txt`.
 
 ## 9. Test On Another Windows Machine
 
@@ -180,31 +170,20 @@ Photo GPS Editor.exe
 
 Confirm it works on a machine without Python and without ExifTool installed.
 
-## 10. Create The Windows Release Zip
+## 10. Release Files
 
-After testing succeeds, create the zip:
+Releases don't use a hand-made zip: pushing a `v*` tag makes GitHub Actions
+build all three systems and attach these files to a draft release:
+
+```text
+photo-gps-editor-windows-x86_64.zip
+photo-gps-editor-macos-arm64.zip
+photo-gps-editor-linux-x86_64.tar.gz
+Photo_GPS_Editor-x86_64.AppImage
+```
+
+To zip a local build anyway (for example to copy it to another machine):
 
 ```powershell
 Compress-Archive -Path "dist\Photo GPS Editor" -DestinationPath "dist\photo-gps-editor-windows-x86_64.zip" -Force
-```
-
-The release zip will be:
-
-```text
-dist\photo-gps-editor-windows-x86_64.zip
-```
-
-## 11. Files To Upload For Release Later
-
-The likely release files are:
-
-```text
-Photo_GPS_Editor-x86_64.AppImage
-photo-gps-editor-windows-x86_64.zip
-```
-
-The Linux tarball is optional because the AppImage is more user-friendly:
-
-```text
-photo-gps-editor-linux-x86_64.tar.gz
 ```

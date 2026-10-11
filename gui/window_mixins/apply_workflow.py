@@ -38,9 +38,18 @@ class ApplyWorkflowMixin:
         self.validate_latitude_field()
         self.validate_longitude_field()
 
+        # The source photo already has this location: never write to it.
+        targets = [path for path in selected_paths if path != self._location_source]
+        if not targets:
+            self._set_status_message(
+                "The source photo isn't changed. Select the photos to give its location to.",
+                "error",
+            )
+            return
+
         preparation = self.workflow.prepare_apply_workflow(
             session=self.session,
-            selected_paths=selected_paths,
+            selected_paths=targets,
             using_photo_source=False,
             latitude_text=self.latitude_input.text(),
             longitude_text=self.longitude_input.text(),

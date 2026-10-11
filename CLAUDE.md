@@ -5,7 +5,8 @@ photos (JPG, CR2, CR3, DNG) through ExifTool. Runs on Linux Mint, Windows 11, an
 macOS (Apple Silicon).
 
 Read `PROJECT_CONTEXT.md` before starting work. It is the source of truth for
-status, architecture, the current UI, and future ideas.
+status, architecture, and the current UI. Upcoming work, its order, and its
+plans live only in `docs/ROADMAP.md`.
 
 ## Commands
 

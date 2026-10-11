@@ -109,6 +109,49 @@ class InspectorStateTests(unittest.TestCase):
         self.assertEqual(result.apply_hint, "2 photos already have GPS, which will be replaced.")
         self.assertEqual(result.remove_gps_label, "Remove GPS from Selected 2 Photos")
 
+    def test_source_photo_alone_cannot_be_applied_to(self) -> None:
+        # The location was copied from the one selected photo: nothing to change.
+        result = build_inspector_state(
+            selected_paths=[WITH_GPS],
+            photo_infos=INFOS,
+            latitude_text="40.5",
+            longitude_text="-111.8",
+            source_path=WITH_GPS,
+        )
+
+        self.assertFalse(result.can_apply)
+        self.assertEqual(result.apply_label, "Apply Location to Selected Photos")
+        self.assertIn("is the source of the new location", result.apply_hint)
+        self.assertEqual(result.overwrite_count, 0)
+
+    def test_source_photo_is_left_out_of_apply(self) -> None:
+        result = build_inspector_state(
+            selected_paths=[WITH_GPS, NO_GPS, OTHER_NO_GPS],
+            photo_infos=INFOS,
+            latitude_text="40.5",
+            longitude_text="-111.8",
+            source_path=WITH_GPS,
+        )
+
+        self.assertTrue(result.can_apply)
+        self.assertEqual(result.apply_label, "Apply Location to 2 Photos")
+        # The source has GPS, but it isn't replaced, so no overwrite warning.
+        self.assertEqual(result.overwrite_count, 0)
+        self.assertEqual(result.apply_hint, "The source photo isn't changed.")
+
+    def test_unselected_source_changes_nothing(self) -> None:
+        result = build_inspector_state(
+            selected_paths=[NO_GPS],
+            photo_infos=INFOS,
+            latitude_text="40.5",
+            longitude_text="-111.8",
+            source_path=WITH_GPS,
+        )
+
+        self.assertTrue(result.can_apply)
+        self.assertEqual(result.apply_label, "Apply Location to 1 Photo")
+        self.assertEqual(result.apply_hint, "")
+
 
 if __name__ == "__main__":
     unittest.main()

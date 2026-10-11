@@ -36,8 +36,9 @@ class MapPickerMixin:
 
     def show_map(self) -> None:
         """
-        Open the map window, centered on the photos in the Photo List with
-        GPS (or the United States), or bring it to the front if it is open.
+        Open the map window, centered on New Location when one is set, else on
+        the photos in the Photo List with GPS (or the United States), or bring
+        it to the front if it is open.
         """
         if self._map_window is None:
             self._map_window = self._build_map_window()
@@ -51,8 +52,8 @@ class MapPickerMixin:
             self._map_window.reset_for_opening()
         self._map_window.show()
         if opening:
-            # The pin counts as already shown: opening centers on the
-            # photos, not on New Location.
+            # The pin counts as already shown: opening centers on it
+            # (show_photos_or_united_states), so it needn't be revealed.
             self._map_pin_shown = self._new_location_pin()
             self._map_location_history = []
             self._map_window.set_back_enabled(False)

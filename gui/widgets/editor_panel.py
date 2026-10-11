@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
     QFormLayout,
     QFrame,
     QGroupBox,
+    QHeaderView,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -611,7 +612,64 @@ class DateChangesList(QTreeWidget):
     time, and the new one. Rows that fit show no hover hint.
     """
 
+    # Narrowest the name and current-date columns get when room is short.
+    MIN_NAME_WIDTH = 80
+    MIN_CURRENT_WIDTH = 60
+
+    def fit_columns(self) -> None:
+        """
+        Size the columns to fit the list's width: the new date in full when
+        it fits, the name in full, and the current date the room left. When
+        the list is too narrow the current date gives way first, then the
+        name, then the new date, so all three always stay in view (each cut
+        short with "…"; the row's hover hint shows it in full). Header
+        ResizeToContents can't do this: it let a long new date such as
+        "… MDT (time kept, time zone added)" push its column past the
+        right edge, where it was hidden.
+        """
+        header = self.header()
+        for column in range(self.columnCount()):
+            header.setSectionResizeMode(column, QHeaderView.Fixed)
+        available = self.viewport().width()
+        name = max(self._content_widths(0), default=0)
+        current = max(self._content_widths(1), default=0)
+        new_widths = sorted(self._content_widths(2))
+        new = new_widths[-1] if new_widths else 0
+        if name + current + new > available and new_widths:
+            # Short of room: size the new date for most rows (9 in 10), so a
+            # few long ones, such as "(time kept, time zone added)", are cut
+            # short rather than squeezing every row's current date.
+            typical = new_widths[(len(new_widths) - 1) * 9 // 10]
+            new = max(typical, min(new, available - name - current))
+        room = max(available - new - self.MIN_CURRENT_WIDTH, 0)
+        name = max(min(name, room), min(self.MIN_NAME_WIDTH, name))
+        new = max(min(new, available - name - self.MIN_CURRENT_WIDTH), 0)
+        header.resizeSection(0, name)
+        header.resizeSection(2, new)
+        header.resizeSection(1, max(available - name - new, 0))
+
+    def _content_widths(self, column: int) -> list[int]:
+        """
+        The width each row's text needs in a column, over every row (not
+        just the ones in view), with room for the padding _is_cut_short
+        allows for. Empty cells are left out.
+        """
+        widths = []
+        for row in range(self.topLevelItemCount()):
+            item = self.topLevelItem(row)
+            if not item.text(column):
+                continue
+            font = QFont(self.font())
+            font.setBold(item.font(column).bold())
+            widths.append(QFontMetrics(font).horizontalAdvance(item.text(column)) + 12)
+        return widths
+
     def viewportEvent(self, event) -> bool:
+        if event.type() == QEvent.Resize:
+            # Also when the vertical scroll bar comes or goes.
+            result = super().viewportEvent(event)
+            self.fit_columns()
+            return result
         if event.type() != QEvent.ToolTip:
             return super().viewportEvent(event)
         item = self.itemAt(event.pos())

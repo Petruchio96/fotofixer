@@ -152,13 +152,16 @@ class DateTimePicker(QWidget):
         for box in (self.hour_box, self.minute_box, self.second_box):
             box.currentIndexChanged.connect(self._user_changed)
 
-        # Time zones, east (top) to west; filled by set_zones().
+        # Time zones, east (top) to west; filled by set_zones(). Above the
+        # date and time: choose the zone, then enter the time in it (a zone
+        # change converts the time shown, so picking it after typing a time
+        # would change that time).
         self.zone_box = ChevronComboBox()
         self.zone_box.setObjectName("timeZoneCombo")
         self.zone_box.setMaxVisibleItems(16)
         self.zone_box.setProperty("mixed", False)
         self.zone_box.activated.connect(lambda index: self.zone_chosen.emit(self.zone_box.itemData(index)))
-        outer.addWidget(self.zone_box)
+        outer.insertWidget(0, self.zone_box)
 
     def value(self) -> datetime:
         date = self.date_edit.date()

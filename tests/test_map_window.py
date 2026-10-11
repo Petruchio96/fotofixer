@@ -114,13 +114,15 @@ class MapWindowTests(unittest.TestCase):
 
         self.assertTrue(map_window.map_view.is_visible_on_map(*self.gps_by_path[self.with_gps]))
 
-    def test_opening_does_not_jump_to_new_location(self) -> None:
+    def test_opening_centers_on_new_location_when_set(self) -> None:
         self.window.set_location_fields("37.774900", "-122.419400")
 
         map_window = self._open_map()
 
         self.assertEqual(map_window.map_view.pin, (37.7749, -122.4194))
-        self.assertTrue(map_window.map_view.is_visible_on_map(*self.gps_by_path[self.with_gps]))
+        self.assertTrue(map_window.map_view.is_visible_on_map(37.7749, -122.4194))
+        self.assertEqual(map_window.map_view.zoom, 15)
+        self.assertFalse(map_window.map_view.is_visible_on_map(*self.gps_by_path[self.with_gps]))
 
     def test_readout_shows_the_coordinates_under_the_mouse(self) -> None:
         map_window = self._open_map()
@@ -154,6 +156,18 @@ class MapWindowTests(unittest.TestCase):
         self.assertEqual(self._fields(), (f"{expected[0]:.6f}", f"{expected[1]:.6f}"))
         self.assertTrue(self.window.apply_button.isEnabled())
         self.assertEqual(self.window.apply_button.text(), "Apply Location to 1 Photo")
+
+    def test_close_button_is_cancel_until_a_location_is_selected(self) -> None:
+        map_window = self._open_map()
+        button = map_window.done_button
+        self.assertEqual(button.text(), "Cancel")
+
+        QTest.mouseClick(map_window.map_view, Qt.LeftButton, Qt.NoModifier, QPoint(300, 200))
+        self.assertEqual(button.text(), "Select Location")
+        self.assertEqual(button.objectName(), "accentButton")
+
+        QTest.mouseClick(map_window.clear_button, Qt.LeftButton)
+        self.assertEqual(button.text(), "Cancel")
 
     def test_map_location_replaces_a_location_source_photo(self) -> None:
         map_window = self._open_map()

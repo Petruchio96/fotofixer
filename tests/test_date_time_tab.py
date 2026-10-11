@@ -343,6 +343,48 @@ class DateTimeTabTests(unittest.TestCase):
             "IMG_4101.CR3\nOriginal: 10/03/2026 9:14:02am MDT\nNew: 10/03/2026 10:14:02am CDT",
         )
 
+    def test_changes_list_keeps_new_dates_in_view(self) -> None:
+        # A photo without a zone gets the long "(time kept, time zone added)"
+        # note; it once pushed the new-date column past the list's right
+        # edge, so no row showed its new date (found on Windows).
+        self._give_zone(self.canon1, "-06:00")
+        self._choose_zone_mode(self.canon1, self.canon2)
+        self.window.date_zone_chosen("central")
+        self.window.resize(900, 900)
+        QApplication.processEvents()
+        changes = self.window.date_changes_list
+        header = changes.header()
+
+        self.assertLessEqual(header.sectionPosition(2) + header.sectionSize(2), changes.viewport().width())
+        # The usual row's new date is whole; the long one is cut short and
+        # its hover hint shows it in full.
+        rows = {changes.topLevelItem(row).text(0): changes.topLevelItem(row) for row in range(2)}
+        self.assertFalse(changes._is_cut_short(rows["IMG_4101.CR3"], 2))
+        self.assertTrue(changes._is_cut_short(rows["IMG_4102.CR3"], 2))
+        self.assertIn("(time kept, time zone added)", changes.row_tooltip(rows["IMG_4102.CR3"]))
+
+    def test_set_zone_change_keeps_the_moment(self) -> None:
+        # Choosing another zone converts Set's date and time (the same
+        # moment); only editing the date or time moves it.
+        self._give_zone(self.canon1, "-06:00")
+        self._open_date_tab()
+        self._select(self.canon1)
+        self._choose_set()
+        picker = self.window.date_set_picker
+        self.assertEqual(picker.value(), datetime(2026, 10, 3, 9, 14, 2))
+        # The zone comes first, above the date and time.
+        self.assertLess(picker.zone_box.y(), picker.date_edit.y())
+
+        box = picker.zone_box
+        index = box.findData("central")
+        box.setCurrentIndex(index)
+        box.activated.emit(index)
+        self.assertEqual(picker.value(), datetime(2026, 10, 3, 10, 14, 2))
+
+        QTest.mouseClick(self.window.date_apply_button, Qt.LeftButton)
+        self.assertEqual(self.tags[self.canon1]["DateTimeOriginal"], exif(2026, 10, 3, 10, 14, 2))
+        self.assertEqual(self.tags[self.canon1]["OffsetTimeOriginal"], "-05:00")
+
     def test_photo_without_a_zone_keeps_its_time_and_gets_the_zone(self) -> None:
         self._choose_zone_mode(self.canon2)
         self.window.date_zone_chosen("central")

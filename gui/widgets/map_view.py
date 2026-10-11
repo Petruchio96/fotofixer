@@ -898,7 +898,7 @@ class MapView(QWidget):
 
     def enterEvent(self, event) -> None:
         # Pointing at the map gives it the keyboard (+/-, the space bar), so
-        # the space bar never presses a focused button such as Done.
+        # the space bar never presses a focused button such as Select Location.
         if self._window_active and not self.hasFocus():
             self.setFocus(Qt.MouseFocusReason)
         super().enterEvent(event)

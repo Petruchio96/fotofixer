@@ -31,10 +31,10 @@ from pathlib import Path
 
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QBrush, QColor
-from PySide6.QtWidgets import QHeaderView, QMessageBox, QTreeWidgetItem
+from PySide6.QtWidgets import QMessageBox, QTreeWidgetItem
 
 from core.photo_dates import format_display_datetime
-from core.time_zones import ZONES_BY_KEY, computer_utc_offset, offset_at_local
+from core.time_zones import ZONES_BY_KEY, computer_utc_offset, offset_at_local, to_zone
 from gui.presenters.date_time_state import (
     MODE_SET,
     MODE_SHIFT,
@@ -162,7 +162,17 @@ class DateTimeEditorMixin:
         (the same moment), and every photo changed gets it. (Change Time
         Zone with "Keep the clock time" keeps the clock times instead.)
         """
-        self._date_zone = ZONES_BY_KEY.get(key)
+        zone = ZONES_BY_KEY.get(key)
+        if self._date_change_mode == MODE_SET and self._date_set_value is not None:
+            # Set's date and time is converted too, so the zone alone never
+            # moves the moment (8:26 am MDT -> 9:26 am CDT); only editing the
+            # date or time does. With no zone shown before, there's no moment
+            # to keep: the time just gets the zone.
+            shown = ZONES_BY_KEY.get(self._build_date_time_state().zone_key)
+            if shown is not None and zone is not None:
+                instant = self._date_set_value - offset_at_local(shown, self._date_set_value)
+                self._date_set_value = to_zone(instant, zone)[0]
+        self._date_zone = zone
         self.update_details_panel()
 
     def keep_clock_clicked(self, checked: bool) -> None:
@@ -551,11 +561,8 @@ class DateTimeEditorMixin:
                 item.setTextAlignment(2, Qt.AlignRight | Qt.AlignVCenter)
                 changes.addTopLevelItem(item)
             # Names and new dates in full; the current date takes the room left.
-            header = changes.header()
-            header.setStretchLastSection(False)
-            header.setSectionResizeMode(1, QHeaderView.Stretch)
-            for column in (0, 2):
-                header.setSectionResizeMode(column, QHeaderView.ResizeToContents)
+            changes.header().setStretchLastSection(False)
+            changes.fit_columns()
         finally:
             changes.setUpdatesEnabled(True)
 

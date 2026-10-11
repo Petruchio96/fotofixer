@@ -45,7 +45,7 @@ Not scheduled:
 
 1.6.1 is released. Next, small branches (1.6.x / 1.7.x):
 
-- **Change Time Zone** (branch `change-time-zone`, version 1.6.2, not released yet): a third
+- **Change Time Zone** (merged in PR #15, version 1.6.2, not released yet): a third
   Date & Time choice. Every change works on the moment a photo was taken;
   Change Time Zone keeps the moment by default, with "Keep the clock time"
   for photos whose times were right but whose zone was wrong (the Central
@@ -63,8 +63,20 @@ Not scheduled:
   step. (1.6.1's files were attached by hand: `gh api
   repos/.../actions/artifacts/<id>/zip` fetches a file without unzipping
   it; `gh run download` unzips too.)
-- **Re-test 1.6.1 on Windows:** the step 2 cards, the map window's border,
-  and that Apply skips the source photo.
+- **Windows polish** (branch `windows-polish`): development moved to real
+  Windows 11 on 2026-10-11. Tested there: RAW date writes and undo, the
+  progress row on 250+ photos, map space-bar panning, copying and pasting
+  GPS, and the map's native border and shadow (the fallback border is only
+  for VMs). Fixed on the branch: step 4's new dates pushed out of view, Set's
+  zone change moving the moment, the zone above the date and time, the map's
+  Select Location / Cancel button, and the map opening on New Location.
+  Still to do:
+  - "Retrying to obtain clipboard" fills the error log every few minutes on
+    Windows (probably the clipboard check that turns Paste on and off).
+  - Test a winter photo (MST/CST) and a write to a photo another program has
+    locked (as Synology Drive may while syncing).
+  - Windows look: menu letters always underlined, the map icon touching its
+    text in Pick from a Map, pale placeholder and disabled text.
 
 ---
 

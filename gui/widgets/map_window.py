@@ -7,7 +7,8 @@ the main window, and the usual "Apply Location to N Photos" button writes
 them. The pin also follows coordinates already in New Location.
 
 The window is modal (the main window can't be used while it is open, but
-it is shown with show(), not a blocking exec()); Done or Esc closes it, and
+it is shown with show(), not a blocking exec()); Select Location (Cancel
+without a pin) or Esc closes it, and
 the New Location it set is then ready to apply. Photos in
 the Photo List with GPS show as blue dots (orange when selected); hovering one
 shows its file name, and clicking one shows a small preview.
@@ -41,7 +42,7 @@ from gui.window_frame import apply_window_border
 
 MAP_HINT = (
     "Click the map to set the New Location, or drag the orange pin. "
-    "Then click Done, and Apply in the main window."
+    "Then click Select Location, and Apply in the main window."
 )
 
 # Size of the thumbnail in the photo preview.
@@ -53,7 +54,7 @@ READOUT_IDLE = "Point at the map to see its coordinates"
 # Shown over the map when Esri's imagery doesn't load.
 ESRI_PROBLEM_TEXT = (
     "Esri satellite imagery didn't load. Check your Esri key in Edit > Settings "
-    "(click Done first), or use the US satellite map."
+    "(close the map first), or use the US satellite map."
 )
 
 # Opening on photos (or the US): margin around them, as a share of the
@@ -240,10 +241,9 @@ class MapWindow(QWidget):
         self.readout_label = QLabel(READOUT_IDLE)
         self.readout_label.setObjectName("mapReadout")
         self.readout_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
-        self.done_button = QPushButton("Done")
-        self.done_button.setObjectName("accentButton")
-        self.done_button.setMinimumWidth(110)
-        self.done_button.setToolTip("Close the map and go back to the main window (Esc)")
+        # "Select Location" with a pin, "Cancel" without (see _update_buttons).
+        self.done_button = QPushButton()
+        self.done_button.setMinimumWidth(130)
         self.done_button.clicked.connect(self.close)
         self.clear_button = QPushButton("Clear")
         self.clear_button.setProperty("tone", "neutral")
@@ -382,11 +382,15 @@ class MapWindow(QWidget):
 
     def show_photos_or_united_states(self) -> None:
         """
-        Where the map opens: every photo with GPS, or with none, the lower
-        48 United States; either with a margin around it.
+        Where the map opens: the New Location (the orange pin) when one is
+        already set, at street level; else every photo with GPS, or with
+        none, the lower 48 United States; either with a margin around it.
         """
         self.readout_label.setText(READOUT_IDLE)
-        if self._photo_locations:
+        pin = self.map_view.pin
+        if pin is not None:
+            self.map_view.set_view(pin[0], pin[1], SINGLE_PHOTO_ZOOM)
+        elif self._photo_locations:
             self.show_all_photos()
         else:
             self.map_view.fit_points(CONTIGUOUS_US_CORNERS, padding=FIT_PADDING)
@@ -461,6 +465,21 @@ class MapWindow(QWidget):
             if has_pin
             else "No location selected yet: click the map to place the pin"
         )
+        if hasattr(self, "done_button"):
+            # With a pin: "Select Location" (orange: what is about to change).
+            # Without one there is nothing to take back: "Cancel" (neutral).
+            # Either way it closes the map; New Location is already filled.
+            self.done_button.setText("Select Location" if has_pin else "Cancel")
+            self.done_button.setToolTip(
+                "Use the orange pin as the New Location and go back to the main "
+                "window, where Apply writes it (Esc)"
+                if has_pin
+                else "Close the map without choosing a location (Esc)"
+            )
+            self.done_button.setObjectName("accentButton" if has_pin else "")
+            self.done_button.setProperty("tone", None if has_pin else "neutral")
+            self.done_button.style().unpolish(self.done_button)
+            self.done_button.style().polish(self.done_button)
 
     def showEvent(self, event) -> None:
         super().showEvent(event)

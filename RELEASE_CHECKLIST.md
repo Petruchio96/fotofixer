@@ -97,6 +97,6 @@ date changes make no backups.
 
 ## Publish
 
-- [ ] Tag `vX.Y.Z` on `main`; CI attaches the five files to a draft release.
+- [ ] Tag `vX.Y.Z` on `main`; CI attaches the four files to a draft release.
 - [ ] Release notes added; title "Version X.Y" (or "Version X.Y.Z").
 - [ ] Publish the draft and mark it latest.

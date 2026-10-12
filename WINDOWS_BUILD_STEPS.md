@@ -181,13 +181,12 @@ build all three systems and attach these files to a draft release:
 
 ```text
 photo-gps-editor-windows-x86_64-setup.exe
-photo-gps-editor-windows-x86_64.zip
 photo-gps-editor-macos-arm64.zip
 photo-gps-editor-linux-x86_64.tar.gz
 Photo_GPS_Editor-x86_64.AppImage
 ```
 
-To zip a local build anyway (for example to copy it to another machine):
+To zip a local build (for example to copy it to another machine):
 
 ```powershell
 Compress-Archive -Path "dist\Photo GPS Editor" -DestinationPath "dist\photo-gps-editor-windows-x86_64.zip" -Force

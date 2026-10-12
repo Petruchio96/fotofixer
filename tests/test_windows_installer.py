@@ -58,7 +58,7 @@ class WindowsInstallerWorkflowTests(unittest.TestCase):
 
     def test_installer_is_uploaded_and_checked_for_the_release(self) -> None:
         self.assertIn(f"path: release-files/{SETUP_FILE_NAME}", self.workflow)
-        release_check = self.workflow[self.workflow.index("Check all five build files are here"):]
+        release_check = self.workflow[self.workflow.index("Check all four build files are here"):]
         self.assertIn(SETUP_FILE_NAME, release_check)
 
     def test_installer_script_is_compiled_with_the_project_version(self) -> None:

@@ -68,14 +68,14 @@ python -m PyInstaller photo_gps_editor.spec --noconfirm
 ```
 
 The Windows output will be a one-folder app containing `Photo GPS Editor.exe`.
-Release zips come from CI (see above); see `WINDOWS_BUILD_STEPS.md` for the
-full Windows walkthrough.
+The release file is the installer below, built by CI (see above); see
+`WINDOWS_BUILD_STEPS.md` for the full Windows walkthrough.
 
 ### Windows installer
 
 `packaging/windows_installer.iss` is an Inno Setup 6 script that wraps the
-one-folder build as `photo-gps-editor-windows-x86_64-setup.exe`. CI builds it
-next to the zip, which stays the portable option. The installer:
+one-folder build as `photo-gps-editor-windows-x86_64-setup.exe`, the Windows
+download (there is no separate zip). The installer:
 
 - installs per user to `%LOCALAPPDATA%\Programs\Photo GPS Editor`, with no
   admin prompt;

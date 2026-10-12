@@ -89,7 +89,7 @@ What the name touches (about 50 places outside the tests):
 
 - **Windows installed copy:** one click downloads the new `Setup.exe`, checks
   it, installs it silently, and reopens the app.
-- **Everything else** (macOS, Linux, the Windows zip, running from source):
+- **Everything else** (macOS, Linux, running from source):
   the app shows what's new and opens the download page.
 
 This is to-do item #3. One-click updating depends on the Windows installer,
@@ -158,7 +158,6 @@ and after a silent install reopens the app (a `[Run]` entry with
 | Running from | How detected | Button | Action |
 |---|---|---|---|
 | Windows, installed | frozen + `unins000.exe` next to the exe | **Update** | download setup → verify → run silently → app quits → setup reopens it |
-| Windows, zip | frozen, no `unins000.exe` | **Download** | open the release page. The window also suggests switching to the installer, which updates itself |
 | macOS `.app` | frozen + darwin | **Download** | open the release page. Replacing an unsigned `.app` in place causes quarantine problems, so it isn't worth it |
 | Linux AppImage / tarball | frozen + linux | **Download** | open the release page |
 | Source (`python app.py`) | not frozen | — | notice only ("pull the latest code") |

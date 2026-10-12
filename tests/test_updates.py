@@ -13,6 +13,7 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+import threading
 import time
 import unittest
 from pathlib import Path
@@ -357,9 +358,14 @@ class RunScriptTests(unittest.TestCase):
         self.addCleanup(temp.cleanup)
         self.root = Path(temp.name)
         self.log = self.root / "update-log.txt"
-        # The "app": a short sleep the script has to wait for.
+        # The "app": a short sleep the script has to wait for. Reaped as soon
+        # as it ends: an unreaped child stays a zombie, which `kill -0` still
+        # sees, and the script would wait for it until it gives up. (The real
+        # app isn't the script's parent, so it has no zombie.)
         self.app = subprocess.Popen(["sleep", "0.6"])
-        self.addCleanup(self.app.wait)
+        reaper = threading.Thread(target=self.app.wait, daemon=True)
+        reaper.start()
+        self.addCleanup(reaper.join, 5)
 
     def _run(self, script: str) -> int:
         path = self.root / "update.sh"

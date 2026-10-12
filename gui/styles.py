@@ -916,6 +916,61 @@ QPushButton#pickCancel {
     border: none;
     padding: 6px 14px;
 }
+QFrame#updateBanner {
+    background: #d97706;
+    border-radius: 10px;
+}
+QLabel#updateBannerText {
+    color: #ffffff;
+    font-weight: 500;
+}
+QPushButton#updateBannerAction {
+    background: #ffffff;
+    color: #9a4f00;
+    border: none;
+    border-radius: 6px;
+    padding: 6px 14px;
+    font-weight: 600;
+}
+QPushButton#updateBannerAction:hover {
+    background: #fde8cc;
+}
+QPushButton#updateBannerAction:disabled {
+    background: #f5f7f9;
+    color: #8c9aa8;
+}
+QPushButton#updateBannerLink,
+QPushButton#updateBannerClose {
+    background: transparent;
+    color: #ffffff;
+    border: none;
+    padding: 6px 8px;
+    text-decoration: underline;
+}
+QPushButton#updateBannerClose {
+    text-decoration: none;
+    font-size: 14px;
+    padding: 2px 8px;
+}
+QPushButton#updateBannerLink:hover,
+QPushButton#updateBannerClose:hover {
+    color: #fde8cc;
+}
+QLabel#updateHeadline {
+    font-size: 15px;
+}
+QScrollArea#updateNotesArea {
+    background: #ffffff;
+    border: 1px solid #d7dee5;
+    border-radius: 8px;
+}
+QLabel#updateNotes {
+    background: #ffffff;
+    padding: 10px;
+}
+QLabel#updateError {
+    color: #b42318;
+}
 QLabel#mapHint {
     color: #556579;
 }

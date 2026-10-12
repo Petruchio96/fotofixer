@@ -1,0 +1,39 @@
+{
+  "tag_name": "v1.7.0",
+  "name": "Version 1.7",
+  "body": "Version 1.7.0 adds a **Windows installer**, **Change Time Zone** on the Date & Time tab, and **progress for every write**, plus a round of Windows fixes from the first testing on a real Windows 11 PC.\r\n\r\n## Downloads\r\n\r\n| System | File | How to run |\r\n|---|---|---|\r\n| **Windows** | `photo-gps-editor-windows-x86_64-setup.exe` | Run it. It installs for the current user (no admin prompt), adds a Start menu shortcut, and upgrades an earlier install in place. If Windows SmartScreen warns about an unrecognized app, choose **More info → Run anyway** (the app isn't code-signed yet). |\r\n| **macOS** (Apple Silicon) | `photo-gps-editor-macos-arm64.zip` | Unzip and open **Photo GPS Editor**. The first time, macOS will block it because it isn't from an identified developer: open **System Settings → Privacy & Security** and click **Open Anyway**. |\r\n| **Linux** | `Photo_GPS_Editor-x86_64.AppImage` | Make it executable (`chmod +x Photo_GPS_Editor-x86_64.AppImage`) and run it. |\r\n| **Linux** (folder) | `photo-gps-editor-linux-x86_64.tar.gz` | The same app as a folder. Extract it and run `Photo GPS Editor`. |\r\n\r\nExifTool 13.59 is included in every download; nothing else needs to be installed.\r\n\r\n## What's new\r\n\r\n### Windows installer\r\n- The Windows download is now a **setup program** instead of a zip. It installs to `%LOCALAPPDATA%\\Programs\\Photo GPS Editor`, puts the app in the Start menu and in Settings > Apps, and offers a desktop shortcut.\r\n- Installing a newer version over an older one keeps your settings and replaces the old files. Uninstalling keeps the settings and the error log.\r\n- If you were using the zip from an earlier version, run the setup program and delete the old unzipped folder.\r\n\r\n### Date & Time tab\r\n- **Change Time Zone**, a third choice in step 2, for photos stamped with the wrong zone. By default the moment the photo was taken stays the same and the clock time changes to the new zone (11:16 MDT → 12:16 CDT). Turn on **Keep the clock time (change only the time zone)** to keep the clock time and change only the zone (11:16 MDT → 11:16 CDT).\r\n- Step 2 is three cards that fold up to the one you chose; click it to see the choices again.\r\n- Shift and Set: the time zone sits above the date and time. Changing Set's zone converts its time, so the moment stays the same, as Shift already did.\r\n- Step 4 always shows the new dates. Long rows are cut short, and a hover hint shows the full original and new date.\r\n- Photos with no zone on the original date fall back to the digitized date's zone first, which is less likely to carry an editing program's zone.\r\n\r\n### Progress for every change\r\n- Every change, undo, and redo writes in the background with a progress row under the Photo List (\"Changing dates… 37 of 114\"). The window waits until it's done. Shifting a hundred photos used to freeze the window.\r\n\r\n### Map\r\n- The close button reads **Select Location** when the pin is set and **Cancel** when it isn't.\r\n- The map opens on New Location when one is set.\r\n- Hold the **space bar** to pan with an open hand.\r\n\r\n### Windows fixes\r\n- The Paste button no longer polls the clipboard, which logged \"Retrying to obtain clipboard\" every few minutes and could hold the clipboard against other programs.\r\n- A write to a photo another program has open fails for that photo only, with the reason in the pop-up.\r\n- Disabled and placeholder text is easier to read, and the map icon has a gap before its text.\r\n\r\n## Notes\r\n- **Date changes don't make backup copies.** Try them on a few copies of your photos first.\r\n- 1.6.2 was never released separately; its changes are all in 1.7.0.\r\n- The macOS build is for Apple Silicon Macs (M1 and later) and has not been tested on a real Mac.\r\n- Please [report any problems](https://github.com/Petruchio96/photo-gps-editor/issues).\r\n",
+  "html_url": "https://github.com/Petruchio96/photo-gps-editor/releases/tag/v1.7.0",
+  "draft": false,
+  "prerelease": false,
+  "published_at": "2026-10-12T02:08:25Z",
+  "assets": [
+    {
+      "name": "photo-gps-editor-linux-x86_64.tar.gz",
+      "size": 87773889,
+      "digest": "sha256:05a433f3f838474728564cc98db6bdc702ec53b8bc9499233b67e8c971a5d90e",
+      "browser_download_url": "https://github.com/Petruchio96/photo-gps-editor/releases/download/v1.7.0/photo-gps-editor-linux-x86_64.tar.gz",
+      "content_type": "application/x-gtar"
+    },
+    {
+      "name": "photo-gps-editor-macos-arm64.zip",
+      "size": 43934679,
+      "digest": "sha256:746443b21b5db3e298001ad8c44b784ce6dfea9ed9493e704bd6a139925f3f91",
+      "browser_download_url": "https://github.com/Petruchio96/photo-gps-editor/releases/download/v1.7.0/photo-gps-editor-macos-arm64.zip",
+      "content_type": "application/zip"
+    },
+    {
+      "name": "photo-gps-editor-windows-x86_64-setup.exe",
+      "size": 44246761,
+      "digest": "sha256:7e5e08ed2b41077726a86b055990c0190c296cd29fb01cdef947df61f91b4d83",
+      "browser_download_url": "https://github.com/Petruchio96/photo-gps-editor/releases/download/v1.7.0/photo-gps-editor-windows-x86_64-setup.exe",
+      "content_type": "application/octet-stream"
+    },
+    {
+      "name": "Photo_GPS_Editor-x86_64.AppImage",
+      "size": 80538104,
+      "digest": "sha256:587d14082fdde017fcd08998a7ebb04a22c823c8bc136efd9f5ab0ffb33b1e5a",
+      "browser_download_url": "https://github.com/Petruchio96/photo-gps-editor/releases/download/v1.7.0/Photo_GPS_Editor-x86_64.AppImage",
+      "content_type": "application/vnd.appimage"
+    }
+  ]
+}

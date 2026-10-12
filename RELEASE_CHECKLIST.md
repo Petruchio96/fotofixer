@@ -4,6 +4,10 @@ Use this checklist against the packaged application (the CI build or the
 draft release's files), not the source checkout. Test on copies of photos:
 date changes make no backups.
 
+A release rides on the pull request of the branch that bumps the version;
+it never gets a branch or PR of its own. Test the branch's CI build before
+the merge, then tag and publish right after it.
+
 ## Before Tagging
 
 - [ ] Version bumped in `pyproject.toml`, `APP_VERSION` in
@@ -95,8 +99,33 @@ date changes make no backups.
       after reopening the app.
 - [ ] After reopening the app, the changes are still in the files.
 
+## Updates
+
+Run the branch's CI build with the environment variable
+`PHOTO_GPS_EDITOR_PRETEND_VERSION=1.0.0`, so it thinks it is old and offers
+the latest *published* release.
+
+- [ ] About 5 s after the window opens, the orange bar offers the latest
+      release; What's New shows its notes; Help > Check for Updates says the
+      same, and says "up to date" without the variable.
+- [ ] Windows, installed with Setup: Update downloads with progress, Setup
+      runs silently, the app closes and reopens as that version with the
+      settings kept (`update-log.txt` next to the error log).
+- [ ] Linux AppImage and the tarball's folder: Update replaces the file or
+      folder and reopens the app; in a folder that isn't writable the
+      button reads Download and opens the release page.
+- [ ] macOS: as Linux (when a Mac is available); run straight from
+      Downloads, the button reads Download.
+- [ ] Skip This Version hides the bar until a newer version; ✕ hides it for
+      this session; the Settings checkbox turns the start-up check off.
+
 ## Publish
 
-- [ ] Tag `vX.Y.Z` on `main`; CI attaches the four files to a draft release.
+- [ ] Merge the branch's PR (the one with the version bump).
+- [ ] Tag `vX.Y.Z` on `main`; CI attaches the four files to a draft release
+      and checks that each has a SHA-256 digest (the update check verifies
+      downloads against them).
 - [ ] Release notes added; title "Version X.Y" (or "Version X.Y.Z").
-- [ ] Publish the draft and mark it latest.
+- [ ] Publish the draft and mark it latest. Publishing is what ships it:
+      the in-app update check only sees published releases (and, later, the
+      Docker image is built from the published release).

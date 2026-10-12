@@ -99,8 +99,14 @@ def main() -> int:
     # Backstop for quits that skip the window's close (e.g. system logout):
     # background work must stop before Qt shuts down.
     app.aboutToQuit.connect(window.stop_background_work)
+    # Once a day, a few seconds in: is there a newer release on GitHub?
+    window.start_update_check_later()
 
-    return app.exec()
+    exit_code = app.exec()
+    # If the window closed to install an update, start the installer now
+    # that nothing of ours is running (it reopens the app when done).
+    window.launch_pending_update()
+    return exit_code
 
 
 if __name__ == "__main__":

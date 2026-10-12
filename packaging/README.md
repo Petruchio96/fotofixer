@@ -88,8 +88,9 @@ download (there is no separate zip). The installer:
 - keeps the settings (registry `HKCU\Software\Photo GPS Editor`) and the
   error log (`%LOCALAPPDATA%\Photo GPS Editor`) on uninstall, as they are
   outside the install folder;
-- after a silent install (`/SILENT /SP- /NOCANCEL /CLOSEAPPLICATIONS`, which
-  the in-app update checker will use) reopens the app.
+- after a silent install (`/SILENT /SP- /NOCANCEL /NORESTART /SUPPRESSMSGBOXES
+  /CLOSEAPPLICATIONS /LOG=…`, which the in-app update check uses) reopens the
+  app.
 
 The exe and the shortcuts use `assets/app_icon.ico`, made from the 128 px PNG
 by `packaging/make_windows_icon.py` (run it again if the PNG changes).
@@ -153,3 +154,29 @@ FUSE by extracting first:
 ```bash
 APPIMAGE_EXTRACT_AND_RUN=1 dist/Photo_GPS_Editor-x86_64.AppImage
 ```
+
+## Updates
+
+The app checks GitHub's latest *published* release (drafts and pre-releases
+don't count) and, when it is newer, offers to update. What that means
+depends on the download format (`core/updates.py`):
+
+| Copy | Update button | How |
+|---|---|---|
+| Windows, installed with Setup | Update | downloads the setup, verifies it, closes, runs `setup.exe /SILENT …`, which upgrades in place and reopens the app |
+| Windows, an old zip | Download | opens the release page (run the new Setup to switch to the installer) |
+| Linux AppImage | Update | downloads the AppImage, verifies it, closes; a small `/bin/sh` script waits for the app to quit, copies the new file over the old one, and reopens it |
+| Linux folder (tarball) | Update | the same script unpacks the tarball beside the folder and swaps the folders |
+| macOS `.app` | Update | the same script unpacks the zip with `ditto` and swaps the bundles (a copy run from Downloads is translocated by macOS and gets Download instead) |
+| Running from source | notice only | "Pull the latest code to update" |
+
+Downloads are verified against the size and SHA-256 digest GitHub reports
+for each release file, so the four file names must stay exactly as CI
+produces them (`RELEASE_ASSETS` in `core/updates.py`; a test checks the
+workflow and the installer script), the release job refuses a release whose
+files have no digest, and the macOS zip must stay a `ditto`-made zip so the
+bundle's symlinks and execute bits survive. What Setup or the script did is
+logged to `update-log.txt` next to the error log.
+
+To try it without a newer release, run any build with
+`PHOTO_GPS_EDITOR_PRETEND_VERSION=1.0.0`: it then offers the latest release.

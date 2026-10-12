@@ -47,6 +47,14 @@ def _write(text: str) -> None:
     _log_file.flush()
 
 
+def log(text: str) -> None:
+    """
+    Note something in the log without a pop-up: things worth a trace when
+    looking into a problem, like a failed update check.
+    """
+    _write(text)
+
+
 def _show_message(summary: str) -> None:
     """
     Tell the user, without blocking: QMessageBox.warning() would run a

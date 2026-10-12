@@ -38,11 +38,12 @@ from gui.window_mixins.inspector import InspectorMixin
 from gui.window_mixins.location_editor import LocationEditorMixin
 from gui.window_mixins.map_picker import ESRI_KEY_SETTING, MapPickerMixin
 from gui.window_mixins.photo_list import THUMBNAIL_BATCH_SIZE, PhotoListMixin
+from gui.window_mixins.update_check import UpdateCheckMixin
 from services.gps_edit_history import EDIT_DATE, EDIT_GPS, GpsEditHistory, PhotoListSnapshot
 from services.models import OverwriteEntry, WorkflowSession
 from services.workflow_facade import PhotoWorkflowFacade
 
-APP_VERSION = "1.7.0"
+APP_VERSION = "1.8.0"
 
 # QSettings key for the "Keep Backup Copies of Originals" option.
 KEEP_BACKUPS_SETTING = "keep_backup_copies"
@@ -61,6 +62,7 @@ class MainWindow(
     LocationEditorMixin,
     DateTimeEditorMixin,
     MapPickerMixin,
+    UpdateCheckMixin,
     PhotoListMixin,
     ApplyWorkflowMixin,
     QMainWindow,
@@ -72,7 +74,8 @@ class MainWindow(
     mixins handle the larger groups of UI actions.
     """
 
-    # Sent with map tile downloads (the User-Agent).
+    # Sent with map tile downloads and update checks (the User-Agent), and
+    # what the update check compares the latest release with.
     app_version = APP_VERSION
 
     def __init__(self, settings: QSettings | None = None) -> None:
@@ -156,6 +159,8 @@ class MainWindow(
         self._thumbnail_total = 0
         self._pending_thumbnail_items = {}
         self._blank_icon = None
+        # The update check's state (see UpdateCheckMixin); it checks nothing yet.
+        self._init_update_check()
 
         self._build_ui()
         self._build_menu_bar()
@@ -189,6 +194,9 @@ class MainWindow(
         outer_layout = QVBoxLayout(central_widget)
         outer_layout.setContentsMargins(10, 10, 10, 10)
         outer_layout.setSpacing(12)
+
+        # "Version X is available": hidden until a newer release is found.
+        outer_layout.addWidget(self._build_update_banner())
 
         splitter = QSplitter(Qt.Horizontal)
         splitter.setChildrenCollapsible(False)
@@ -267,6 +275,8 @@ class MainWindow(
 
         help_menu = self.menuBar().addMenu("&Help")
 
+        self._build_update_menu(help_menu)
+
         self.about_action = QAction("About", self)
         self.about_action.triggered.connect(self.show_about_dialog)
         help_menu.addAction(self.about_action)
@@ -290,6 +300,7 @@ class MainWindow(
         settings_dialog = getattr(self, "_settings_dialog", None)
         if settings_dialog is not None and settings_dialog.isVisible():
             settings_dialog.reject()
+        self._cancel_update_download()
         self._close_map_window()
         self.stop_background_work()
         super().closeEvent(event)
@@ -710,6 +721,7 @@ class MainWindow(
             self,
             keep_backups=self.keep_backups,
             esri_key=self.settings.value(ESRI_KEY_SETTING, "", type=str),
+            check_updates=self.check_updates_on_start,
         )
         # Kept so tests (and late signals) find a live object.
         self._settings_dialog = dialog
@@ -719,6 +731,7 @@ class MainWindow(
                 return
             self.set_keep_backups(dialog.keep_backups())
             self.set_esri_key(dialog.esri_key())
+            self.set_check_updates_on_start(dialog.check_updates())
 
         dialog.finished.connect(closed)
         dialog.setWindowModality(Qt.ApplicationModal)

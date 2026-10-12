@@ -11,6 +11,17 @@ date changes make no backups.
 - [ ] Automated tests pass from source and in CI on Linux, Windows, and macOS.
 - [ ] `docs/ROADMAP.md`: finished items removed, the order still right.
 
+## Windows installer
+
+- [ ] `photo-gps-editor-windows-x86_64-setup.exe` installs without an admin
+      prompt, to `%LOCALAPPDATA%\Programs\Photo GPS Editor`.
+- [ ] The Start menu shortcut opens the app; Settings > Apps lists it with
+      the new version.
+- [ ] Installing over the previous version keeps Edit > Settings and leaves
+      no stale files (`_internal` holds only the new build).
+- [ ] Uninstalling removes the folder and the shortcut and keeps the settings
+      and the error log.
+
 ## Launch
 
 - [ ] The app opens from the packaged build on a machine without Python or

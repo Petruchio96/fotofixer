@@ -1,8 +1,9 @@
 # Test and package Photo GPS Editor on Linux, Windows, and macOS.
 #
-# - Every push to any branch: run the tests and build all three apps.
-#   Download the builds from the workflow run's "Artifacts" section; each
-#   download is the release file itself (no extra zip around it).
+# - Every push to any branch: run the tests and build all three apps (the
+#   Windows one as an installer). Download the builds from the workflow run's
+#   "Artifacts" section; each download is the release file itself (no extra
+#   zip around it).
 # - Pushing a tag like v1.2.0: also attach the builds to that GitHub release
 #   (a draft release is created if one does not exist yet).
 # - "Run workflow" on the Actions tab runs it manually.
@@ -101,15 +102,23 @@ jobs:
           mkdir release-files
           mv dist/photo-gps-editor-linux-x86_64.tar.gz dist/Photo_GPS_Editor-x86_64.AppImage release-files/
 
-      # Windows: zipped one-folder app
-      - name: Package (Windows)
+      # Windows: the installer (packaging/windows_installer.iss) wraps the
+      # one-folder app. Built with the runner's Inno Setup, or Chocolatey's
+      # if the image stops shipping it.
+      - name: Package (Windows installer)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
           & "dist\Photo GPS Editor\_internal\tools\windows\exiftool.exe" -ver
           New-Item -ItemType Directory release-files | Out-Null
-          Compress-Archive -Path "dist\Photo GPS Editor" `
-            -DestinationPath "release-files\photo-gps-editor-windows-x86_64.zip"
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) {
+            choco install innosetup -y --no-progress
+          }
+          $version = python -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])"
+          & $iscc "/DAppVersion=$version" "/DSourceDir=$PWD\dist\Photo GPS Editor" `
+            /Orelease-files packaging\windows_installer.iss
+          Get-Item release-files\photo-gps-editor-windows-x86_64-setup.exe
 
       # macOS: zipped .app bundle (ditto keeps the bundle's symlinks intact)
       - name: Package (macOS)
@@ -123,7 +132,7 @@ jobs:
 
       # Each file is uploaded as-is (archive: false), so a download from the
       # run's Artifacts section is the file itself, not a zip around it (the
-      # Windows and macOS builds are already zips). archive: false takes one
+      # macOS build is already a zip). archive: false takes one
       # file per upload, hence a step per file.
       - name: Upload build (Linux AppImage)
         if: runner.os == 'Linux'
@@ -143,11 +152,11 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-      - name: Upload build (Windows)
+      - name: Upload build (Windows installer)
         if: runner.os == 'Windows'
         uses: actions/upload-artifact@v7
         with:
-          path: release-files/photo-gps-editor-windows-x86_64.zip
+          path: release-files/photo-gps-editor-windows-x86_64-setup.exe
           archive: false
           if-no-files-found: error
           retention-days: 30
@@ -171,10 +180,14 @@ jobs:
       contents: write
 
     steps:
+      # skip-decompress: the macOS build is a zip uploaded as-is (archive:
+      # false above); without it the download unzips it and the check below
+      # fails.
       - uses: actions/download-artifact@v8
         with:
           path: release-files
           merge-multiple: true
+          skip-decompress: true
 
       # Stop before touching the release if any build file is missing.
       - name: Check all four build files are here
@@ -182,7 +195,7 @@ jobs:
           ls -l release-files
           for file in Photo_GPS_Editor-x86_64.AppImage \
               photo-gps-editor-linux-x86_64.tar.gz \
-              photo-gps-editor-windows-x86_64.zip \
+              photo-gps-editor-windows-x86_64-setup.exe \
               photo-gps-editor-macos-arm64.zip; do
             test -f "release-files/$file" || { echo "Missing: $file"; exit 1; }
           done

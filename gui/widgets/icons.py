@@ -15,8 +15,13 @@ ICON_SIZE = 16
 _SCALE = 2
 
 
-def _icon(color: str, draw) -> QIcon:
-    pixmap = QPixmap(ICON_SIZE * _SCALE, ICON_SIZE * _SCALE)
+def _icon(color: str, draw, *, text_gap: int = 0) -> QIcon:
+    """
+    Draw a 16 px line icon. text_gap adds that many clear pixels on the
+    right, for buttons whose style sets the icon too close to its text (the
+    button's iconSize must grow by the same amount, or the icon shrinks).
+    """
+    pixmap = QPixmap((ICON_SIZE + text_gap) * _SCALE, ICON_SIZE * _SCALE)
     pixmap.setDevicePixelRatio(_SCALE)
     pixmap.fill(Qt.transparent)
     painter = QPainter(pixmap)
@@ -53,8 +58,8 @@ def pin_icon(color: str) -> QIcon:
     return _icon(color, draw)
 
 
-def map_icon(color: str) -> QIcon:
-    """Folded map, for Pick from a Map."""
+def map_icon(color: str, *, text_gap: int = 0) -> QIcon:
+    """Folded map, for Pick from a Map. text_gap: see _icon."""
 
     def draw(painter: QPainter) -> None:
         path = QPainterPath(QPointF(2, 4))
@@ -70,7 +75,7 @@ def map_icon(color: str) -> QIcon:
         painter.drawLine(QPointF(6, 2.5), QPointF(6, 12))
         painter.drawLine(QPointF(10, 4), QPointF(10, 13.5))
 
-    return _icon(color, draw)
+    return _icon(color, draw, text_gap=text_gap)
 
 
 def location_pin_path(tip: QPointF, width: float, height: float) -> QPainterPath:

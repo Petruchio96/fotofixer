@@ -6,7 +6,13 @@ import tomllib
 
 
 project_root = Path(SPECPATH)
-app_icon = str(project_root / "assets" / "app_icon_128.png")
+# Windows gets the multi-size .ico (made by packaging/make_windows_icon.py):
+# the exe, the taskbar, and the installer's shortcuts then have real 16, 32,
+# and 48 px images. Elsewhere PyInstaller converts the PNG itself.
+if sys.platform == "win32":
+    app_icon = str(project_root / "assets" / "app_icon.ico")
+else:
+    app_icon = str(project_root / "assets" / "app_icon_128.png")
 
 # pyproject.toml is the single source of truth for the app version.
 with open(project_root / "pyproject.toml", "rb") as pyproject_file:
@@ -83,7 +89,7 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    # PyInstaller converts the PNG to .ico / .icns with Pillow on Windows and
+    # The .ico on Windows; PyInstaller converts the PNG to .icns with Pillow on
     # macOS; Linux ignores it (the AppImage sets its own icon).
     icon=app_icon,
 )

@@ -68,8 +68,43 @@ python -m PyInstaller photo_gps_editor.spec --noconfirm
 ```
 
 The Windows output will be a one-folder app containing `Photo GPS Editor.exe`.
-Release zips come from CI (see above); see `WINDOWS_BUILD_STEPS.md` for the
-full Windows walkthrough.
+The release file is the installer below, built by CI (see above); see
+`WINDOWS_BUILD_STEPS.md` for the full Windows walkthrough.
+
+### Windows installer
+
+`packaging/windows_installer.iss` is an Inno Setup 6 script that wraps the
+one-folder build as `photo-gps-editor-windows-x86_64-setup.exe`, the Windows
+download (there is no separate zip). The installer:
+
+- installs per user to `%LOCALAPPDATA%\Programs\Photo GPS Editor`, with no
+  admin prompt;
+- adds a Start menu shortcut, an optional desktop shortcut, and an uninstaller
+  (Settings > Apps);
+- upgrades in place: running a newer setup replaces the old files (the old
+  `_internal` folder is removed first, so nothing stale lingers) and closes a
+  running copy first; its fixed `AppId` is what makes it the same program, so
+  keep it even if the app is renamed;
+- keeps the settings (registry `HKCU\Software\Photo GPS Editor`) and the
+  error log (`%LOCALAPPDATA%\Photo GPS Editor`) on uninstall, as they are
+  outside the install folder;
+- after a silent install (`/SILENT /SP- /NOCANCEL /CLOSEAPPLICATIONS`, which
+  the in-app update checker will use) reopens the app.
+
+The exe and the shortcuts use `assets/app_icon.ico`, made from the 128 px PNG
+by `packaging/make_windows_icon.py` (run it again if the PNG changes).
+
+To build it locally, after the PyInstaller build:
+
+```powershell
+winget install --id JRSoftware.InnoSetup --scope user
+$version = python -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])"
+& "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe" "/DAppVersion=$version" "/DSourceDir=$PWD\dist\Photo GPS Editor" /Odist packaging\windows_installer.iss
+```
+
+The output is `dist\photo-gps-editor-windows-x86_64-setup.exe`. The installer
+is not code-signed, so a downloaded copy shows "Windows protected your PC" the
+first time: More info > Run anyway. (A copy built on the same PC doesn't.)
 
 ## macOS
 

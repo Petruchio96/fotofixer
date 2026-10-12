@@ -1,5 +1,5 @@
 import unittest
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from core.photo_dates import (
     camera_name,
@@ -7,6 +7,7 @@ from core.photo_dates import (
     format_display_datetime,
     format_exif_datetime,
     parse_exif_datetime,
+    time_offset_from_tags,
 )
 
 
@@ -50,6 +51,30 @@ class PhotoDateTests(unittest.TestCase):
         self.assertEqual(camera_name(None, "EOS R6"), "EOS R6")
         self.assertIsNone(camera_name(None, None))
         self.assertIsNone(camera_name("", "  "))
+
+
+class TimeOffsetFromTagsTests(unittest.TestCase):
+    """Which offset tag gives the photo its zone."""
+
+    def test_original_offset_comes_first(self) -> None:
+        tags = {"OffsetTimeOriginal": "-07:00", "OffsetTimeDigitized": "-06:00", "OffsetTime": "-05:00"}
+        self.assertEqual(time_offset_from_tags(tags), timedelta(hours=-7))
+
+    def test_digitized_offset_before_the_last_changed_one(self) -> None:
+        # OffsetTime goes with the "last changed" date, so an editing program
+        # may have written its own zone there; OffsetTimeDigitized is the
+        # camera's.
+        tags = {"OffsetTimeOriginal": None, "OffsetTimeDigitized": "-06:00", "OffsetTime": "-05:00"}
+        self.assertEqual(time_offset_from_tags(tags), timedelta(hours=-6))
+        self.assertEqual(time_offset_from_tags({"OffsetTimeDigitized": "+01:00"}), timedelta(hours=1))
+
+    def test_last_changed_offset_is_the_last_resort(self) -> None:
+        tags = {"OffsetTimeOriginal": "", "OffsetTimeDigitized": None, "OffsetTime": "-05:00"}
+        self.assertEqual(time_offset_from_tags(tags), timedelta(hours=-5))
+
+    def test_no_usable_offset_is_none(self) -> None:
+        self.assertIsNone(time_offset_from_tags({}))
+        self.assertIsNone(time_offset_from_tags({"OffsetTimeOriginal": None, "OffsetTime": "not an offset"}))
 
 
 if __name__ == "__main__":

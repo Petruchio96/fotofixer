@@ -72,9 +72,10 @@ default on most Linux distributions.
 
 ### Windows
 
-Download `photo-gps-editor-windows-x86_64.zip`, unzip it, and run
-`Photo GPS Editor.exe` inside the folder. Keep the files together: the app
-needs the `_internal` folder next to it.
+Download `photo-gps-editor-windows-x86_64-setup.exe` and run it. It installs
+for your user only (no administrator prompt) and adds a Start menu shortcut.
+To update, run the newer setup; it replaces the old version in place and
+keeps your settings. Uninstall from Settings > Apps.
 
 If Windows SmartScreen warns about an unrecognized app, choose
 **More info → Run anyway**. The app is not code-signed yet.

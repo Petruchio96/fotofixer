@@ -42,7 +42,7 @@ from services.gps_edit_history import EDIT_DATE, EDIT_GPS, GpsEditHistory, Photo
 from services.models import OverwriteEntry, WorkflowSession
 from services.workflow_facade import PhotoWorkflowFacade
 
-APP_VERSION = "1.6.2"
+APP_VERSION = "1.7.0"
 
 # QSettings key for the "Keep Backup Copies of Originals" option.
 KEEP_BACKUPS_SETTING = "keep_backup_copies"
@@ -166,11 +166,20 @@ class MainWindow(
         self._pick_escape_shortcut.setEnabled(False)
         self._pick_escape_shortcut.activated.connect(self.stop_picking_location)
         self._apply_window_style()
+        # The Paste button follows the clipboard: read once now, then again
+        # a moment after each change (see LocationEditorMixin).
+        self._clipboard_has_coordinates = False
+        self._clipboard_is_stale = True
+        self._clipboard_check_retries = 0
+        self._clipboard_check_timer = QTimer(self)
+        self._clipboard_check_timer.setSingleShot(True)
+        self._clipboard_check_timer.timeout.connect(self._refresh_clipboard_state)
         self._clipboard = self.clipboard()
-        self._clipboard.dataChanged.connect(self._update_clipboard_buttons)
+        self._clipboard.dataChanged.connect(self._handle_clipboard_change)
         self._apply_backup_setting()
         self._apply_grid_filter()
         self.update_details_panel()
+        self._refresh_clipboard_state()
 
     def _build_ui(self) -> None:
         central_widget = QWidget()

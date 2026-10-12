@@ -12,7 +12,9 @@ plans live only in `docs/ROADMAP.md`.
 
 - Run the app: `.venv/bin/python app.py`
 - Run the tests: `QT_QPA_PLATFORM=offscreen .venv/bin/python -m unittest discover -s tests`
-- Build locally: see `packaging/README.md` (PyInstaller one-folder build)
+- On Windows (Git Bash): `.venv/Scripts/python` instead of `.venv/bin/python`
+- Build locally: see `packaging/README.md` (PyInstaller one-folder build and
+  the Windows installer)
 - CI: `.github/workflows/build.yml` tests and builds Linux, Windows, and macOS on
   every push; a `v*` tag attaches the builds to a draft release
 

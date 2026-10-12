@@ -9,6 +9,7 @@ and Date & Time (shift the selected photos' dates, or set one date on them).
 
 from __future__ import annotations
 
+import sys
 from typing import TYPE_CHECKING
 
 from PySide6.QtCore import QEvent, QSize, Qt
@@ -36,7 +37,7 @@ from PySide6.QtWidgets import (
 from gui.presenters.date_time_state import MODE_SET, MODE_SHIFT, MODE_ZONE
 from gui.widgets.browser_panel import build_pane_header
 from gui.widgets.date_time_picker import ChevronComboBox, DateTimePicker
-from gui.widgets.icons import calendar_icon, clock_icon, clock_shift_icon, globe_icon, map_icon, pin_icon
+from gui.widgets.icons import ICON_SIZE, calendar_icon, clock_icon, clock_shift_icon, globe_icon, map_icon, pin_icon
 
 if TYPE_CHECKING:
     from gui.main_window import MainWindow
@@ -130,7 +131,11 @@ def _build_location_group(window: "MainWindow") -> QGroupBox:
     # Opens the pop-out map: click it or drag the pin to fill the fields.
     window.show_map_button = QPushButton("Pick from a Map")
     window.show_map_button.setObjectName("pickButton")
-    window.show_map_button.setIcon(map_icon("#1f5fc4"))
+    # On Windows the icon lands flush against the text, so it gets clear
+    # space on its right there (the icon size grows to match).
+    map_icon_gap = 4 if sys.platform == "win32" else 0
+    window.show_map_button.setIcon(map_icon("#1f5fc4", text_gap=map_icon_gap))
+    window.show_map_button.setIconSize(QSize(ICON_SIZE + map_icon_gap, ICON_SIZE))
     window.show_map_button.setToolTip(
         "Open a map: click it, or drag the pin, to set the New Location. "
         "Photos in the Photo List with GPS show as dots."

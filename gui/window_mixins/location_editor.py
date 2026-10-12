@@ -16,9 +16,10 @@ Whatever is in the fields is what Apply writes to the selected photos.
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import QApplication, QLineEdit, QListWidgetItem, QMessageBox
 
 from core.models import GpsCoordinates
@@ -37,6 +38,33 @@ PICK_PROMPT = (
     "Click a photo on the left to copy its location. "
     "Only photos with GPS can be picked. Press Esc or Cancel to stop."
 )
+
+# How long after the clipboard changes the Paste button re-checks it, and how
+# many times it tries again when another program still has the clipboard open.
+CLIPBOARD_CHECK_DELAY_MS = 250
+CLIPBOARD_CHECK_RETRIES = 8
+
+
+def clipboard_is_busy() -> bool:
+    """
+    True when another program has the Windows clipboard open right now.
+
+    Windows announces a clipboard change the moment the writer closes it, but
+    clipboard managers and programs that add several formats re-open it
+    straight away. Reading it then makes Qt retry and log "Retrying to obtain
+    clipboard" (and it may read nothing). Opening and closing it ourselves is
+    a silent probe: it fails only while someone else holds it. Other
+    platforms have no such lock.
+    """
+    if sys.platform != "win32":
+        return False
+    import ctypes
+
+    user32 = ctypes.windll.user32
+    if not user32.OpenClipboard(None):
+        return True
+    user32.CloseClipboard()
+    return False
 
 
 class LocationEditorMixin:
@@ -398,7 +426,10 @@ class LocationEditorMixin:
         parsed = self.parse_coordinate_text(clipboard_text)
 
         if parsed is None:
-            self._update_clipboard_buttons()
+            # The remembered state was wrong (the clipboard changed while it
+            # was busy, say), so read it again now.
+            self._clipboard_is_stale = True
+            self._refresh_clipboard_state()
             self._set_status_message(
                 "The clipboard doesn't contain coordinates.",
                 "error",
@@ -426,12 +457,37 @@ class LocationEditorMixin:
             self._set_location_source(None)
         self.update_details_panel()
 
-    def _clipboard_has_valid_coordinates(self) -> bool:
+    def _handle_clipboard_change(self) -> None:
+        """
+        The clipboard changed (in this app or any other). Re-check it a
+        moment later rather than now: the program that wrote it may still
+        have it open (see clipboard_is_busy), and a burst of changes becomes
+        one read.
+        """
+        self._clipboard_is_stale = True
+        self._clipboard_check_retries = 0
+        self._clipboard_check_timer.start(CLIPBOARD_CHECK_DELAY_MS)
+
+    def _refresh_clipboard_state(self) -> None:
+        """Read the clipboard once and remember whether it holds coordinates."""
+        if not self._clipboard_is_stale:
+            return
+        if clipboard_is_busy():
+            # Try again shortly; after enough tries, leave the last known state.
+            if self._clipboard_check_retries < CLIPBOARD_CHECK_RETRIES:
+                self._clipboard_check_retries += 1
+                self._clipboard_check_timer.start(CLIPBOARD_CHECK_DELAY_MS)
+            return
+        self._clipboard_is_stale = False
         clipboard_text = QApplication.clipboard().text().strip()
-        return self.parse_coordinate_text(clipboard_text) is not None
+        self._clipboard_has_coordinates = self.parse_coordinate_text(clipboard_text) is not None
+        self._update_clipboard_buttons()
 
     def _update_clipboard_buttons(self) -> None:
-        can_paste_coordinates = self._clipboard_has_valid_coordinates()
+        # Uses the remembered state: this runs on every inspector refresh,
+        # and reading the clipboard each time is what collided with other
+        # programs on Windows.
+        can_paste_coordinates = self._clipboard_has_coordinates
         self.paste_coordinates_button.setEnabled(can_paste_coordinates)
         self.paste_coordinates_button.setToolTip(
             "Paste coordinates copied from a map or another photo"

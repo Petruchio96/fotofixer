@@ -1,8 +1,9 @@
 # Test and package Photo GPS Editor on Linux, Windows, and macOS.
 #
-# - Every push to any branch: run the tests and build all three apps.
-#   Download the builds from the workflow run's "Artifacts" section; each
-#   download is the release file itself (no extra zip around it).
+# - Every push to any branch: run the tests and build all three apps (and
+#   the Windows installer). Download the builds from the workflow run's
+#   "Artifacts" section; each download is the release file itself (no extra
+#   zip around it).
 # - Pushing a tag like v1.2.0: also attach the builds to that GitHub release
 #   (a draft release is created if one does not exist yet).
 # - "Run workflow" on the Actions tab runs it manually.
@@ -111,6 +112,21 @@ jobs:
           Compress-Archive -Path "dist\Photo GPS Editor" `
             -DestinationPath "release-files\photo-gps-editor-windows-x86_64.zip"
 
+      # Windows: the installer (packaging/windows_installer.iss), built with
+      # the runner's Inno Setup, or Chocolatey's if the image stops shipping it.
+      - name: Build the Windows installer
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) {
+            choco install innosetup -y --no-progress
+          }
+          $version = python -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])"
+          & $iscc "/DAppVersion=$version" "/DSourceDir=$PWD\dist\Photo GPS Editor" `
+            /Orelease-files packaging\windows_installer.iss
+          Get-Item release-files\photo-gps-editor-windows-x86_64-setup.exe
+
       # macOS: zipped .app bundle (ditto keeps the bundle's symlinks intact)
       - name: Package (macOS)
         if: runner.os == 'macOS'
@@ -152,6 +168,15 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+      - name: Upload build (Windows installer)
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v7
+        with:
+          path: release-files/photo-gps-editor-windows-x86_64-setup.exe
+          archive: false
+          if-no-files-found: error
+          retention-days: 30
+
       # macos-latest runs on Apple Silicon, so the zip is named ...-arm64.zip.
       - name: Upload build (macOS)
         if: runner.os == 'macOS'
@@ -171,18 +196,23 @@ jobs:
       contents: write
 
     steps:
+      # skip-decompress: the Windows and macOS builds are zips uploaded as-is
+      # (archive: false above); without it the download unzips them and the
+      # check below fails.
       - uses: actions/download-artifact@v8
         with:
           path: release-files
           merge-multiple: true
+          skip-decompress: true
 
       # Stop before touching the release if any build file is missing.
-      - name: Check all four build files are here
+      - name: Check all five build files are here
         run: |
           ls -l release-files
           for file in Photo_GPS_Editor-x86_64.AppImage \
               photo-gps-editor-linux-x86_64.tar.gz \
               photo-gps-editor-windows-x86_64.zip \
+              photo-gps-editor-windows-x86_64-setup.exe \
               photo-gps-editor-macos-arm64.zip; do
             test -f "release-files/$file" || { echo "Missing: $file"; exit 1; }
           done

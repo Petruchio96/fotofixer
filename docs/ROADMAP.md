@@ -10,13 +10,14 @@ and remove finished items.
 1. **Improvements and fixes** (now, below). Small branches, released as
    1.6.x or 1.7.x.
 2. **Rename the app** (below), one branch. "Photo GPS Editor" no longer fits:
-   it edits dates and times too. Do it before the installer and update
-   checker, which build the name into install folders, shortcuts, and
-   download file names.
-3. **Windows installer** (Part 1), one branch.
-4. **In-app update checker** (Part 2), one branch. Depends on the installer
-   for one-click Windows updates.
-5. **Docker/web version** (Part 3), 4–5 branches, once the desktop features
+   it edits dates and times too. Do it before the update checker, which
+   builds the download file names into the app. The Windows installer
+   (`packaging/windows_installer.iss`, shipped in 1.7.0) also carries the
+   name (install folder, shortcuts, setup file name); its fixed `AppId`
+   keeps upgrades working across the rename.
+3. **In-app update checker** (Part 2), one branch. The installer it needs
+   for one-click Windows updates exists.
+4. **Docker/web version** (Part 3), 4–5 branches, once the desktop features
    have settled. Part 4 checks that the DS920+ can run it. When it's done,
    the app is feature complete: **version 2.0**.
 
@@ -30,10 +31,11 @@ Not scheduled:
 
 ## Versions
 
-- 1.6.1 (2026-10-11) is the latest release.
+- 1.6.1 (2026-10-11) is the latest release. 1.6.2 (merged, unreleased)
+  is skipped as a release: the next release is 1.7.0.
 - Until the Docker/web version is done, versions stay 1.x: **1.6.x** for
   fixes and small improvements, **1.7.x** when a branch adds something
-  bigger (for example the rename, the installer, or the update checker).
+  bigger (for example the rename or the update checker).
   The usual rules in `CLAUDE.md` still decide whether a branch gets a bump
   at all.
 - **2.0** marks the Docker/web version: the desktop app plus the browser
@@ -43,40 +45,13 @@ Not scheduled:
 
 ## Now: improvements and fixes
 
-1.6.1 is released. Next, small branches (1.6.x / 1.7.x):
-
-- **Change Time Zone** (merged in PR #15, version 1.6.2, not released yet): a third
-  Date & Time choice. Every change works on the moment a photo was taken;
-  Change Time Zone keeps the moment by default, with "Keep the clock time"
-  for photos whose times were right but whose zone was wrong (the Central
-  wedding photos Synology Photos stamped with Mountain time). Step 2 is
-  three stacked cards that fold up to the one chosen.
-- **Safer zone fallback.** A photo with no `OffsetTimeOriginal` falls back
-  to `OffsetTime` (`core/photo_dates.py`, `time_offset_from_tags`). That
-  tag goes with the "last changed" date, so it can hold an editing
-  program's zone. Try `OffsetTimeDigitized` before it (it goes with the
-  digitized date, which cameras set to the moment taken).
-- **CI release download.** The `v1.6.1` release job failed:
-  `actions/download-artifact` unzipped the Windows and macOS zips (uploaded
-  with `archive: false`), so the four-file check stopped it before
-  uploading. Add `skip-decompress: true` to the release job's download
-  step. (1.6.1's files were attached by hand: `gh api
-  repos/.../actions/artifacts/<id>/zip` fetches a file without unzipping
-  it; `gh run download` unzips too.)
-- **Windows polish** (branch `windows-polish`): development moved to real
-  Windows 11 on 2026-10-11. Tested there: RAW date writes and undo, the
-  progress row on 250+ photos, map space-bar panning, copying and pasting
-  GPS, and the map's native border and shadow (the fallback border is only
-  for VMs). Fixed on the branch: step 4's new dates pushed out of view, Set's
-  zone change moving the moment, the zone above the date and time, the map's
-  Select Location / Cancel button, and the map opening on New Location.
-  Still to do:
-  - "Retrying to obtain clipboard" fills the error log every few minutes on
-    Windows (probably the clipboard check that turns Paste on and off).
-  - Test a winter photo (MST/CST) and a write to a photo another program has
-    locked (as Synology Drive may while syncing).
-  - Windows look: menu letters always underlined, the map icon touching its
-    text in Pick from a Map, pale placeholder and disabled text.
+1.6.1 is released. Merged since, not released: **Change Time Zone** (PR #15,
+bumped to 1.6.2) and the first **Windows polish** fixes (PR #16). 1.6.2 will
+not be released on its own: branch `windows-polish-2` (Windows polish part 2,
+the safer zone fallback, the CI release download fix, the Windows installer,
+version **1.7.0**)
+releases everything since 1.6.1 once it is merged and tagged (see
+`RELEASE_CHECKLIST.md`). Nothing else is queued before the rename.
 
 ---
 
@@ -108,91 +83,6 @@ What the name touches (about 50 places outside the tests):
 
 ---
 
-## Part 1: Windows installer (Inno Setup)
-
-**Recommendation: Inno Setup 6, per-user install, built in CI next to the
-existing zip.**
-
-Why Inno Setup and not the alternatives:
-
-- **WiX (MSI):** more complex, with XML component authoring and fiddly upgrades.
-- **MSIX:** has to be signed even for personal use.
-- **Inno Setup:** a single `.iss` script, free, and handles shortcuts,
-  uninstall, and upgrades well. GitHub's Windows runners can install it with
-  `choco install innosetup`.
-
-### What the installer does
-
-- Installs per user to `%LOCALAPPDATA%\Programs\Photo GPS Editor`, with no
-  admin/UAC prompt (`PrivilegesRequired=lowest`). An "install for all users"
-  option can be added later with `PrivilegesRequiredOverridesAllowed=dialog`.
-- Adds a Start menu shortcut and an optional desktop shortcut (a checkbox task).
-- Adds an uninstaller, listed in Settings > Apps.
-- Upgrades in place. A fixed `AppId` GUID means installing a newer `Setup.exe`
-  replaces the old version. Old files in `_internal\` are deleted first
-  (`[InstallDelete]`), so stale DLLs from the previous PyInstaller build can't
-  linger.
-- Closes a running copy before upgrading (`CloseApplications=yes`).
-- Offers "Launch Photo GPS Editor" on the last page.
-- Keeps user data on uninstall: QSettings (registry `HKCU\Software\Photo GPS
-  Editor`) and the error log in `%LOCALAPPDATA%\Photo GPS Editor`. This is the
-  normal behavior.
-
-### Files
-
-- **New `packaging/windows_installer.iss`:** the script. It takes `AppVersion`
-  and the source folder from the command line
-  (`ISCC /DAppVersion=1.6.1 /DSourceDir=...`), so the version only lives in
-  `pyproject.toml`.
-- **New `assets/app_icon.ico`:** made from `assets/app_icon_128.png`
-  (multi-size: 16/32/48/256). It is used for the `.exe`, the shortcuts, and
-  Setup itself. The 128 px PNG is small for a 256 px icon, so a 256 px source
-  would look better.
-- **`photo_gps_editor.spec`:** on Windows, use the `.ico` for the exe icon.
-- **`.github/workflows/build.yml`:** add a Windows step after
-  "Package (Windows)":
-  - install Inno Setup
-  - read the version from `pyproject.toml`
-  - run `ISCC`
-  - add `photo-gps-editor-windows-x86_64-setup.exe` to `release-files/`
-
-  The zip stays as a portable option.
-- **`packaging/README.md`, `RELEASE_CHECKLIST.md`, `PROJECT_CONTEXT.md`:** add a
-  short installer section and remove the "Windows installer" Future Idea.
-
-### Signing / SmartScreen
-
-The installer will be unsigned, so the first run shows "Windows protected your
-PC". Click More info > Run anyway. That is fine for personal use. A code
-signing certificate (about $100–300/yr, or Azure Trusted Signing about $10/mo)
-is only worth it if other people will install it.
-
-### Hooks the update checker needs (Part 2)
-
-- **Relaunch after a silent update.** Add a `[Run]` entry with
-  `Flags: nowait skipifnotsilent` that starts the app. A silent update then
-  reopens the app, while a normal install keeps its own "Launch" checkbox.
-- **Fixed file name.** The release file is always named
-  `photo-gps-editor-windows-x86_64-setup.exe`, so the checker can find it.
-- **Install marker.** Inno puts `unins000.exe` next to the app's exe. The app
-  uses that file to tell an installed copy from the portable zip.
-
-### Verification
-
-1. Download the setup from the CI run in the Windows VM.
-2. Install with no admin prompt.
-3. Check that the Start menu shortcut launches the app and Settings are kept.
-4. Install the next CI build over it: it upgrades in place with no stale files,
-   and settings survive.
-5. Uninstall: the folder and shortcut are removed, and settings remain.
-
-### Version
-
-This is packaging, not a feature, so no version bump. It ships with the next
-release after 1.6.1.
-
----
-
 ## Part 2: In-app update checker
 
 **Goal:** the app tells you when a newer release is on GitHub.
@@ -202,8 +92,12 @@ release after 1.6.1.
 - **Everything else** (macOS, Linux, the Windows zip, running from source):
   the app shows what's new and opens the download page.
 
-This is to-do item #3. It needs Part 1 first, because one-click updating
-depends on the installer.
+This is to-do item #3. One-click updating depends on the Windows installer,
+which exists (`packaging/windows_installer.iss`): it installs per user to
+`%LOCALAPPDATA%\Programs\Photo GPS Editor`, puts `unins000.exe` next to the
+exe, is named `photo-gps-editor-windows-x86_64-setup.exe` on every release,
+and after a silent install reopens the app (a `[Run]` entry with
+`skipifnotsilent`; `RestartApplications` is off, so nothing starts it twice).
 
 ### How the check works
 
@@ -290,7 +184,7 @@ depends on the installer.
      install.
 3. **Install.**
    - Start
-     `setup.exe /SILENT /SP- /NOCANCEL /CLOSEAPPLICATIONS /RESTARTAPPLICATIONS`
+     `setup.exe /SILENT /SP- /NOCANCEL /CLOSEAPPLICATIONS`
      as a detached process.
    - Then quit the app normally: close the ExifTool process and save
      settings.
@@ -352,8 +246,8 @@ depends on the installer.
 
 ### Verification (end to end)
 
-1. Release a version with the installer and checker, for example 1.7.0, and
-   install it in the Windows VM with Setup.
+1. Release a version with the checker (the installer shipped in 1.7.0) and
+   install it on Windows with Setup.
 2. Run it with `PHOTO_GPS_EDITOR_PRETEND_VERSION=1.0.0`. The bar should offer
    1.7.0. Click Update: it downloads, verifies, closes, and reopens, with
    settings kept.
@@ -370,8 +264,7 @@ depends on the installer.
 - **Keep asset names stable.** The checker finds downloads by name. Add a
   test, or a comment in `build.yml`, that ties the names to `core/updates.py`.
 - **Version bump.** This is a significant feature, so suggest a version bump
-  in this PR. If the installer branch hasn't been released yet, the two can
-  share one version.
+  in this PR.
 
 ---
 

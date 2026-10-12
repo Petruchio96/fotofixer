@@ -14,6 +14,7 @@ from PySide6.QtWidgets import QApplication, QDialog, QLabel, QListWidget, QMessa
 
 from core.models import PhotoInfo
 from gui.main_window import APP_VERSION, MainWindow
+from gui.window_mixins import location_editor
 from gui.window_mixins.photo_list import THUMBNAIL_PATH_ROLE
 from gui.widgets.thumbnail_delegate import FADED_ROLE, PICK_DISABLED_ROLE, SOURCE_ROLE
 from services.workflow_facade import PhotoWorkflowFacade
@@ -155,6 +156,17 @@ class MainWindowSmokeTests(unittest.TestCase):
 
     def _set_location(self, latitude: float, longitude: float) -> None:
         self.window.set_location_fields(str(latitude), str(longitude))
+
+    def _set_clipboard(self, text: str) -> None:
+        """Put text on the clipboard and wait for the Paste button to follow it."""
+        QApplication.clipboard().setText(text)
+        self._wait_for_clipboard_check()
+
+    def _wait_for_clipboard_check(self) -> None:
+        # The Paste button re-checks the clipboard a moment after it changes
+        # (and again while another program holds it), not at once.
+        while self.window._clipboard_check_timer.isActive():
+            QTest.qWait(20)
 
     def _new_location(self):
         location = self.window._build_inspector_state().new_location
@@ -870,7 +882,7 @@ class MainWindowSmokeTests(unittest.TestCase):
         self.window.populate_list()
         self._select_paths([self.paths[0]])
         self._set_location(*self.location)
-        QApplication.clipboard().setText("40.1, -111.2")
+        self._set_clipboard("40.1, -111.2")
 
         self.window.start_picking_location()
 
@@ -903,7 +915,7 @@ class MainWindowSmokeTests(unittest.TestCase):
 
         # The lock survives things that recompute button states.
         window.update_details_panel()
-        QApplication.clipboard().setText("41.5, -112.5")
+        self._set_clipboard("41.5, -112.5")
         self.assertFalse(window.apply_button.isEnabled())
         self.assertFalse(window.paste_coordinates_button.isEnabled())
 
@@ -1333,7 +1345,7 @@ class MainWindowSmokeTests(unittest.TestCase):
         self._assert_coordinates_almost_equal(self._new_location(), (40.714166666666664, -74.006))
 
     def test_paste_button_fills_fields_from_clipboard(self) -> None:
-        QApplication.clipboard().setText("40.486325, -111.813415")
+        self._set_clipboard("40.486325, -111.813415")
         self.assertTrue(self.window.paste_coordinates_button.isEnabled())
 
         self.window.paste_coordinates_button.click()
@@ -1341,10 +1353,41 @@ class MainWindowSmokeTests(unittest.TestCase):
         self.assertEqual(self._new_location(), self.location)
 
     def test_paste_button_is_disabled_without_coordinates_on_clipboard(self) -> None:
-        QApplication.clipboard().setText("not coordinates")
+        self._set_clipboard("40.486325, -111.813415")
+        self._set_clipboard("not coordinates")
 
         self.assertFalse(self.window.paste_coordinates_button.isEnabled())
         self.assertFalse(self.window.paste_action.isEnabled())
+
+    def test_paste_button_waits_while_another_program_holds_the_clipboard(self) -> None:
+        # On Windows the program that changed the clipboard may still have it
+        # open; the check is retried instead of reading (and warning) at once.
+        busy = True
+        with patch.object(location_editor, "clipboard_is_busy", side_effect=lambda: busy):
+            QApplication.clipboard().setText("40.486325, -111.813415")
+            while self.window._clipboard_check_retries < 2:
+                QTest.qWait(20)
+            self.assertFalse(self.window.paste_coordinates_button.isEnabled())
+
+            busy = False
+            self._wait_for_clipboard_check()
+
+        self.assertTrue(self.window.paste_coordinates_button.isEnabled())
+        self.assertTrue(self.window.paste_action.isEnabled())
+
+    def test_inspector_refresh_does_not_read_the_clipboard(self) -> None:
+        # Reading it on every refresh is what collided with other programs on
+        # Windows: the Paste button uses the state read after the last change.
+        self._set_clipboard("40.486325, -111.813415")
+        QTest.qWait(2 * location_editor.CLIPBOARD_CHECK_DELAY_MS)
+
+        with patch.object(location_editor.QApplication, "clipboard") as clipboard:
+            self._set_location(*self.location)
+            self.window.update_details_panel()
+            self._select_paths([self.paths[0]])
+
+        clipboard.assert_not_called()
+        self.assertTrue(self.window.paste_coordinates_button.isEnabled())
 
     def test_invalid_clipboard_paste_shows_message(self) -> None:
         QApplication.clipboard().setText("not coordinates")

@@ -1,6 +1,11 @@
 """
 Application stylesheet constants.
+
+The Windows-only parts at the bottom adjust the look on Windows without
+changing the shared values Linux and macOS use.
 """
+
+import sys
 
 APP_STYLESHEET = """
 QMainWindow, QWidget#centralSurface {
@@ -1051,3 +1056,35 @@ QSplitter::handle {
     width: 10px;
 }
 """
+
+# Windows only. Segoe UI's thin strokes make the shared greys for placeholder
+# and disabled text look washed out there, so they get darker greys (still
+# plainly grey: grey means disabled). The selectors repeat the shared rules
+# above so each one is overridden at its own specificity.
+WINDOWS_STYLESHEET = """
+QLineEdit {
+    placeholder-text-color: #71808f;
+}
+QPushButton:disabled,
+QPushButton#accentButton:disabled,
+QPushButton#applyButton[tone="safe"]:disabled,
+QPushButton#applyButton[tone="warning"]:disabled,
+QPushButton[tone="danger"]:disabled,
+QPushButton[tone="primary"]:disabled,
+QPushButton[tone="neutral"]:disabled,
+QPushButton#pickerAddButton:disabled,
+QPushButton#removeGpsButton:disabled {
+    color: #71808f;
+}
+QPushButton#filterButton:disabled,
+QPushButton#onlySelectedButton:disabled,
+QPushButton#referenceArrow:disabled,
+QPushButton#selectionBarButton:disabled,
+QFrame#selectionBar[active="true"] QPushButton#selectionBarButton:disabled {
+    color: #8794a1;
+}
+"""
+
+if sys.platform == "win32":
+    APP_STYLESHEET += WINDOWS_STYLESHEET
+

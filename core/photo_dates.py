@@ -74,8 +74,15 @@ def date_taken_from_tags(tags: Mapping[str, str | None]) -> datetime | None:
 
 
 def time_offset_from_tags(tags: Mapping[str, str | None]) -> timedelta | None:
-    """The photo's time zone offset (OffsetTimeOriginal, else OffsetTime), or None."""
-    for tag in ("OffsetTimeOriginal", "OffsetTime"):
+    """
+    The photo's time zone offset, or None if no tag holds one.
+
+    OffsetTimeOriginal goes with the date taken, so it comes first. Without
+    it, OffsetTimeDigitized is the better fallback: it goes with the digitized
+    date, which cameras set to the moment taken. OffsetTime goes with the
+    "last changed" date, so it can hold an editing program's zone instead.
+    """
+    for tag in ("OffsetTimeOriginal", "OffsetTimeDigitized", "OffsetTime"):
         offset = parse_offset(tags.get(tag))
         if offset is not None:
             return offset

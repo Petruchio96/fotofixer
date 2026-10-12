@@ -77,6 +77,30 @@ What the name touches (about 50 places outside the tests):
 - **Release notes** for the version that renames it: say what the app used
   to be called, so people find it.
 
+**The bridge: copies of 1.8.0 must still be able to update.** The update
+checker in 1.8.0 finds the next version by exact names, so the first
+release under the new name has to be one those copies can find and install:
+
+- **Download file names** (`RELEASE_ASSETS` in `core/updates.py`):
+  `photo-gps-editor-windows-x86_64-setup.exe`,
+  `photo-gps-editor-macos-arm64.zip`,
+  `photo-gps-editor-linux-x86_64.tar.gz`, and
+  `Photo_GPS_Editor-x86_64.AppImage`.
+- **Names inside the downloads.** For the Linux tarball folder and the
+  macOS app, 1.8.0 writes its own update script, which expects
+  `FOLDER_NAME` "Photo GPS Editor", `BUNDLE_NAME` "Photo GPS Editor.app",
+  and `POSIX_EXE_NAME` "Photo GPS Editor". If they change, the swap stops
+  safely, but the app doesn't reopen by itself. The AppImage swap and
+  Windows Setup need only the file name (and the installer's fixed
+  `AppId`).
+- **The clean way:** one release under the current name teaches the checker
+  (and its update script) the new names before the rename ships. The HEIC
+  release (above in the Order) is the natural bridge; any 1.8.x fix would
+  do too. It needs no release of its own.
+- **The other way:** the rename release also uploads its files under the
+  old names and keeps the old names inside the downloads, for that one
+  release.
+
 ---
 
 ## HEIC support (desktop)
@@ -93,6 +117,9 @@ Windows, and macOS:
   don't.
 - Tests with a real iPhone HEIC fixture (GPS and date writes, thumbnails).
 - A significant feature, so it gets a version bump in its own PR.
+- If it ships before the rename, make it the rename's bridge release:
+  teach the update checker the new names too (see "The bridge" under
+  "Rename the app").
 
 ---
 

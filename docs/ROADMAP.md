@@ -7,7 +7,20 @@ and remove finished items.
 
 ## Order
 
-1. **Rename the app** (below), one branch. "Photo GPS Editor" no longer fits:
+1. **Docker/web version** (Part 3), 6 branches counting the Phase 0
+   trial. It goes first (the user's call, 2026-10-12). The design is
+   browser-only: a static container, editing in each visitor's own browser,
+   photos never leave their computer. When it's done, the app is feature
+   complete: **version 2.0.0**.
+   - **Pick the app's new name before the first image is published.** The
+     GHCR image, the page title, the self-hosting docs, and the address the
+     user plans to share (`photo-gps-date-changer.iramnas.synology.me`) all
+     carry it, and renaming a published image later strands anyone who
+     pulled the old one. The desktop rename itself (item 3) can wait.
+2. **HEIC (iPhone) support in the desktop app** (below), one branch with a
+   version bump, on Linux, Windows, and macOS. The web version supports HEIC
+   from its start, so this can land before, during, or after it.
+3. **Rename the app** (below), one branch. "Photo GPS Editor" no longer fits:
    it edits dates and times too. The update checker (1.8.0) finds each
    download by name, so the rename must also change the names in
    `core/updates.py` (`RELEASE_ASSETS`), `.github/workflows/build.yml`, and
@@ -15,30 +28,26 @@ and remove finished items.
    shortcuts, setup file name; its fixed `AppId` keeps upgrades working).
    Copies already out there look for the old names, so keep those for one
    release (or teach the checker both) so they can still update themselves.
-2. **Docker/web version** (Part 3), 4–5 branches, once the desktop features
-   have settled. Part 4 checks that the DS920+ can run it. When it's done,
-   the app is feature complete: **version 2.0**.
 
 Not scheduled:
 
-- **Drag-and-drop loading** of photos into the Photo List. The Add Photos
-  picker (folders and photos) covers most of the need; the web version
-  wouldn't share it.
+- **Drag-and-drop loading** of photos into the desktop Photo List. The Add
+  Photos picker (folders and photos) covers most of the need. (The web
+  version has drag and drop from the start.)
 - **Macs.** No release has been tested on a real Mac yet; test when one is
   available.
 
 ## Versions
 
-- 1.7.0 (2026-10-12) is the latest release. 1.8.0 (branch `update-checker`,
-  the in-app update checker) releases when it merges.
-- Until the Docker/web version is done, versions stay 1.x: **1.8.x** for
-  fixes and small improvements, **1.9.0** for the rename.
+- 1.8.0 (2026-10-12, the in-app update checker) is the latest release.
+- While the web version is built, desktop fixes and small improvements are
+  **1.8.x**, and HEIC support gets its own bump (1.9.0 if it ships first).
   The usual rules in `CLAUDE.md` still decide whether a branch gets a bump
   at all.
+- **2.0.0** marks the web version: the desktop app plus the browser version,
+  feature complete. The rename that follows is 2.1.0.
 - A release is never its own branch or PR. The branch that bumps the version
   is the release: merge its PR, tag, notes, publish (`RELEASE_CHECKLIST.md`).
-- **2.0** marks the Docker/web version: the desktop app plus the browser
-  version on the NAS, feature complete.
 
 ---
 
@@ -70,147 +79,209 @@ What the name touches (about 50 places outside the tests):
 
 ---
 
+## HEIC support (desktop)
+
+The desktop app reads and writes JPG, CR2, CR3, and DNG. iPhones save HEIC
+by default, so friends' and family's photos often are. Add it on Linux,
+Windows, and macOS:
+
+- `.heic`/`.heif` in `core/file_types.py`. ExifTool 13.59 writes GPS and
+  dates to HEIC.
+- Thumbnails: Qt can't decode HEIC, so use the embedded preview through
+  `read_embedded_previews`. Check that iPhone HEICs have an extractable
+  `ThumbnailImage`/`PreviewImage`, and fall back to the file icon when they
+  don't.
+- Tests with a real iPhone HEIC fixture (GPS and date writes, thumbnails).
+- A significant feature, so it gets a version bump in its own PR.
+
+---
+
 ## Part 3: Web version in a Docker container
 
-### Approach
+Decided 2026-10-11/12. It replaces an earlier design (a FastAPI server that
+mounted the NAS photo share and ran ExifTool on it), which the user
+rejected: the container must never touch photo files.
 
-The new web version lives in **the same repo**. It adds a `web/` package and a
-FastAPI backend that calls the existing `services/workflow_facade.py`
-(`PhotoWorkflowFacade`) and `core/`. A plain HTML/JS front end in the browser
-is served by the same container.
+### Goal
 
-`core/` and `services/` already have no Qt dependency, and a test enforces
-that. This plan relies on that boundary. Most of the hard logic is reused
-unchanged:
+It works like BentoPDF. Someone hosts one container. Friends and family open
+its address (the user's will be something like
+`https://photo-gps-date-changer.iramnas.synology.me`, behind the Synology
+reverse proxy) and edit GPS and dates in photos **on their own computer**.
+Anyone can self-host the same image on any Docker host and share it the same
+way.
 
-- ExifTool reading and writing: `core/exiftool_wrapper.py`
-- Coordinate parsing: `core/coordinates.py`, `services/coordinate_service.py`
-- Apply, clear, and restore: `services/workflow_controller.py`
-- Undo/redo: `services/gps_edit_history.py`
-- Date & Time: `services/date_time_service.py`, `core/photo_dates.py`
-- Folder listing: `core/places.py` (`list_subfolders`, `list_photos`,
-  `photos_in_folders`)
-- Map math: `core/map_tiles.py`
+- **ExifTool runs in the visitor's browser** as WebAssembly.
+  `@uswriting/exiftool` runs ExifTool on zeroperl (Perl compiled to
+  WebAssembly) and has `readMetadata()` and `writeMetadata()`; ExifTool's
+  author points to it. Writing CR3 that way is unproven: Phase 0 is a trial.
+- Photos never leave the visitor's computer. Nothing passes through the
+  host's internet connection except the app itself; the server stores
+  nothing. No NAS folder is mounted, so there is no server-side path
+  handling, temp storage, or per-user state.
 
-The desktop app keeps working as it does now. Both share the backend.
+Decisions with the user:
+
+- Editing in the browser, files on the visitor's own computer, no NAS mount.
+- **Login is optional and off by default**, as in BentoPDF. The host can set
+  one shared password with environment variables to keep strangers out. A
+  visitor can only ever change their own files, so the password only
+  decides who can load the page. No per-person accounts.
+- **Esri satellite:** each visitor enters their own key, saved only in their
+  browser and sent straight to Esri. The host's key is never involved, and
+  no key is ever in the repo or image.
+- HEIC from the start (and in the desktop app, above).
+- Image for `linux/amd64` + `linux/arm64` on GHCR. MIT license (add
+  `LICENSE`). PCs, Macs, and iPads (about 1024 px and up); phones out of
+  scope.
+
+### What changes from the desktop app
+
+| | Desktop | Web |
+|---|---|---|
+| Where files are | Local disk and shares | The visitor's computer, through the browser |
+| ExifTool | Pinned 13.59 Perl/exe, `-stay_open` | ExifTool WebAssembly build in a Web Worker |
+| Logic | `core/`, `services/` (Python) | The same pure Python modules through Pyodide, or a JS port if Phase 0 says so |
+| Saving | In place | Chrome/Edge: in place in the opened folder. Safari, Firefox, iPad: download (one file, or a zip) |
+| Settings | QSettings | `localStorage` in the visitor's browser |
+| Undo/redo | In memory | In memory for the tab; in download mode, until the download |
 
 ### Architecture
 
 ```
-Browser (PC, Mac, or iPad on LAN)
-  └─ static HTML/JS + Leaflet map
-       │ JSON over HTTP
-  FastAPI (uvicorn, 1 worker)  ── web/
-       ├─ PhotoWorkflowFacade (services/)
-       ├─ one ExifToolWrapper (persistent Perl process; calls serialized by a lock)
-       ├─ thumbnail endpoint (embedded JPEG previews; Pillow only for rotate/resize)
-       └─ settings.json + thumbnail cache in /config volume
-  Volumes:  /photos  ← Synology shared folder (read-write)
-            /config  ← settings, cache, error log
+Visitor's browser (PC / Mac / iPad)
+  index.html + JS modules (no build step) + Leaflet (vendored)
+  ├─ UI thread: Photo List, Photos to Change, map, Settings
+  └─ Web Worker
+       ├─ ExifTool WebAssembly (read GPS/dates/previews, write tags)
+       └─ Pyodide + core/ and services/ pure modules (date plans,
+          time zones, coordinate parsing, undo history)
+  Files: File System Access API (Chrome/Edge, read-write folder)
+         or <input type=file>, webkitdirectory, drag and drop (all browsers)
+  Map tiles: OSM and USGS direct; Esri direct with the visitor's own key
+      │ HTTPS, static files only
+Reverse proxy (Synology, Caddy, Traefik…) ── TLS
+      │ HTTP
+Container: nginx-unprivileged serving web/ (static), optional basic auth
 ```
 
-### Key design decisions
+### Opening photos (replaces the desktop's folder-tree picker)
 
-- **Single user, single worker.** `ExifToolWrapper` keeps one ExifTool process
-  running and is not thread-safe. Use one uvicorn worker and an
-  `asyncio.Lock`/thread lock around ExifTool calls. Undo/redo history lives in
-  server memory. That is fine for one person, and the history is lost when the
-  container restarts.
-- **Photos root.** The picker can only browse inside `/photos`. Every path the
-  browser sends is resolved and checked to stay under that root, so a path
-  can't escape it.
-- **Thumbnails.** These use the existing `read_small_previews` and
-  `read_embedded_previews`. They return the JPEG already inside each
-  CR3/DNG/JPG, so the NAS never decodes RAW data. Pillow fixes orientation and
-  resizes, and the result is cached on disk in `/config/thumbs` (keyed by path
-  + mtime + size). Pillow is allowed in `web/`, but not in `core/` or
-  `services/`.
-- **Map.** Leaflet runs in the browser. It was rejected for the desktop
-  because of QtWebEngine's size, but in a browser it costs nothing. Tiles go
-  straight from the browser to OpenStreetMap, USGS, or Esri, reusing the URLs
-  from `core/map_tiles.py` `TileSource`. The NAS does no tile work.
-- **Long jobs** (load a folder of 1,000 photos, apply to 300) run as
-  background jobs with a job id. The browser shows progress by polling or SSE,
-  so requests never time out.
-- **Settings.** A JSON file in `/config` replaces QSettings (backups option,
-  Esri key, last folder).
-- **Front end.** Plain HTML/JS modules with no build step, so the Dockerfile
-  stays simple. It copies the desktop's layout and colors (`gui/styles.py`):
-  - Photo List on the left, Photos to Change on the right
-  - Location and Date & Time tabs
-  - the blue/orange/navy theme
+- **Open a Folder** (Chrome and Edge on a computer):
+  `showDirectoryPicker({mode: "readwrite"})`. The picker's folder tree and
+  tiles show that folder and its subfolders, as in the desktop picker.
+  Changes are written back into the original files. With the backups option
+  on, an `<name>_original.<ext>` copy goes next to the photo, as on the
+  desktop.
+- **Add Photos** (every browser): a file input with `multiple`, plus a
+  folder input (`webkitdirectory`) where supported. Changed photos come back
+  as downloads: one file directly, several as a zip, with the original
+  names.
+- **Drag and drop** anywhere on the Photo List: files and folders
+  (`webkitGetAsEntry`). In Chrome/Edge, `getAsFileSystemHandle` gives write
+  access, so dropped photos save in place too.
+- The page says which mode applies: "Changes are saved straight into your
+  files" or "Changed photos download when you click Download".
+- iPad: Add Photos opens the Files app picker; downloads go to Files.
+- "Copy location / time from a photo" becomes **From a Photo on This
+  Computer** (the picker in one-photo mode).
 
-  Mockups go first, as a Design-type Artifact (per CLAUDE.md).
-- **Target devices.** PCs, Macs, and tablets such as iPads, in Chrome, Edge,
-  Firefox, and Safari. Phones are out of scope, so there is no phone layout.
-  The smallest layout to support is about 1024 px wide (iPad landscape); iPad
-  portrait at 768 px is a nice-to-have, with the two panes stacked or
-  narrowed. For tablets:
-  - Everything works with tap as well as mouse, and nothing needs right-click
-    or a keyboard shortcut.
-  - Buttons and grid cells are big enough to tap (about 40 px).
-  - Selection works by tapping, not by shift/ctrl-click.
-  - Leaflet already handles pinch-to-zoom and dragging on the map.
-  - Hover hints stay (as `title` tooltips), but iPads don't show hover, so
-    button labels must make sense without them.
-- **Security.** The app has no login, and it can rewrite every photo. Use it on
-  the LAN only, through Synology's reverse proxy (DSM > Login Portal > Reverse
-  Proxy) or Tailscale. Never port-forward it to the internet. Basic auth or
-  DSM's reverse-proxy auth can be added in a later phase.
+### Logic in the browser
 
-### Container
+Pyodide runs Python as WebAssembly. The modules with no I/O are reused as
+they are (they already have no Qt):
 
-- **New `docker/Dockerfile`:** `python:3.12-slim` + `perl`, plus ExifTool from
-  `packaging/fetch_exiftool.py linux`. That is the same pinned 13.59 as the
-  desktop builds, checksum-verified.
-- Install `requirements-web.txt` (fastapi, uvicorn, Pillow; no PySide6).
-- Run as a non-root user, with the UID/GID set by `PUID`/`PGID` to match the
-  Synology user that owns the photo share.
-- Expected image size: about 150–200 MB.
-- **New `docker/compose.yaml`:** for Synology Container Manager > Project:
-  - port `8080`
-  - volumes `/volume1/photo:/photos` and
-    `/volume1/docker/photo-gps-editor:/config`
-  - `mem_limit: 512m`
-  - `restart: unless-stopped`
-- **CI:** a new workflow (`.github/workflows/docker.yml`) builds
-  `linux/amd64` (the J4125 is x86-64, so no ARM build is needed) and pushes
-  it to GHCR as `ghcr.io/petruchio96/photo-gps-editor` with the tags
-  `latest`, `X.Y`, and `X.Y.Z`. It runs when a GitHub release is
-  **published** (`on: release: types: [published]`, pre-releases skipped;
-  plus `workflow_dispatch` with a tag input), not on the `v*` tag: the tag
-  build makes the draft, and publishing the release is the one act that
-  ships the desktop files (which the update checker sees) and the image at
-  the same time. Steps: checkout at the release tag, `docker/login-action`
-  to ghcr.io with `GITHUB_TOKEN` (`permissions: packages: write`),
-  `docker/metadata-action` for the tags, `docker/build-push-action` with
-  `file: docker/Dockerfile`. The Dockerfile sets
-  `PHOTO_GPS_EDITOR_CONTAINER=1`, which `core/updates.py` reads as the
-  install kind `CONTAINER`.
+- `core/coordinates.py`, `services/coordinate_service.py`: coordinate parsing
+- `core/photo_dates.py`, `core/time_zones.py` (the `tzdata` Pyodide
+  package), `services/date_time_service.py` (`plan_shift`, `plan_set`,
+  `plan_zone_change`, `date_tag_values`, `group_by_camera`)
+- `services/gps_edit_history.py`: undo/redo memory
+- `core/map_tiles.py`: tile URLs and fit-to-photos math
+- `core/file_types.py`: supported extensions
+
+The I/O parts (`core/exiftool_wrapper.py`, `core/photo_loader.py`,
+`services/workflow_facade.py`) stay desktop-only. A JS layer does the
+reading and writing and calls Python only for plans and parsing. (Pyodide's
+synchronous Python can't wait on the async ExifTool calls in Safari, which
+is why I/O stays in JS.)
+
+If Phase 0 shows Pyodide's download (several MB, cached after the first
+visit) is too slow on an iPad, port these modules to JS instead, with the
+same test cases; a test then checks that both versions give the same
+answers.
+
+### Thumbnails
+
+ExifTool WebAssembly extracts `ThumbnailImage` or `PreviewImage`, never
+`JpgFromRaw` (a full-size JPEG per RAW). `createImageBitmap` and a canvas
+fix the orientation and crop to the photo's aspect ratio, as
+`gui/thumbnail_loader.py` does. Photos are read one at a time in the worker,
+and tiles fill in as they're ready. Thumbnails stay in memory only, so
+nothing is left behind on a shared computer.
+
+### Container and security
+
+- **Image:** `nginxinc/nginx-unprivileged` (alpine) serving `web/` as static
+  files. No Python, Perl, or ExifTool in the container. Expected size under
+  60 MB.
+- **Vendored, never from a CDN:** Leaflet, the ExifTool WebAssembly bundle,
+  and Pyodide with only the packages used. Visitors download nothing from
+  third parties except map tiles.
+- **Optional password:** `APP_USERNAME` + `APP_PASSWORD` (or
+  `APP_PASSWORD_FILE`). At start the entrypoint writes an htpasswd file to
+  tmpfs and turns on nginx basic auth; without them the app is open. Basic
+  auth is safe over HTTPS and needs no server code. nginx `limit_req` slows
+  password guessing.
+- **Headers:** `Content-Security-Policy: default-src 'self'; script-src
+  'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; img-src 'self' data:
+  blob: https://tile.openstreetmap.org https://basemap.nationalmap.gov
+  https://ibasemaps-api.arcgis.com; connect-src 'self'; object-src 'none';
+  frame-ancestors 'none'; base-uri 'none'; form-action 'self'`,
+  `X-Content-Type-Options: nosniff`, `Referrer-Policy:
+  strict-origin-when-cross-origin` (OpenStreetMap wants an identifying
+  referer), `Permissions-Policy`, the `application/wasm` MIME type, and a
+  long cache for versioned assets. Cross-origin isolation (COOP/COEP) only
+  if Phase 0 shows the WebAssembly build needs it; strict COEP would block
+  map tiles.
+- **Privacy:** no analytics, no cookies (except basic auth), no file data
+  ever sent. nginx access logs can be turned off with an env var.
+- **The Esri key** lives in the visitor's `localStorage` under a clear "this
+  browser only" label, with Remove Key; tiles load from Esri with `?token=`,
+  as on the desktop.
+- **Compose defaults:** `read_only: true`, `tmpfs: /tmp`, `cap_drop: [ALL]`,
+  `security_opt: [no-new-privileges:true]`, `mem_limit: 128m`,
+  `restart: unless-stopped`, port on `127.0.0.1:8080` only, `HEALTHCHECK`.
+- The server has nothing to steal or misuse: no files, no keys, no accounts.
+
+### Publishing the image
+
+A workflow (`.github/workflows/docker.yml`) builds `linux/amd64` and
+`linux/arm64` with buildx and pushes `ghcr.io/petruchio96/<new-name>` with
+the tags `latest`, `X.Y`, and `X.Y.Z` when a GitHub release is
+**published** (`on: release: types: [published]`, pre-releases skipped;
+plus `workflow_dispatch` with a tag input), not on the `v*` tag: the tag
+build makes the draft, and publishing the release ships the desktop files
+(which the update checker sees) and the image at the same time. Steps:
+checkout at the tag, `docker/login-action` to ghcr.io with `GITHUB_TOKEN`
+(`permissions: packages: write`), `docker/metadata-action`,
+`docker/build-push-action` with `file: docker/Dockerfile`. Pushes to `main`
+may also publish `:edge` so the NAS can try a build before a release.
 
 ### Updates for the container
 
 Containers don't update themselves; this one follows the usual practice:
 
-- **The image carries the versions.** Each published release pushes
-  `latest`, `X.Y`, and `X.Y.Z` to GHCR (above). Synology Container Manager
+- **The image carries the versions** (above). Synology Container Manager
   checks downloaded images against the registry and shows its own "update
-  available" badge and notification; the update is then Project > Action >
-  Stop, pull the image, Build/Start (or `docker compose pull && docker
-  compose up -d` from a shell).
-- **The web page says so too.** Once a day the server asks GitHub for the
-  latest release with `core/updates.py` (`parse_release`, `is_newer`;
-  `urllib`, cached a day) and the page shows the same orange notice as the
-  desktop app, with "How to update" opening those steps. The install kind is
-  `CONTAINER`, so there is no Update button, only the notice.
-- **Automatic pulls, if wanted.** `compose.yaml` ships a commented-out
-  Watchtower sidecar, scoped by label so turning it on updates only this
-  container and never Vaultwarden or anything else on the NAS:
+  available" badge; the update is Project > Action > Stop, pull, Build/Start
+  (or `docker compose pull && docker compose up -d`).
+- **Automatic pulls, if wanted.** `docker/compose.yaml` ships a commented-out
+  Watchtower sidecar, scoped by label so it updates only this container:
 
   ```yaml
   services:
-    photo-gps-editor:
-      image: ghcr.io/petruchio96/photo-gps-editor:latest
+    app:                       # named after the new app name
+      image: ghcr.io/petruchio96/<new-name>:latest
       labels:
         - com.centurylinklabs.watchtower.enable=true
     # Uncomment to pull new versions automatically (checks once a day).
@@ -222,135 +293,108 @@ Containers don't update themselves; this one follows the usual practice:
     #   restart: unless-stopped
   ```
 
-### Phases (one branch/PR each)
+- **The in-page notice is open (ask the user).** The first design had the
+  server ask GitHub (`core/updates.py`, install kind `CONTAINER`, which
+  exists). The server is now static nginx, so the *browser* would have to
+  ask, and `connect-src 'self'` blocks that. Either add
+  `https://api.github.com` to `connect-src` (the mockups assume this: the
+  Settings page shows "Version X is available. Ask the person who runs this
+  site to update it."), or bake the version into the image and drop the
+  notice.
 
-1. **Web skeleton, read-only.**
-   - `web/app.py` (FastAPI), the folder-browse API, photo-list API,
-     thumbnails, and GPS display
-   - Dockerfile, compose, and the `docker.yml` workflow that publishes the
-     image (above), so Container Manager can pull it from GHCR
-   - **Deploy to the NAS at this point** and measure speed and memory on real
-     CR3 folders before building more.
-2. **Editing.**
-   - Apply/Clear GPS from typed or pasted coordinates, or from a source photo
-   - the backups option
-   - undo/redo
-   - a job/progress endpoint
-3. **Map.** Leaflet: pick a location, show all photo dots, street/satellite,
-   and the Esri key in Settings.
-4. **Date & Time tab.** Reuses `services/date_time_service.py` once the
-   desktop feature is merged.
-5. **Polish.**
-   - auth option
-   - iPad touch pass (test in Safari on an iPad)
-   - error log viewer
-   - README section for installing on Synology
+### Mockups
 
-### Small prep refactors (only if the web layer needs them)
+Design artifact: https://claude.ai/artifact/7vLiemwRBdyC351wLkS3SD. They
+are current for this design (updated 2026-10-11): the Location tab (with a
+Tweak that switches between saving in place and the Download bar), the
+Date & Time tab, Add Photos from this computer (switch between the
+Chrome/Edge folder view and the Safari/iPad drop zone), the map, Settings
+(saved in the browser only), and the browser's own sign-in box, which
+appears only when the host sets a password.
 
-Some workflow logic may still live in `gui/presenters` or `gui/window_mixins`,
-for example selection rules, the Show filter, or the backup-list bookkeeping.
-Move whatever the web needs down into `services/`, with tests, rather than
-duplicating it. Phase 1 starts with an audit of `gui/presenters/` to find
-these.
+### Hosting on Synology (goes into `docs/SELF_HOSTING.md`)
+
+1. Container Manager > Project > Create with `docker/compose.yaml` (image
+   from GHCR). Optionally set `APP_USERNAME`/`APP_PASSWORD` in `.env`.
+2. Control Panel > Login Portal > Advanced > Reverse Proxy: source HTTPS,
+   the hostname (for example `photo-gps-date-changer.iramnas.synology.me`),
+   port 443; destination `http://localhost:8080`; add the HSTS header.
+3. Security > Certificate: a Let's Encrypt certificate covering that
+   hostname (DSM can issue one for subdomains of a synology.me address;
+   check the wildcard option there).
+4. Share the address. Nothing else to configure; there's no folder to mount.
+
+Generic Docker, Caddy, and Traefik examples go in the same document.
+
+### Phases (one branch / PR each)
+
+0. **Trial (a throwaway branch, not merged).** Ask the user for test files
+   first: real R8 CR3s and DNGs (on the NAS share), a JPG, **an iPhone
+   HEIC**, and **a CR2** (the R8 shoots only CR3, so the CR2 comes from an
+   older camera or a sample file). A bare page that:
+   - reads and writes GPS and all three date tags with the ExifTool
+     WebAssembly build on all five formats, and compares the result with the
+     desktop's ExifTool 13.59 (same tags, the file still opens in Lightroom
+     and Synology Photos, nothing else changed);
+   - checks the package's license, its ExifTool version (13.42 in its README
+     vs our 13.59), memory with a 30 MB CR3, and whether it needs
+     cross-origin isolation;
+   - loads Pyodide with the pure modules and times the first and cached
+     loads on a PC and an iPad;
+   - saves back in place in Chrome, and downloads in Safari and on an iPad.
+
+   Go if CR3 and HEIC writes are correct. If not, **stop and plan again with
+   the user**. The fallback they named is uploading photos to the container
+   for editing, which needs a new design (uploads, temp storage and cleanup,
+   size limits, the Synology proxy's 60 s timeout); the rejected NAS-mount
+   design is not it.
+1. **Skeleton.** Container, compose, optional password, headers, CI build,
+   `LICENSE`; open a folder / add photos / drag and drop; Photo List with
+   thumbnails, GPS badges, Show filter, selection; the summary pane. Deploy
+   on the NAS.
+2. **Location editing.** Apply/clear GPS (typed, pasted, from a photo),
+   overwrite confirmation, backups (folder mode), undo/redo, save in place or
+   download (one file or a zip), progress.
+3. **Map.** Leaflet, OSM and USGS, Esri with the visitor's key, the pin,
+   photo dots and previews, Use This Location, Back/Clear.
+4. **Date & Time.** Shift, Set, Change Time Zone, camera groups.
+5. **Polish and publish.** iPad pass in Safari, `docs/SELF_HOSTING.md`, a
+   README section, the GHCR workflow, version **2.0.0** in the same PR, and
+   the release.
 
 ### Tests
 
-- `tests/test_web_*.py` uses FastAPI's `TestClient` against a temp photo
-  folder. It runs in the existing unittest suite and CI.
-- Path-escape tests for the `/photos` root.
-- The existing "core/services don't import PySide6/Pillow" test stays as is.
-- Add a check that `web/` doesn't import PySide6 or `gui/`.
-
-### Synology notes
-
-- **Backups option.** Leave it off on NAS shares and rely on Btrfs snapshots
-  (Snapshot Replication) instead. Snapshots cost almost nothing on Btrfs, and
-  `_original` copies double the storage and Synology Drive sync traffic.
-- **Permissions.** The container's `PUID`/`PGID` must have write access to the
-  photo shared folder. Otherwise ExifTool writes fail, though the existing
-  failure-tolerant writes would report them.
-- **One place at a time.** On Windows the photos live on a local drive that
-  Synology Drive syncs to the NAS. If the desktop app and the web version
-  change the same photos before a sync finishes, Synology Drive makes
-  conflict copies. Edit a folder from one place at a time.
+- Python: the existing suite unchanged; a new test lists the modules the
+  browser loads and checks that they import nothing that does I/O
+  (`subprocess`, `threading`, `core.exiftool_wrapper`).
+- JS: unit tests for the file layer (save-mode detection, zip naming, undo
+  in download mode) with Node's built-in test runner, no build step, run in
+  CI. If logic is ported to JS, both versions run against the same cases.
+- Real files (Phase 0, then each phase): tags written in the browser match
+  ExifTool 13.59's on the desktop for all five formats.
+- Container: `docker run` with `read_only` and `cap_drop`; the page loads;
+  the password works when set and is absent when not; the headers are
+  present; `grep` the image for keys (none).
+- Browser: Chrome against `http://localhost:8080` for each phase; Safari and
+  an iPad for downloads; the Synology address over HTTPS from outside the
+  LAN.
 
 ---
 
-## Part 4: Can a DS920+ handle it?
+## Part 4: Can a DS920+ host it?
 
-**Short answer: yes, easily. A single-user web app over ExifTool is a light
-container. Vaultwarden is lighter still.**
-
-*Assumption: "8mb" means 8 GB of RAM. The DS920+ ships with 4 GB and is
-commonly upgraded to 8 GB, the official maximum.*
-
-### Hardware
-
-- CPU: Intel Celeron J4125, 4 cores / 4 threads, 2.0 GHz (2.7 GHz burst), x86-64
-- Hardware JPEG/video acceleration is not usable from this app
-- RAM: 8 GB (as assumed above)
-
-### Estimated memory (steady state)
-
-| Process | RAM |
-|---|---|
-| DSM itself + file services | ~1–1.5 GB |
-| Vaultwarden (SQLite) | ~20–60 MB |
-| Photo GPS Editor: Python + FastAPI + uvicorn | ~60–100 MB |
-| Its persistent ExifTool (Perl) process | ~30–60 MB |
-| Its thumbnail work (Pillow, one image at a time) | +20–80 MB peak |
-| **This app total** | **~150–250 MB, cap at 512 MB** |
-
-That leaves well over 5 GB free with 8 GB installed, most of which DSM uses as
-file cache. Even on the stock 4 GB this app would fit.
-
-Two things keep it light:
-
-- Thumbnails come from previews already embedded in the files, so there is no
-  RAW decoding.
-- Pillow's JPEG draft mode (`img.draft()`) decodes the large preview at a
-  quarter or eighth of its size.
-
-### CPU and speed (estimates, to be measured in Phase 1)
-
-- **Reading GPS/dates.** ExifTool on a J4125 should read roughly 20–60
-  files/sec in batch mode (`read_gps_many`). A 500-photo folder takes about
-  10–25 s on the first load. It is faster than the desktop over SMB because
-  the files are on local disk.
-- **Thumbnails.** Embedded preview extraction plus resize takes roughly
-  20–60 ms per photo. They are cached after the first view, so reopening a
-  folder is near-instant.
-- **Writing GPS.** ExifTool rewrites each file. A 30 MB CR3 takes about
-  0.2–0.5 s on HDDs, so a batch of 300 is a minute or two. It is
-  disk-bound, not CPU-bound.
-- **Map.** No NAS load: the browser fetches tiles directly.
-
-### Where it could feel slow
-
-- **Cold HDD reads of big folders.** The first load and first thumbnails can
-  be slow. Fixes:
-  - show progress (Phase 2's job endpoint)
-  - cache thumbnails
-  - optional: pre-warm the cache for a folder
-- **Hibernation.** If DSM's HDD hibernation is on, the first request waits for
-  the disks to spin up (~10 s).
-- **Other jobs.** Synology Photos indexing or face recognition running at the
-  same time will compete for CPU. It's worth pausing or scheduling those if
-  they overlap.
-
-### Verdict
-
-Fine to run with Vaultwarden and a few other light containers. Set
-`mem_limit: 512m` so it can never squeeze Vaultwarden. Real numbers come from
-Phase 1 on the NAS: `docker stats` while loading a large CR3 folder.
+Easily. The container is static nginx: under 60 MB on disk and a few MB of
+RAM (`mem_limit: 128m` is generous), with no CPU work, because every photo
+is processed on the visitor's own computer. The NAS only serves the app's
+files once per visitor (Pyodide and the ExifTool bundle are the bulk, a few
+MB each, then cached by the browser). It sits comfortably beside
+Vaultwarden and other light containers.
 
 ---
 
 ## Open questions
 
-1. Is the RAM 8 GB, as assumed? (It affects nothing here, but the memory file
-   says 4 GB.)
-2. Web access: LAN only, or also from outside the house (Tailscale vs. Synology
-   reverse proxy with login)?
-3. Which Synology shared folder(s) hold the photos (for `/photos` mounts)?
+1. The app's new name, needed before the first image is published (see
+   Order).
+2. The in-page update notice: allow the browser to ask GitHub, or drop it
+   (see "Updates for the container").

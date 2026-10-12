@@ -10,10 +10,13 @@ from pathlib import Path
 
 from PIL import Image
 
+from core.updates import LINUX_APPIMAGE_ASSET, RELEASE_ASSETS, WINDOWS_SETUP_ASSET
+
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 INSTALLER_SCRIPT = PROJECT_ROOT / "packaging" / "windows_installer.iss"
 WORKFLOW = PROJECT_ROOT / ".github" / "workflows" / "build.yml"
-SETUP_FILE_NAME = "photo-gps-editor-windows-x86_64-setup.exe"
+APPIMAGE_SCRIPT = PROJECT_ROOT / "packaging" / "build_appimage.sh"
+SETUP_FILE_NAME = WINDOWS_SETUP_ASSET
 
 
 class WindowsInstallerScriptTests(unittest.TestCase):
@@ -23,7 +26,8 @@ class WindowsInstallerScriptTests(unittest.TestCase):
 
     def test_output_file_name_is_fixed(self) -> None:
         # The update checker downloads this exact name from the release.
-        self.assertIn("OutputBaseFilename=photo-gps-editor-windows-x86_64-setup\n", self.script)
+        base_name = WINDOWS_SETUP_ASSET.removesuffix(".exe")
+        self.assertIn(f"OutputBaseFilename={base_name}\n", self.script)
 
     def test_app_id_is_a_fixed_guid(self) -> None:
         # Upgrades in place depend on the AppId never changing.
@@ -64,6 +68,18 @@ class WindowsInstallerWorkflowTests(unittest.TestCase):
     def test_installer_script_is_compiled_with_the_project_version(self) -> None:
         self.assertIn("packaging\\windows_installer.iss", self.workflow)
         self.assertIn("/DAppVersion=$version", self.workflow)
+
+    def test_every_release_file_has_the_name_the_update_checker_expects(self) -> None:
+        # core/updates.py finds each download by name; CI must upload and
+        # check exactly those names.
+        release_check = self.workflow[self.workflow.index("Check all four build files are here"):]
+        for name in RELEASE_ASSETS:
+            self.assertIn(f"path: release-files/{name}", self.workflow)
+            self.assertIn(name, release_check)
+        self.assertIn(LINUX_APPIMAGE_ASSET, APPIMAGE_SCRIPT.read_text(encoding="utf-8"))
+
+    def test_release_job_checks_the_digests_the_updater_verifies_against(self) -> None:
+        self.assertIn("Check every release file has a SHA-256 digest", self.workflow)
 
 
 class WindowsIconTests(unittest.TestCase):

@@ -190,6 +190,9 @@ jobs:
           skip-decompress: true
 
       # Stop before touching the release if any build file is missing.
+      # These names are fixed: the in-app update check (core/updates.py)
+      # finds each download by name, and tests/test_windows_installer.py
+      # ties the two together.
       - name: Check all four build files are here
         run: |
           ls -l release-files
@@ -210,3 +213,23 @@ jobs:
               --notes "Draft created by the build workflow. Add release notes before publishing."
           fi
           gh release upload "$GITHUB_REF_NAME" release-files/* --repo "$GITHUB_REPOSITORY" --clobber
+
+      # The in-app update check verifies each download against the SHA-256
+      # GitHub computes for it. Without digests there is no one-click
+      # update, so stop here if any is missing (they appear shortly after
+      # the upload, hence the retries).
+      - name: Check every release file has a SHA-256 digest
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # The by-tag endpoint hides drafts, so find the release in the list.
+          id=$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=20" \
+            --jq ".[] | select(.tag_name == \"$GITHUB_REF_NAME\") | .id")
+          for attempt in 1 2 3; do
+            gh api "repos/$GITHUB_REPOSITORY/releases/$id" \
+              --jq '.assets[] | "\(.name) \(.digest // "MISSING")"' | tee digests.txt
+            grep -q MISSING digests.txt || break
+            sleep 10
+          done
+          ! grep -q MISSING digests.txt
+          test "$(wc -l < digests.txt)" -eq 4

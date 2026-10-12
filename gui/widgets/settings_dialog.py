@@ -7,6 +7,7 @@ Edit > Settings: the app's options in one window.
       US Satellite (USGS). Esri's imagery needs a key from the user's own
       free ArcGIS Location Platform account: an open-source app can't keep
       a key of its own secret.
+    - Updates: whether the app asks GitHub for a newer version when it opens.
 
 Nothing changes until Save; the main window applies and saves the values.
 """
@@ -61,6 +62,12 @@ ESRI_STEPS_HTML = (
     "4. Create it, generate the key, and paste it below. "
     f'(<a href="{CREATE_KEY_URL}">Esri\'s instructions</a>)'
 )
+UPDATES_HELP = (
+    "About five seconds after the app opens, at most once a day, it asks GitHub "
+    "whether a newer version exists and shows a notice if one does. "
+    "Help > Check for Updates always checks."
+)
+
 ESRI_NOTE = (
     "The key is saved in this app's settings on this computer. Esri's free plan "
     "includes a monthly allowance of map tiles; your ArcGIS dashboard shows how "
@@ -70,16 +77,18 @@ ESRI_NOTE = (
 
 class SettingsDialog(QDialog):
     """
-    The Settings window. After Save, keep_backups() and esri_key() hold the
-    chosen values (esri_key() is "" for no key).
+    The Settings window. After Save, keep_backups(), esri_key(), and
+    check_updates() hold the chosen values (esri_key() is "" for no key).
     """
 
-    def __init__(self, parent: QWidget, *, keep_backups: bool, esri_key: str) -> None:
+    def __init__(
+        self, parent: QWidget, *, keep_backups: bool, esri_key: str, check_updates: bool = True
+    ) -> None:
         super().__init__(parent)
         self.setWindowTitle("Settings")
         self.setFixedWidth(600)
         # The values the window opened with: Save is off until one changes.
-        self._initial = (keep_backups, esri_key.strip())
+        self._initial = (keep_backups, esri_key.strip(), check_updates)
 
         # --- Backups ---
         backups_group = QGroupBox("Backups")
@@ -93,6 +102,19 @@ class SettingsDialog(QDialog):
         backups_help.setWordWrap(True)
         backups_layout.addWidget(self.keep_backups_check)
         backups_layout.addWidget(backups_help)
+
+        # --- Updates ---
+        updates_group = QGroupBox("Updates")
+        updates_layout = QVBoxLayout(updates_group)
+        self.check_updates_check = QCheckBox("Check for updates when the app starts")
+        self.check_updates_check.setChecked(check_updates)
+        self.check_updates_check.toggled.connect(self._update_buttons)
+        self.check_updates_check.setToolTip(UPDATES_HELP)
+        updates_help = QLabel(UPDATES_HELP)
+        updates_help.setObjectName("settingsHelp")
+        updates_help.setWordWrap(True)
+        updates_layout.addWidget(self.check_updates_check)
+        updates_layout.addWidget(updates_help)
 
         # --- Esri Satellite ---
         esri_group = QGroupBox("Esri Satellite Map")
@@ -150,6 +172,7 @@ class SettingsDialog(QDialog):
         layout = QVBoxLayout(self)
         layout.setSpacing(12)
         layout.addWidget(backups_group)
+        layout.addWidget(updates_group)
         layout.addWidget(esri_group)
         layout.addLayout(buttons)
         self._update_buttons()
@@ -163,10 +186,13 @@ class SettingsDialog(QDialog):
     def esri_key(self) -> str:
         return self.esri_key_input.text().strip()
 
+    def check_updates(self) -> bool:
+        return self.check_updates_check.isChecked()
+
     def _update_buttons(self) -> None:
         self.remove_key_button.setEnabled(bool(self.esri_key_input.text().strip()))
         if hasattr(self, "save_button"):
-            changed = (self.keep_backups(), self.esri_key()) != self._initial
+            changed = (self.keep_backups(), self.esri_key(), self.check_updates()) != self._initial
             self.save_button.setEnabled(changed)
             self.save_button.setToolTip(
                 "Save these settings" if changed else "Nothing has changed yet"

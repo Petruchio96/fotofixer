@@ -7,17 +7,15 @@ and remove finished items.
 
 ## Order
 
-1. **Improvements and fixes** (now, below). Small branches, released as
-   1.6.x or 1.7.x.
-2. **Rename the app** (below), one branch. "Photo GPS Editor" no longer fits:
-   it edits dates and times too. Do it before the update checker, which
-   builds the download file names into the app. The Windows installer
-   (`packaging/windows_installer.iss`, shipped in 1.7.0) also carries the
-   name (install folder, shortcuts, setup file name); its fixed `AppId`
-   keeps upgrades working across the rename.
-3. **In-app update checker** (Part 2), one branch. The installer it needs
-   for one-click Windows updates exists.
-4. **Docker/web version** (Part 3), 4–5 branches, once the desktop features
+1. **Rename the app** (below), one branch. "Photo GPS Editor" no longer fits:
+   it edits dates and times too. The update checker (1.8.0) finds each
+   download by name, so the rename must also change the names in
+   `core/updates.py` (`RELEASE_ASSETS`), `.github/workflows/build.yml`, and
+   the installer (`packaging/windows_installer.iss`: install folder,
+   shortcuts, setup file name; its fixed `AppId` keeps upgrades working).
+   Copies already out there look for the old names, so keep those for one
+   release (or teach the checker both) so they can still update themselves.
+2. **Docker/web version** (Part 3), 4–5 branches, once the desktop features
    have settled. Part 4 checks that the DS920+ can run it. When it's done,
    the app is feature complete: **version 2.0**.
 
@@ -31,27 +29,16 @@ Not scheduled:
 
 ## Versions
 
-- 1.6.1 (2026-10-11) is the latest release. 1.6.2 (merged, unreleased)
-  is skipped as a release: the next release is 1.7.0.
-- Until the Docker/web version is done, versions stay 1.x: **1.6.x** for
-  fixes and small improvements, **1.7.x** when a branch adds something
-  bigger (for example the rename or the update checker).
+- 1.7.0 (2026-10-12) is the latest release. 1.8.0 (branch `update-checker`,
+  the in-app update checker) releases when it merges.
+- Until the Docker/web version is done, versions stay 1.x: **1.8.x** for
+  fixes and small improvements, **1.9.0** for the rename.
   The usual rules in `CLAUDE.md` still decide whether a branch gets a bump
   at all.
+- A release is never its own branch or PR. The branch that bumps the version
+  is the release: merge its PR, tag, notes, publish (`RELEASE_CHECKLIST.md`).
 - **2.0** marks the Docker/web version: the desktop app plus the browser
   version on the NAS, feature complete.
-
----
-
-## Now: improvements and fixes
-
-1.6.1 is released. Merged since, not released: **Change Time Zone** (PR #15,
-bumped to 1.6.2) and the first **Windows polish** fixes (PR #16). 1.6.2 will
-not be released on its own: branch `windows-polish-2` (Windows polish part 2,
-the safer zone fallback, the CI release download fix, the Windows installer,
-version **1.7.0**)
-releases everything since 1.6.1 once it is merged and tagged (see
-`RELEASE_CHECKLIST.md`). Nothing else is queued before the rename.
 
 ---
 
@@ -80,190 +67,6 @@ What the name touches (about 50 places outside the tests):
   old address).
 - **Release notes** for the version that renames it: say what the app used
   to be called, so people find it.
-
----
-
-## Part 2: In-app update checker
-
-**Goal:** the app tells you when a newer release is on GitHub.
-
-- **Windows installed copy:** one click downloads the new `Setup.exe`, checks
-  it, installs it silently, and reopens the app.
-- **Everything else** (macOS, Linux, running from source):
-  the app shows what's new and opens the download page.
-
-This is to-do item #3. One-click updating depends on the Windows installer,
-which exists (`packaging/windows_installer.iss`): it installs per user to
-`%LOCALAPPDATA%\Programs\Photo GPS Editor`, puts `unins000.exe` next to the
-exe, is named `photo-gps-editor-windows-x86_64-setup.exe` on every release,
-and after a silent install reopens the app (a `[Run]` entry with
-`skipifnotsilent`; `RestartApplications` is off, so nothing starts it twice).
-
-### How the check works
-
-- It calls GitHub's public API:
-  `GET https://api.github.com/repos/Petruchio96/photo-gps-editor/releases/latest`
-  - The repo is public, so no token is needed. Unauthenticated calls are
-    limited to 60 an hour per IP, which is far more than needed.
-  - This endpoint skips **drafts and pre-releases**. CI's draft releases stay
-    invisible until you press Publish, so publishing a release is what
-    "ships" it to users. Add that to `RELEASE_CHECKLIST.md`.
-  - Today's response contains `tag_name` (`v1.4.1`), `name`, `body` (the
-    release notes, in Markdown), `html_url`, and `assets[]`. Each asset has a
-    `name`, `browser_download_url`, `size`, and `digest` (`sha256:…`).
-- It compares `tag_name` with `APP_VERSION` (`gui/main_window.py`). The comparison is numeric, (1, 10, 0) > (1, 9, 2),
-  never a text comparison.
-- **When it checks:**
-  - Automatically, about 5 s after startup, so it doesn't compete with
-    loading photos. At most **once a day**: a QSettings timestamp records the
-    last check.
-  - On demand from the new **Help > Check for Updates…**, which always checks.
-  - Turning off the automatic check: an **"Check for updates when the app
-    starts"** checkbox in Edit > Settings, new "Updates" group, on by
-    default. The menu item always works.
-- **Network:** `QNetworkAccessManager` on the GUI thread, the same pattern as
-  the map's `NetworkTileFetcher` (`gui/widgets/map_view.py`). There is no
-  background thread, so the Windows queued-signal crash can't happen.
-  - Send a `User-Agent` (GitHub requires one) and
-    `Accept: application/vnd.github+json`.
-  - Use a 10 s transfer timeout.
-- **Failures:**
-  - The automatic check stays silent on any failure (offline, rate limited,
-    or 404 because there are no releases yet). It writes one line to the
-    error log.
-  - A manual check says "Couldn't reach GitHub. Check your connection and
-    try again."
-
-### What you see
-
-- **Update found by the automatic check:** an orange notice bar at the top of
-  the main window. Orange because something new is available. It doesn't
-  block anything:
-  > **Version 1.7.0 is available** (you have 1.6.1) · `What's New` ·
-  > `Update` (or `Download` off Windows) · `Skip This Version` · `✕`
-
-  - `Skip This Version` stores the tag. The bar stays hidden until an even
-    newer version appears.
-  - `✕` hides it until the next day's check.
-- **Help > Check for Updates…:** a small window, opened with `open()` rather
-  than `exec()`. It shows either:
-  - "You're up to date (1.6.1)", or
-  - the new version, its release notes (`QLabel` with Markdown, scrollable),
-    and the same buttons.
-- **New buttons get hover hints**, which the existing test enforces. Example:
-  "Download version 1.7.0, install it, and restart the app."
-
-### What "Update" does on each system
-
-| Running from | How detected | Button | Action |
-|---|---|---|---|
-| Windows, installed | frozen + `unins000.exe` next to the exe | **Update** | download setup → verify → run silently → app quits → setup reopens it |
-| macOS `.app` | frozen + darwin | **Download** | open the release page. Replacing an unsigned `.app` in place causes quarantine problems, so it isn't worth it |
-| Linux AppImage / tarball | frozen + linux | **Download** | open the release page |
-| Source (`python app.py`) | not frozen | — | notice only ("pull the latest code") |
-
-### Windows one-click update in detail
-
-1. **Download.**
-   - Choose the asset named exactly
-     `photo-gps-editor-windows-x86_64-setup.exe`.
-   - Only accept a download URL that is `https://` on `github.com` or
-     `objects.githubusercontent.com`, including redirects. GitHub redirects
-     downloads to its CDN.
-   - Download with `QNetworkAccessManager` into
-     `%TEMP%\Photo GPS Editor update\`, showing progress in the window, with
-     a Cancel button.
-2. **Verify.**
-   - The file's size must match the asset's `size`.
-   - Its SHA-256 must match the asset's `digest`.
-   - If either check fails, delete the file and show "The download was
-     damaged. Try again."
-   - This also stands in for code signing. The app downloads the file itself,
-     so it gets no Mark-of-the-Web and SmartScreen doesn't block the silent
-     install.
-3. **Install.**
-   - Start
-     `setup.exe /SILENT /SP- /NOCANCEL /CLOSEAPPLICATIONS`
-     as a detached process.
-   - Then quit the app normally: close the ExifTool process and save
-     settings.
-   - Setup waits for the app to close, upgrades in place (the same `AppId`),
-     and relaunches it through the `skipifnotsilent` `[Run]` entry.
-4. **Unsaved work.** Before step 3, if a write is still running, the Update
-   button waits or is disabled ("Finish the current change first"). The undo
-   history is lost on restart, and the window says so.
-
-### Code layout (follows the core/services/gui rules)
-
-- **New `core/updates.py`:** pure Python, no Qt, so it is unit-testable and
-  the web version can reuse it. It contains:
-  - `parse_version("v1.6.1") -> (1, 6, 1)` and `is_newer(latest, current)`
-  - `parse_release(json_dict) -> ReleaseInfo(version, tag, title, notes,
-    page_url, assets)`
-  - `pick_asset(release, platform, install_kind) -> Asset | None`
-  - `is_trusted_download_url(url)`
-  - `verify_file(path, size, digest)`
-  - `INSTALLER_ASSET_NAME`, which CI and the `.iss` file also use
-- **New `gui/update_checker.py`:**
-  - `UpdateChecker(QObject)`: fetch, the once-a-day rule, skip-version, and
-    the result callback
-  - `UpdateDownloader`: download, progress, verify, launch the installer
-  - `install_kind()`: installed / portable / mac / linux / source
-  - A fetcher can be injected, like `TileFetcher`, so tests never use the
-    network.
-- **New `gui/widgets/update_dialog.py`:** the notice bar and the Check for
-  Updates window.
-- **`gui/main_window.py`:**
-  - the Help menu item
-  - start the delayed automatic check
-  - QSettings keys: `updates/check_on_start`, `updates/last_check`,
-    `updates/skipped_version`
-- **`gui/widgets/settings_dialog.py`:** the "Updates" group with its
-  checkbox.
-- **Testing hook:** the environment variable
-  `PHOTO_GPS_EDITOR_PRETEND_VERSION=1.0.0` overrides the version the checker
-  compares against. You can then test against the real latest release
-  without making a fake one.
-
-### Tests
-
-- `tests/test_updates.py` (`core`):
-  - version parsing and ordering (1.10 > 1.9, a missing patch number, a
-    leading `v`, bad tags ignored)
-  - parsing a saved copy of today's real API response
-  - asset choice for each platform and install kind
-  - the URL allowlist
-  - digest checks
-- GUI tests with a fake fetcher:
-  - the bar appears for a newer version and stays hidden for the same or an
-    older one
-  - Skip, and the once-a-day rule
-  - a manual check while offline shows the message
-  - the Update vs Download label for each install kind
-  - hover hints are present
-- The silent-install step is checked by hand in the Windows VM (below).
-
-### Verification (end to end)
-
-1. Release a version with the checker (the installer shipped in 1.7.0) and
-   install it on Windows with Setup.
-2. Run it with `PHOTO_GPS_EDITOR_PRETEND_VERSION=1.0.0`. The bar should offer
-   1.7.0. Click Update: it downloads, verifies, closes, and reopens, with
-   settings kept.
-3. For the real test, publish the next version. The VM copy updates itself
-   with one click.
-4. On Linux, run the AppImage the same way: the bar offers Download, which
-   opens the release page.
-
-### Rollout notes
-
-- **Old copies can't update themselves.** Copies older than the first version
-  with the checker can't notice anything. Install that version by hand once,
-  with Setup on Windows. After that, updates are one click.
-- **Keep asset names stable.** The checker finds downloads by name. Add a
-  test, or a comment in `build.yml`, that ties the names to `core/updates.py`.
-- **Version bump.** This is a significant feature, so suggest a version bump
-  in this PR.
 
 ---
 
@@ -370,24 +173,62 @@ Browser (PC, Mac, or iPad on LAN)
     `/volume1/docker/photo-gps-editor:/config`
   - `mem_limit: 512m`
   - `restart: unless-stopped`
-- **CI:** a new job builds `linux/amd64` (the J4125 is x86-64, so no ARM build
-  is needed). On `v*` tags it pushes to GHCR
-  (`ghcr.io/petruchio96/photo-gps-editor`). Container Manager pulls it from
-  there.
+- **CI:** a new workflow (`.github/workflows/docker.yml`) builds
+  `linux/amd64` (the J4125 is x86-64, so no ARM build is needed) and pushes
+  it to GHCR as `ghcr.io/petruchio96/photo-gps-editor` with the tags
+  `latest`, `X.Y`, and `X.Y.Z`. It runs when a GitHub release is
+  **published** (`on: release: types: [published]`, pre-releases skipped;
+  plus `workflow_dispatch` with a tag input), not on the `v*` tag: the tag
+  build makes the draft, and publishing the release is the one act that
+  ships the desktop files (which the update checker sees) and the image at
+  the same time. Steps: checkout at the release tag, `docker/login-action`
+  to ghcr.io with `GITHUB_TOKEN` (`permissions: packages: write`),
+  `docker/metadata-action` for the tags, `docker/build-push-action` with
+  `file: docker/Dockerfile`. The Dockerfile sets
+  `PHOTO_GPS_EDITOR_CONTAINER=1`, which `core/updates.py` reads as the
+  install kind `CONTAINER`.
 
 ### Updates for the container
 
-The desktop updater doesn't apply here. You update the container by pulling
-the new image: Container Manager > Project > stop, pull, start. The web page
-can reuse `core/updates.py` to show a "version X is available" notice and link
-to these steps.
+Containers don't update themselves; this one follows the usual practice:
+
+- **The image carries the versions.** Each published release pushes
+  `latest`, `X.Y`, and `X.Y.Z` to GHCR (above). Synology Container Manager
+  checks downloaded images against the registry and shows its own "update
+  available" badge and notification; the update is then Project > Action >
+  Stop, pull the image, Build/Start (or `docker compose pull && docker
+  compose up -d` from a shell).
+- **The web page says so too.** Once a day the server asks GitHub for the
+  latest release with `core/updates.py` (`parse_release`, `is_newer`;
+  `urllib`, cached a day) and the page shows the same orange notice as the
+  desktop app, with "How to update" opening those steps. The install kind is
+  `CONTAINER`, so there is no Update button, only the notice.
+- **Automatic pulls, if wanted.** `compose.yaml` ships a commented-out
+  Watchtower sidecar, scoped by label so turning it on updates only this
+  container and never Vaultwarden or anything else on the NAS:
+
+  ```yaml
+  services:
+    photo-gps-editor:
+      image: ghcr.io/petruchio96/photo-gps-editor:latest
+      labels:
+        - com.centurylinklabs.watchtower.enable=true
+    # Uncomment to pull new versions automatically (checks once a day).
+    # watchtower:
+    #   image: containrrr/watchtower
+    #   volumes:
+    #     - /var/run/docker.sock:/var/run/docker.sock
+    #   command: --label-enable --cleanup --interval 86400
+    #   restart: unless-stopped
+  ```
 
 ### Phases (one branch/PR each)
 
 1. **Web skeleton, read-only.**
    - `web/app.py` (FastAPI), the folder-browse API, photo-list API,
      thumbnails, and GPS display
-   - Dockerfile and compose
+   - Dockerfile, compose, and the `docker.yml` workflow that publishes the
+     image (above), so Container Manager can pull it from GHCR
    - **Deploy to the NAS at this point** and measure speed and memory on real
      CR3 folders before building more.
 2. **Editing.**
@@ -403,7 +244,6 @@ to these steps.
    - auth option
    - iPad touch pass (test in Safari on an iPad)
    - error log viewer
-   - CI image publish
    - README section for installing on Synology
 
 ### Small prep refactors (only if the web layer needs them)

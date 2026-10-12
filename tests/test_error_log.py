@@ -54,6 +54,15 @@ class ErrorLogTests(unittest.TestCase):
         error_log._open_message.done(0)
         self.assertIsNone(error_log._open_message)
 
+    def test_log_writes_a_note_without_a_pop_up(self) -> None:
+        shown = []
+        with patch.object(error_log, "log_path", return_value=self.log),                 patch.object(error_log.QMessageBox, "show", new=lambda dialog: shown.append(dialog)),                 patch.object(sys, "__stderr__", None):
+            error_log.install()
+            error_log.log("Update check: offline")
+
+        self.assertIn("Update check: offline", self.log.read_text(encoding="utf-8"))
+        self.assertEqual(shown, [])
+
     def test_qt_messages_are_logged(self) -> None:
         with patch.object(error_log, "log_path", return_value=self.log), \
                 patch.object(sys, "__stderr__", None):

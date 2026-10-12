@@ -61,5 +61,8 @@ plans live only in `docs/ROADMAP.md`.
   incremental improvements don't get a version bump; their changes ship with the
   next version. When a branch does qualify, suggest the bump and put it in the
   same PR.
+- A release is never its own branch or PR (that wastes a CI run and a review).
+  The branch that bumps the version is the release: merge its PR, tag `main`,
+  add the notes to CI's draft, publish (`RELEASE_CHECKLIST.md`, Publish).
 - Version bumps touch `pyproject.toml`, `APP_VERSION` in `gui/main_window.py`,
   and the `PROJECT_CONTEXT.md` snapshot (`README.md` has no version number).

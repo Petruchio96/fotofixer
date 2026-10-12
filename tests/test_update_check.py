@@ -27,7 +27,7 @@ from core.updates import (
     InstallKind,
 )
 from gui import update_checker
-from gui.main_window import MainWindow
+from gui.main_window import APP_VERSION, MainWindow
 from gui.update_checker import (
     CHECK_ON_START_SETTING,
     DOWNLOAD_CANCELLED,
@@ -152,7 +152,7 @@ class UpdateCheckTests(unittest.TestCase):
         banner = self.window.update_banner
         self.assertTrue(banner.isVisible())
         self.assertIn("Version 9.0.0 is available", banner.text_label.text())
-        self.assertIn("you have 1.8.0", banner.text_label.text())
+        self.assertIn(f"you have {APP_VERSION}", banner.text_label.text())
         self.assertEqual(banner.action_button.text(), "Update")
         self.assertIn("install it", banner.action_button.toolTip())
         self.assertEqual(self.fetcher.release_requests, [updates.LATEST_RELEASE_API_URL])
@@ -160,7 +160,7 @@ class UpdateCheckTests(unittest.TestCase):
             self.assertTrue(button.toolTip(), button.text())
 
     def test_banner_stays_hidden_for_the_same_or_an_older_version(self) -> None:
-        for tag in ("v1.8.0", "v1.0.0"):
+        for tag in (f"v{APP_VERSION}", "v1.0.0"):
             self.fetcher.body = release_json(tag)
             self.settings.remove(LAST_CHECK_SETTING)
             self._automatic_check()
@@ -258,11 +258,11 @@ class UpdateCheckTests(unittest.TestCase):
         self.assertLess(actions.index(self.window.check_updates_action), actions.index(self.window.about_action))
 
     def test_manual_check_shows_up_to_date(self) -> None:
-        self.fetcher.body = release_json("v1.8.0")
+        self.fetcher.body = release_json(f"v{APP_VERSION}")
         self.window.check_for_updates()
         dialog = self._dialog()
         self.assertTrue(dialog.isVisible())
-        self.assertIn("up to date (version 1.8.0)", dialog.headline.text())
+        self.assertIn(f"up to date (version {APP_VERSION})", dialog.headline.text())
         self.assertFalse(dialog.action_button.isVisible())
         self.assertFalse(self.window.update_banner.isVisible())
 

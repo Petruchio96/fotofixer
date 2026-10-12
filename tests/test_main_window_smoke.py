@@ -1553,6 +1553,31 @@ class MainWindowSmokeTests(unittest.TestCase):
             self.window.undo_gps_edit()
         self.assertFalse(backup.is_file())
 
+    def test_undo_never_makes_a_backup(self) -> None:
+        # A photo without GPS gets a location (no backup: nothing to lose).
+        # Undoing it removes that location, which with backups on used to
+        # "back up" the location being removed as <name>_original.
+        writer = self.window.exiftool
+        writer.keep_backups = True
+        backups_on_while = {}
+        clear_gps = writer.clear_gps
+
+        def recording_clear(path):
+            backups_on_while["clear"] = writer.keep_backups
+            clear_gps(path)
+
+        writer.clear_gps = recording_clear
+        self.window.select_browser_paths([self.paths[0]])
+        self._set_location(*self.location)
+        self.window.apply_coordinates_to_selected()
+
+        with patch.object(Path, "exists", return_value=True):
+            self.window.undo_gps_edit()
+
+        self.assertEqual(backups_on_while, {"clear": False})
+        # Back on afterwards, for the next change.
+        self.assertTrue(writer.keep_backups)
+
     def test_undo_leaves_older_backups_alone(self) -> None:
         temp_dir = tempfile.TemporaryDirectory()
         self.addCleanup(temp_dir.cleanup)

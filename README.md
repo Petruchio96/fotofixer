@@ -4,7 +4,7 @@ This project was written almost entirely by AI, with human direction, testing, a
 
 Photo GPS Editor is a desktop application for viewing, copying, applying, and clearing GPS metadata in photo files, and for fixing their dates and times. It is designed for workflows where you have photos without coordinates and want to copy GPS data from another photo or enter coordinates manually.
 
-The app supports JPG thumbnails, selected RAW formats, grouped browsing of photos with and without GPS data, GPS badges on already-tagged photos, overwrite warnings, and single-step undo/redo for GPS edits made during the current session.
+The app supports the photos cameras and phones make (JPG, iPhone HEIC, and RAW files from Canon, Nikon, Sony, Fujifilm, Olympus, Panasonic, Pentax, Samsung, and DNG), grouped browsing of photos with and without GPS data, GPS badges on already-tagged photos, overwrite warnings, and single-step undo/redo for GPS edits made during the current session.
 
 ## What It Does
 

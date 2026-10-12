@@ -43,7 +43,7 @@ from services.gps_edit_history import EDIT_DATE, EDIT_GPS, GpsEditHistory, Photo
 from services.models import OverwriteEntry, WorkflowSession
 from services.workflow_facade import PhotoWorkflowFacade
 
-APP_VERSION = "1.8.0"
+APP_VERSION = "1.9.0"
 
 # QSettings key for the "Keep Backup Copies of Originals" option.
 KEEP_BACKUPS_SETTING = "keep_backup_copies"
@@ -481,7 +481,8 @@ class MainWindow(
             self._report_write_failures(f"undo the {what} change for", failed_paths)
             self._set_status_message(f"{what[0].upper()}{what[1:]} change undone.", "info")
 
-        self._restore_edit_states(states, f"Undoing the {what} change", done)
+        # Undo puts the photos back: it never backs up the version it's undoing.
+        self._restore_edit_states(states, f"Undoing the {what} change", done, make_backups=False)
 
     def redo_gps_edit(self) -> None:
         states = self.gps_history.redo_states()
@@ -500,21 +501,24 @@ class MainWindow(
 
         self._restore_edit_states(states, f"Redoing the {what} change", done)
 
-    def _restore_edit_states(self, states: dict, text: str, on_done) -> None:
+    def _restore_edit_states(self, states: dict, text: str, on_done, *, make_backups: bool = True) -> None:
         """
         Write the remembered states back, GPS or dates (see gps_history.kind),
-        then on_done(failure messages, backups made).
+        then on_done(failure messages, backups made). make_backups False:
+        no backup copies even with Keep Backup Copies of Originals on (undo).
         """
         if self.gps_history.kind == EDIT_DATE:
-            self._restore_date_states(states, text, on_done)
+            self._restore_date_states(states, text, on_done, make_backups=make_backups)
         else:
-            self._restore_gps_states(states, text, on_done)
+            self._restore_gps_states(states, text, on_done, make_backups=make_backups)
 
     def _restore_gps_states(
         self,
         states: dict[Path, tuple[float | None, float | None]],
         text: str,
         on_done,
+        *,
+        make_backups: bool = True,
     ) -> None:
         self._restore_states(
             text,
@@ -525,15 +529,22 @@ class MainWindow(
                 on_progress=progress,
             ),
             on_done,
+            make_backups=make_backups,
         )
 
-    def _restore_states(self, text: str, total: int, write, on_done) -> None:
+    def _restore_states(self, text: str, total: int, write, on_done, *, make_backups: bool = True) -> None:
         """
         Write remembered states back to files in the background (write does
         it; see _run_writes), and put the photo list back the way it was
         when the edit was made. Then on_done(failure messages, the backups
         the writes made, which are added to the list).
+
+        make_backups False (undo): no backup copies even with Keep Backup
+        Copies of Originals on. Otherwise undoing a location added to a photo
+        without GPS "backed up" the location being removed.
         """
+        if not make_backups:
+            write = self._without_backups(write)
         # A load still running would replace the list put back here.
         self.cancel_loading()
         snapshot = self.gps_history.photo_list
@@ -558,6 +569,25 @@ class MainWindow(
             on_done(list(result.execution_result.failed_paths), backups)
 
         self._run_writes(text, total, write, done)
+
+    def _without_backups(self, write):
+        """
+        write with the writer's backups switched off while it runs (on the
+        background thread), then switched back. Input is blocked meanwhile
+        (see _run_writes), so Settings can't change the option at the same
+        time.
+        """
+        writer = self.workflow.writer
+
+        def run(progress):
+            keep = getattr(writer, "keep_backups", False)
+            writer.keep_backups = False
+            try:
+                return write(progress)
+            finally:
+                writer.keep_backups = keep
+
+        return run
 
     def _run_writes(self, text: str, total: int, write, on_done) -> None:
         """

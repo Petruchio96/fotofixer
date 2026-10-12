@@ -46,7 +46,8 @@ the merge, then tag and publish right after it.
 
 ## Photo List
 
-- [ ] JPG, CR2, CR3, and DNG photos load with real thumbnails (portrait
+- [ ] JPG, HEIC (an iPhone photo), CR2, CR3, and DNG photos load with real
+      thumbnails, and the other RAW formats are listed by the picker (portrait
       photos the right way up).
 - [ ] Photos with GPS show the blue pin badge; the Show filter (All, Needs
       GPS, Has GPS) and Only Show Selected Photos work.
@@ -80,7 +81,7 @@ the merge, then tag and publish right after it.
       Keep the clock time on (after its pop-up), only the zone changes
       (11:16 MDT → 11:16 CDT). Step 2 folds up to the choice and opens again
       when clicked.
-- [ ] Date writes work on JPG, CR3, CR2, and DNG; the photos open normally
+- [ ] GPS and date writes work on JPG, HEIC, CR3, CR2, and DNG; the photos open normally
       in another program afterwards and show the new date.
 - [ ] Time zones: named zones with abbreviations; the default comes from the
       selected photos; changing the zone converts the time; the zone is red

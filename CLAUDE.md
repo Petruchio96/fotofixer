@@ -1,7 +1,8 @@
 # Photo GPS Editor
 
 Python + PySide6 desktop app for viewing and editing GPS metadata and dates in
-photos (JPG, CR2, CR3, DNG) through ExifTool. Runs on Linux Mint, Windows 11, and
+photos (JPG, HEIC, and camera RAW: CR2, CR3, DNG, NEF, ARW, RAF, ORF, RW2,
+PEF, SRW) through ExifTool. Runs on Linux Mint, Windows 11, and
 macOS (Apple Silicon).
 
 Read `PROJECT_CONTEXT.md` before starting work. It is the source of truth for

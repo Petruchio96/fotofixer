@@ -120,6 +120,25 @@ the latest *published* release.
 - [ ] Skip This Version hides the bar until a newer version; ✕ hides it for
       this session; the Settings checkbox turns the start-up check off.
 
+## Web Version (the Container)
+
+Run the branch's build locally (`docker/check_container.sh`, or
+`docker compose -f docker/compose.yaml up -d` with a locally built image)
+and open it on `http://127.0.0.1:8080`; for the folder picker and saving
+in place, Chrome or Edge on that address. The version check and the
+publishing workflow are tested by `tests/test_docker_publish.py`.
+
+- [ ] Settings shows the new version (`web/app/version.js` matches
+      `pyproject.toml`).
+- [ ] Chrome or Edge: Open a Folder, GPS and date changes save in place,
+      backups and Undo work. Firefox: changed photos download (one file, or
+      a zip for several).
+- [ ] Safari on a Mac or an iPad (download mode): the page loads (Pyodide
+      and ExifTool), HEIC thumbnails show, photos can be added and changed,
+      and the download works.
+- [ ] The container checks pass (`docker/check_container.sh`): headers, the
+      WebAssembly type, the password on and off.
+
 ## Publish
 
 - [ ] Merge the branch's PR (the one with the version bump).
@@ -128,5 +147,13 @@ the latest *published* release.
       downloads against them).
 - [ ] Release notes added; title "Version X.Y" (or "Version X.Y.Z").
 - [ ] Publish the draft and mark it latest. Publishing is what ships it:
-      the in-app update check only sees published releases (and, later, the
-      Docker image is built from the published release).
+      the in-app update check only sees published releases, and the
+      "Publish container image" workflow builds the image from the
+      published release.
+- [ ] The image: the workflow run is green and
+      `ghcr.io/petruchio96/fotofixer` has the tags `X.Y.Z`, `X.Y`, and
+      `latest`. The first time only: open the package on GitHub (Packages
+      on the profile page) and set its visibility to public, and link it
+      to the repository, so `docker pull` works without a login.
+- [ ] Pull the new image on the NAS (`docs/SELF_HOSTING.md`, "Updating on
+      Synology") and open the shared address once.

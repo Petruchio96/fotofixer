@@ -29,6 +29,26 @@ The app supports the photos cameras and phones make (JPG, iPhone HEIC, and RAW f
   also puts the photo list back the way it was).
 - Optionally keep a backup copy of each original file (Edit > Settings > Keep Backup Copies of Originals).
 
+## In the Browser (the Docker Version)
+
+The same app also runs in a browser, served by one small container that
+anyone can host: open its address, add photos from your computer, and fix
+their location and dates. ExifTool runs as WebAssembly inside the browser,
+so **photos never leave your computer**; the server only serves the page
+and stores nothing. Chrome and Edge save the changed photos back into the
+folder you opened; Safari and Firefox (and an iPad) download them instead.
+
+To host it, see [docs/SELF_HOSTING.md](docs/SELF_HOSTING.md): the image is
+`ghcr.io/petruchio96/fotofixer`, and the guide covers a Synology NAS,
+Docker with Caddy, Traefik, and the optional shared password. To run it on
+your own machine:
+
+```bash
+docker run -d --rm -p 127.0.0.1:8080:8080 ghcr.io/petruchio96/fotofixer
+```
+
+Then open http://127.0.0.1:8080.
+
 ## Local Development Instructions
 
 Requirements:

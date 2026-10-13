@@ -1,0 +1,125 @@
+# Publish the web version's container image to GitHub Container Registry
+# (docs/ROADMAP.md, Part 3, "Publishing the image").
+#
+# - When a GitHub release is *published* (not a draft, not a pre-release):
+#   builds docker/Dockerfile for linux/amd64 and linux/arm64 at the release's
+#   tag and pushes ghcr.io/petruchio96/fotofixer with the tags X.Y.Z, X.Y,
+#   and latest. Publishing the release is the one step that ships both the
+#   desktop downloads (the in-app update check sees only published releases)
+#   and the image. The v* tag push itself only makes the draft (build.yml).
+# - Every push to main that touches the web version: the same build tagged
+#   "edge", so a NAS can try a build before it is released.
+# - "Run workflow" on the Actions tab rebuilds a given tag (for example after
+#   a change to this workflow), and can move "latest" to it.
+#
+# The image carries its version (the OCI labels from docker/metadata-action
+# and the tags), which is what Container Manager and Watchtower compare.
+# Nothing in it is secret: it is the static files of web/ and nginx.
+
+name: Publish container image
+
+on:
+  release:
+    types: [published]
+  push:
+    branches: [main]
+    paths:
+      - "web/**"
+      - "docker/**"
+      - "core/**"
+      - "services/**"
+      - "gui/presenters/**"
+      - "packaging/fetch_web_vendor.py"
+      - ".github/workflows/docker.yml"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to build (for example v1.10.0)"
+        required: true
+        type: string
+      latest:
+        description: "Also move the latest tag to this build"
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  packages: write
+
+# A newer push to main cancels an older edge build still running; release
+# builds never cancel each other (one per tag).
+concurrency:
+  group: docker-${{ github.event_name == 'push' && 'edge' || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'push' }}
+
+env:
+  IMAGE: ghcr.io/petruchio96/fotofixer
+
+jobs:
+  publish:
+    name: Build and push
+    # Pre-releases are not shipped (the desktop update check skips them too).
+    if: github.event_name != 'release' || !github.event.release.prerelease
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # A release event checks out its tag by default; a manual run
+          # checks out the tag typed in.
+          ref: ${{ inputs.tag || github.ref }}
+
+      # arm64 is built under emulation. Only the nginx stage is emulated:
+      # the Dockerfile's vendor stage runs on the build platform, since its
+      # output (downloaded WebAssembly, zipped Python) is the same for both.
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # The tags: X.Y.Z and X.Y from the release tag (semver skips "main"),
+      # latest only for a published release or when asked, edge for main.
+      - name: Work out the image tags
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE }}
+          flavor: latest=false
+          tags: |
+            type=semver,pattern={{version}},value=${{ inputs.tag || github.ref_name }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ inputs.tag || github.ref_name }}
+            type=raw,value=latest,enable=${{ github.event_name == 'release' || inputs.latest == true }}
+            type=edge,branch=main
+          labels: |
+            org.opencontainers.image.title=FotoFixer – When & Where
+            org.opencontainers.image.description=Edit the GPS location and dates of photos in your browser; photos never leave your computer.
+            org.opencontainers.image.licenses=MIT
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # Without this, buildx adds attestation manifests that show up as
+          # "unknown/unknown" platforms in the package's file list.
+          provenance: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Summary
+        run: |
+          {
+            echo "Pushed:"
+            echo '```'
+            echo "${{ steps.meta.outputs.tags }}"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

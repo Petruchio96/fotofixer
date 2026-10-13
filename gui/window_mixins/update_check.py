@@ -53,7 +53,7 @@ from gui.widgets.update_dialog import UpdateDialog
 # The automatic check waits until loading photos has had its turn.
 STARTUP_CHECK_DELAY_MS = 5000
 # Downloads go to the system's temp folder, in a folder of their own.
-UPDATE_DIR_NAME = "Photo GPS Editor update"
+UPDATE_DIR_NAME = "FotoFixer update"
 # What the installer or the update script did, next to the error log.
 UPDATE_LOG_NAME = "update-log.txt"
 
@@ -112,7 +112,7 @@ class UpdateCheckMixin:
         return NetworkUpdateFetcher(
             user_agent=(
                 f"PhotoGPSEditor/{self.app_version} "
-                "(+https://github.com/Petruchio96/photo-gps-editor)"
+                "(+https://github.com/Petruchio96/fotofixer)"
             ),
             parent=self,
         )

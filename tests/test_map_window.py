@@ -253,6 +253,16 @@ class MapWindowTests(unittest.TestCase):
         self.assertEqual(self._fields(), ("40.586500", "-111.655800"))
         self.assertFalse(map_window.preview.isVisible())
 
+    def test_use_this_location_is_off_for_a_photo_selected_to_change(self) -> None:
+        self.window.select_browser_paths([self.with_gps])
+        map_window = self._open_map()
+        dot = map_window.map_view.screen_point_for(*self.gps_by_path[self.with_gps]).toPoint()
+        QTest.mouseClick(map_window.map_view, Qt.LeftButton, Qt.NoModifier, dot)
+
+        self.assertTrue(map_window.preview.isVisible())
+        self.assertFalse(map_window.preview.use_button.isEnabled())
+        self.assertIn("selected to change", map_window.preview.use_button.toolTip())
+
     def test_map_always_opens_on_the_street_map(self) -> None:
         map_window = self._open_map()
         QTest.mouseClick(map_window.satellite_button, Qt.LeftButton)

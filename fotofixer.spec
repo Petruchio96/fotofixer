@@ -78,7 +78,7 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name="Photo GPS Editor",
+    name="FotoFixer",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -100,18 +100,18 @@ coll = COLLECT(
     strip=False,
     upx=False,
     upx_exclude=[],
-    name="Photo GPS Editor",
+    name="FotoFixer",
 )
 
 if sys.platform == "darwin":
     app = BUNDLE(
         coll,
-        name="Photo GPS Editor.app",
+        name="FotoFixer.app",
         icon=app_icon,
         bundle_identifier="io.github.petruchio96.photogpseditor",
         version=app_version,
         info_plist={
-            "CFBundleDisplayName": "Photo GPS Editor",
+            "CFBundleDisplayName": "FotoFixer",
             "CFBundleShortVersionString": app_version,
             "NSHighResolutionCapable": True,
         },

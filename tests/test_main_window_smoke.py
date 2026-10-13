@@ -80,7 +80,7 @@ class FakeThumbnailLoader:
 
 def _choosing(chosen):
     """Stand-in for _pick_photo_files / _pick_photo_file: "chooses" at once."""
-    return lambda _title, on_chosen: on_chosen(chosen)
+    return lambda _title, on_chosen, **_options: on_chosen(chosen)
 
 
 class MainWindowSmokeTests(unittest.TestCase):
@@ -259,10 +259,10 @@ class MainWindowSmokeTests(unittest.TestCase):
         self.assertTrue(link_label.openExternalLinks())
         self.assertGreaterEqual(link_label.minimumWidth(), 360)
         self.assertGreaterEqual(about_dialog.minimumWidth(), 520)
-        self.assertIn("Photo GPS Editor", link_label.text())
+        self.assertIn("FotoFixer", link_label.text())
         self.assertIn(APP_VERSION, link_label.text())
         self.assertIn(
-            '<a href="https://github.com/Petruchio96/photo-gps-editor">',
+            '<a href="https://github.com/Petruchio96/fotofixer">',
             link_label.text(),
         )
 
@@ -837,6 +837,96 @@ class MainWindowSmokeTests(unittest.TestCase):
         center = grid.visualItemRect(self._item_for(path)).center()
         QTest.mouseClick(grid.viewport(), button, Qt.NoModifier, center)
 
+    # --- A photo is the source or being changed, never both ---------------
+
+    def _two_with_gps(self) -> None:
+        self.gps_by_path[self.paths[0]] = (41.0, -112.0)
+        self.gps_by_path[self.paths[1]] = (42.0, -113.0)
+        self.window.populate_list()
+
+    def test_the_location_source_cannot_be_selected(self) -> None:
+        self._two_with_gps()
+        self._select_paths([self.paths[0]])
+        self.window.use_location_from_path(self.paths[0])
+
+        # Becoming the source deselected it; clicks and Select All skip it.
+        self.assertEqual(self.window.get_selected_paths(), [])
+        self._click_item(self.paths[0])
+        self.assertEqual(self.window.get_selected_paths(), [])
+        self.window.select_all_photos()
+        self.assertEqual(self.window.get_selected_paths(), [self.paths[1]])
+
+    def test_the_source_is_selectable_again_once_released(self) -> None:
+        self._two_with_gps()
+        for release in (
+            lambda: self.window.source_card_clear.click(),
+            lambda: self.window.clear_location_button.click(),
+            lambda: self.window.latitude_input.setText("40.1"),
+            lambda: self.window.use_location_from_path(self.paths[1]),
+        ):
+            with self.subTest():
+                self.window.list_widget.clearSelection()
+                self.window.use_location_from_path(self.paths[0])
+                release()
+                self._click_item(self.paths[0])
+                self.assertIn(self.paths[0], self.window.get_selected_paths())
+
+    def test_clicking_the_source_then_releasing_it_leaves_it_deselected(self) -> None:
+        # Clicking the source used to record a hidden selection that showed
+        # up once Clear (or another way) made it selectable again.
+        self._two_with_gps()
+        for release in (
+            lambda: self.window.clear_location_button.click(),
+            lambda: self.window.use_location_from_path(self.paths[1]),
+        ):
+            with self.subTest():
+                self.window.list_widget.clearSelection()
+                self.window.use_location_from_path(self.paths[0])
+                self._click_item(self.paths[0])
+                release()
+                self.assertNotIn(self.paths[0], self.window.get_selected_paths())
+
+    def test_a_selected_photo_cannot_be_picked_as_the_source(self) -> None:
+        self._two_with_gps()
+        self._select_paths([self.paths[0]])
+
+        self.window.start_picking_location()
+        self.assertEqual(self._item_for(self.paths[0]).data(PICK_DISABLED_ROLE), "Being Changed")
+        self.window.pick_location_from_item(self._item_for(self.paths[0]))
+        self.assertTrue(self.window.is_picking_location)
+        self.assertIsNone(self.window._location_source)
+
+        self.window.pick_location_from_item(self._item_for(self.paths[1]))
+        self.assertEqual(self.window._location_source, self.paths[1])
+
+    def test_pick_button_is_off_when_every_photo_with_gps_is_selected(self) -> None:
+        self.gps_by_path[self.paths[0]] = (41.0, -112.0)
+        self.window.populate_list()
+        self._select_paths([self.paths[0]])
+        self.assertFalse(self.window.pick_location_button.isEnabled())
+
+    def test_the_file_picker_offers_no_selected_photo(self) -> None:
+        self._two_with_gps()
+        self._select_paths([self.paths[0]])
+        options = {}
+
+        def picker(_title, _on_chosen, **kwargs):
+            options.update(kwargs)
+
+        with patch.object(self.window, "_pick_photo_file", side_effect=picker):
+            self.window.location_from_photo_button.click()
+
+        self.assertEqual(options["blocked"], {self.paths[0]})
+
+    def test_date_tab_time_source_stays_selectable(self) -> None:
+        # The Date & Time tab keeps its own rules: the location source is
+        # only off-limits on the Location tab.
+        self._two_with_gps()
+        self.window.use_location_from_path(self.paths[0])
+        self.window.editor_tabs.setCurrentIndex(1)
+        self.window.select_browser_paths([self.paths[0]])
+        self.assertIn(self.paths[0], self.window.get_selected_paths())
+
     def test_pick_from_grid_sets_source_without_changing_selection(self) -> None:
         self.gps_by_path[self.paths[1]] = (41.0, -112.0)
         self.window.populate_list()
@@ -1142,7 +1232,7 @@ class MainWindowSmokeTests(unittest.TestCase):
     def test_pick_button_is_off_when_no_photo_has_gps(self) -> None:
         button = self.window.pick_location_button
         self.assertFalse(button.isEnabled())
-        self.assertIn("No photos in the Photo List have GPS", button.toolTip())
+        self.assertIn("No photo in the Photo List has GPS", button.toolTip())
 
         self.window.start_picking_location()
         self.assertFalse(self.window.is_picking_location)

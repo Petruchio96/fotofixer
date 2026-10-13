@@ -38,7 +38,7 @@ from gui.update_checker import (
 )
 from gui.window_mixins import update_check
 
-PAGE_URL = "https://github.com/Petruchio96/photo-gps-editor/releases/tag/v9.0.0"
+PAGE_URL = "https://github.com/Petruchio96/fotofixer/releases/tag/v9.0.0"
 DOWNLOAD_DATA = b"setup " * 5000
 
 
@@ -49,7 +49,7 @@ def release_json(tag: str = "v9.0.0", *, data: bytes = DOWNLOAD_DATA, asset_url:
     for name in (WINDOWS_SETUP_ASSET, MACOS_ZIP_ASSET, LINUX_APPIMAGE_ASSET, LINUX_TARBALL_ASSET):
         assets.append({
             "name": name,
-            "browser_download_url": asset_url or f"https://github.com/Petruchio96/photo-gps-editor/releases/download/{tag}/{name}",
+            "browser_download_url": asset_url or f"https://github.com/Petruchio96/fotofixer/releases/download/{tag}/{name}",
             "size": len(data),
             "digest": digest,
         })
@@ -129,7 +129,7 @@ class UpdateCheckTests(unittest.TestCase):
         self.window._open_url = self.opened_urls.append
         # An installed Windows copy unless a test says otherwise.
         self.window._install_kind = InstallKind.WINDOWS_INSTALLED
-        self.window._install_target = self.root / "Photo GPS Editor.exe"
+        self.window._install_target = self.root / "FotoFixer.exe"
         self.window.show()
 
     def tearDown(self) -> None:
@@ -308,14 +308,14 @@ class UpdateCheckTests(unittest.TestCase):
     # --- what each copy is offered ---
 
     def test_button_per_install_kind(self) -> None:
-        writable_target = self.root / "apps" / "Photo_GPS_Editor-x86_64.AppImage"
+        writable_target = self.root / "apps" / "FotoFixer-x86_64.AppImage"
         writable_target.parent.mkdir()
         writable_target.write_bytes(b"old")
         cases = [
             (InstallKind.WINDOWS_INSTALLED, self.root / "x.exe", "Update", "install it"),
             (InstallKind.LINUX_APPIMAGE, writable_target, "Update", "replace this AppImage"),
             (InstallKind.LINUX_FOLDER, writable_target.parent, "Update", "replace the app's folder"),
-            (InstallKind.MAC_APP, self.root / "apps" / "Photo GPS Editor.app", "Update", "replace the app"),
+            (InstallKind.MAC_APP, self.root / "apps" / "FotoFixer.app", "Update", "replace the app"),
             (InstallKind.WINDOWS_PORTABLE, None, "Download", "run the new Setup"),
             (InstallKind.MAC_TRANSLOCATED, None, "Download", "Applications"),
             (InstallKind.LINUX_FOLDER, None, "Download", "laid out"),
@@ -378,7 +378,7 @@ class UpdateCheckTests(unittest.TestCase):
         self.assertEqual(len(self.spawned), 1)
 
     def test_posix_update_runs_the_script_detached(self) -> None:
-        target = self.root / "apps" / "Photo_GPS_Editor-x86_64.AppImage"
+        target = self.root / "apps" / "FotoFixer-x86_64.AppImage"
         target.parent.mkdir()
         target.write_bytes(b"old")
         self.window._install_kind = InstallKind.LINUX_APPIMAGE

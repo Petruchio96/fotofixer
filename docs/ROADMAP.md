@@ -12,20 +12,10 @@ and remove finished items.
    browser-only: a static container, editing in each visitor's own browser,
    photos never leave their computer. When it's done, the app is feature
    complete: **version 2.0.0**.
-   - **The new name: FotoFixer – When & Where** (chosen 2026-10-12; see
-     "Rename the app" for where each part goes). The web version uses it
-     from its first image: the GHCR image, the page title, the self-hosting
-     docs, and the address the user plans to share all carry it, and
-     renaming a published image later strands anyone who pulled the old
-     one. The desktop rename itself (item 2) can wait.
-2. **Rename the app** (below), one branch. "Photo GPS Editor" no longer fits:
-   it edits dates and times too. The update checker (1.8.0) finds each
-   download by name, so the rename must also change the names in
-   `core/updates.py` (`RELEASE_ASSETS`), `.github/workflows/build.yml`, and
-   the installer (`packaging/windows_installer.iss`: install folder,
-   shortcuts, setup file name; its fixed `AppId` keeps upgrades working).
-   Old copies may stop updating themselves; that's accepted (see "The
-   bridge" below).
+   - **The name: FotoFixer – When & Where** (chosen 2026-10-12; the desktop
+     app has it since 1.9.0). The web version uses it from its first image:
+     the GHCR image (`fotofixer`), the page title, the self-hosting docs, and
+     the address the user plans to share.
 
 Not scheduled:
 
@@ -41,83 +31,16 @@ Not scheduled:
 ## Versions
 
 - 1.8.0 (2026-10-12, the in-app update checker) is the latest release.
-- **1.9.0** (branch `more-file-types`, unreleased): HEIC/HEIF and more
+- **1.9.0** (branch `more-file-types`, unreleased): the rename to FotoFixer –
+  When & Where, HEIC/HEIF, and more
   RAW formats. While the web version is built, desktop fixes and small
   improvements after it are **1.9.x**.
   The usual rules in `CLAUDE.md` still decide whether a branch gets a bump
   at all.
 - **2.0.0** marks the web version: the desktop app plus the browser version,
-  feature complete. The rename that follows is 2.1.0.
+  feature complete.
 - A release is never its own branch or PR. The branch that bumps the version
   is the release: merge its PR, tag, notes, publish (`RELEASE_CHECKLIST.md`).
-
----
-
-## Rename the app
-
-"Photo GPS Editor" describes only half of what the app does now that it
-edits dates and times as well as GPS. Change it everywhere in one branch,
-with a version bump.
-
-**The name (chosen 2026-10-12): FotoFixer – When & Where.**
-
-- **FotoFixer** is the name: one word, capital F twice. Alone wherever
-  space is short or the text must be plain: file and folder names, the
-  Docker image (`fotofixer`), the web address, the settings folder, the
-  exe and `.app`, the GitHub repository name if it's renamed.
-- **– When & Where** is the subtitle, shown wherever someone first meets
-  the app, so it isn't mistaken for one of the AI photo-enhancer apps with
-  similar names (FotoFix, Photo Fixer, PhotoFix): the window title
-  ("FotoFixer – When & Where"), the web page title and heading, the GitHub
-  repository description, release titles ("FotoFixer – When & Where 2.0"),
-  the README heading, the Windows installer and Start menu description,
-  and the About window. An en dash, with spaces.
-- Nothing is called exactly "FotoFixer" as of 2026-10-12 (searched); avoid
-  "GeoSetter"/"GeoTag", which are other photo tools.
-
-What the name touches (about 50 places outside the tests):
-
-- **Window titles and menus:** the main window, map, picker, Settings, About.
-- **App identity:** `setApplicationName`/`setOrganizationName` in `app.py`.
-  These decide where settings and the error log live (registry
-  `HKCU\Software\Photo GPS Editor`, `%LOCALAPPDATA%\Photo GPS Editor`,
-  `~/.config/Photo GPS Editor`). Changing them would lose the saved
-  settings (backups option, Esri key, last folder, map size). So either
-  copy the old settings across once at startup, or keep the old internal
-  identity and change only what users see.
-- **Builds:** `photo_gps_editor.spec` (exe and `.app` names), the AppImage
-  (`packaging/build_appimage.sh`, its `.desktop` file), and the download
-  file names in `.github/workflows/build.yml`.
-- **Project:** `pyproject.toml` name, the README, `PROJECT_CONTEXT.md`,
-  `CLAUDE.md`, the map tile User-Agent (OpenStreetMap asks apps to identify
-  themselves), and optionally the GitHub repository (GitHub redirects the
-  old address).
-- **Release notes** for the version that renames it: say what the app used
-  to be called, so people find it.
-
-**The bridge: not needed** (the user's call, 2026-10-12: they are the only
-user, so old copies breaking is accepted). Copies of 1.8.x/1.9.x find
-updates by exact names (`RELEASE_ASSETS`, and `FOLDER_NAME`, `BUNDLE_NAME`,
-`POSIX_EXE_NAME` for the Linux folder and macOS swap in `core/updates.py`),
-so after the rename they won't find or install it by themselves: install
-the renamed version by hand once on each machine. Change those names in
-the rename branch along with everything else (`tests/test_windows_installer.py`
-ties them to `build.yml` and the `.iss`).
-
-**Windows installer details for the rename** (`packaging/windows_installer.iss`):
-
-- **Old Start menu and desktop shortcuts.** They are named after the app
-  (`{autoprograms}\Photo GPS Editor`), so the rename's Setup would leave the
-  old ones behind, and if the exe is renamed too they would point to a file
-  that no longer exists. Delete them in `[InstallDelete]` (both shortcuts,
-  and the old exe `Photo GPS Editor.exe` if the exe is renamed).
-- **Install folder: the new name for everyone** (the user's call,
-  2026-10-12: the user is the only one who has installed it). New installs
-  use `…\Programs\FotoFixer`. Inno Setup normally keeps an upgrade in the
-  folder it was installed in (same `AppId`), so set `UsePreviousAppDir=no`
-  and remove the old folder `{localappdata}\Programs\Photo GPS Editor` in
-  `[InstallDelete]` (the Setup closes the running app first). The
-  uninstaller entry follows, since it's keyed by the `AppId`.
 
 ---
 

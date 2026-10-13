@@ -17,8 +17,8 @@ the merge, then tag and publish right after it.
 
 ## Windows installer
 
-- [ ] `photo-gps-editor-windows-x86_64-setup.exe` installs without an admin
-      prompt, to `%LOCALAPPDATA%\Programs\Photo GPS Editor`.
+- [ ] `fotofixer-windows-x86_64-setup.exe` installs without an admin
+      prompt, to `%LOCALAPPDATA%\Programs\FotoFixer`.
 - [ ] The Start menu shortcut opens the app; Settings > Apps lists it with
       the new version.
 - [ ] Installing over the previous version keeps Edit > Settings and leaves
@@ -103,7 +103,7 @@ the merge, then tag and publish right after it.
 ## Updates
 
 Run the branch's CI build with the environment variable
-`PHOTO_GPS_EDITOR_PRETEND_VERSION=1.0.0`, so it thinks it is old and offers
+`FOTOFIXER_PRETEND_VERSION=1.0.0`, so it thinks it is old and offers
 the latest *published* release.
 
 - [ ] About 5 s after the window opens, the orange bar offers the latest

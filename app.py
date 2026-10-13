@@ -3,6 +3,7 @@ import shutil
 import subprocess
 import sys
 
+from PySide6.QtCore import QSettings
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QApplication, QMessageBox, QStyleFactory
 
@@ -11,13 +12,14 @@ from core.runtime_paths import resource_path
 from gui import error_log
 from gui.gc_guard import GuiThreadGarbageCollector
 from gui.main_window import MainWindow
+from gui.settings_migration import copy_settings_from_old_name
 
 MISSING_EXIFTOOL_MESSAGE = (
-    "Photo GPS Editor needs ExifTool to read and write photo metadata, "
+    "FotoFixer needs ExifTool to read and write photo metadata, "
     "but ExifTool could not be found.\n\n"
     "Install ExifTool from https://exiftool.org "
     "(on Debian, Ubuntu, or Linux Mint: sudo apt install libimage-exiftool-perl), "
-    "then start Photo GPS Editor again."
+    "then start FotoFixer again."
 )
 
 
@@ -83,8 +85,10 @@ def exiftool_is_ready() -> bool:
 def main() -> int:
     match_desktop_cursor()
     app = QApplication(sys.argv)
-    app.setApplicationName("Photo GPS Editor")
-    app.setOrganizationName("Photo GPS Editor")
+    app.setApplicationName("FotoFixer")
+    app.setOrganizationName("FotoFixer")
+    # Renamed from Photo GPS Editor in 1.9.0: bring its settings over once.
+    copy_settings_from_old_name(QSettings())
     app.setStyle(QStyleFactory.create("Fusion"))
     app.setWindowIcon(QIcon(str(resource_path("assets/app_icon_128.png"))))
     error_log.install()

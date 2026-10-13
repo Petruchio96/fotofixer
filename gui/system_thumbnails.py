@@ -158,7 +158,7 @@ def write(path: Path, image: QImage, root: Path | None = None) -> None:
             )
         thumbnail.setText("Thumb::URI", file_uri(path))
         thumbnail.setText("Thumb::MTime", str(modified))
-        thumbnail.setText("Software", "Photo GPS Editor")
+        thumbnail.setText("Software", "FotoFixer")
         # Write to a temporary file first, then rename, so a file manager
         # reading at the same moment never sees a half-written thumbnail.
         handle, temporary = tempfile.mkstemp(dir=folder, suffix=".png")

@@ -67,7 +67,7 @@ def _show_message(summary: str) -> None:
     _showing_message = True
     dialog = QMessageBox(QMessageBox.Warning, "Something Went Wrong", (
         f"{summary}\n\nThe details were saved to:\n{log_path()}\n\n"
-        "Photo GPS Editor will keep running, but please send that file "
+        "FotoFixer will keep running, but please send that file "
         "with a description of what you were doing."
     ), QMessageBox.Ok)
 
@@ -134,7 +134,7 @@ def install() -> Path | None:
         return None
 
     # Crash reports carry no time of their own, so note when the app started.
-    _write("Photo GPS Editor started")
+    _write("FotoFixer started")
     # Hard crashes: the Python call stack of every thread.
     faulthandler.enable(file=_log_file, all_threads=True)
     qInstallMessageHandler(_handle_qt_message)

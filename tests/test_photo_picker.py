@@ -83,6 +83,7 @@ class PhotoPickerTests(unittest.TestCase):
         in_list: set[Path] = frozenset(),
         single: bool = False,
         include_subfolders: bool = False,
+        blocked: set[Path] | None = None,
     ) -> PhotoPickerDialog:
         dialog = PhotoPickerDialog(
             None,
@@ -98,6 +99,7 @@ class PhotoPickerTests(unittest.TestCase):
             ],
             single=single,
             include_subfolders=include_subfolders,
+            blocked=blocked,
         )
         self.addCleanup(dialog.close)
         dialog.show()
@@ -319,6 +321,17 @@ class PhotoPickerTests(unittest.TestCase):
 
         self.assertEqual(dialog.selected_paths(), [self.trip / "c.jpg"])
         self.assertEqual(dialog.add_button.text(), "Use This Photo's Location")
+
+    def test_one_photo_mode_blocks_the_photos_being_changed(self) -> None:
+        dialog = self._open(self.trip, single=True, blocked={self.trip / "a.jpg"})
+        item = self._grid_item(dialog, "a.jpg")
+
+        self.assertEqual(item.data(IN_LIST_ROLE), "Being Changed")
+        self.assertIn("can't be the source", item.toolTip())
+        self._click(dialog, "a.jpg")
+        self.assertEqual(dialog.selected_paths(), [])
+        self._click(dialog, "b.jpg")
+        self.assertEqual(dialog.selected_paths(), [self.trip / "b.jpg"])
 
     def test_double_click_chooses_the_photo_in_one_photo_mode(self) -> None:
         dialog = self._open(self.trip, single=True)

@@ -47,7 +47,7 @@ class ErrorLogTests(unittest.TestCase):
                 sys.excepthook(*sys.exc_info())
 
         text = self.log.read_text(encoding="utf-8")
-        self.assertIn("Photo GPS Editor started", text)
+        self.assertIn("FotoFixer started", text)
         self.assertIn("ValueError: picker broke", text)
         self.assertEqual(len(shown), 1)
         self.assertIn(str(self.log), shown[0])

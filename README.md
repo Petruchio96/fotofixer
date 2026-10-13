@@ -1,8 +1,8 @@
 This project was written almost entirely by AI, with human direction, testing, and design feedback throughout.
 
-# Photo GPS Editor
+# FotoFixer – When & Where
 
-Photo GPS Editor is a desktop application for viewing, copying, applying, and clearing GPS metadata in photo files, and for fixing their dates and times. It is designed for workflows where you have photos without coordinates and want to copy GPS data from another photo or enter coordinates manually.
+FotoFixer fixes where and when your photos were taken: the GPS location and the date, time, and time zone stored in photo files. (It was called Photo GPS Editor until version 1.9.0.) It is designed for workflows where you have photos without coordinates and want to copy GPS data from another photo or enter coordinates manually.
 
 The app supports the photos cameras and phones make (JPG, iPhone HEIC, and RAW files from Canon, Nikon, Sony, Fujifilm, Olympus, Panasonic, Pentax, Samsung, and DNG), grouped browsing of photos with and without GPS data, GPS badges on already-tagged photos, overwrite warnings, and single-step undo/redo for GPS edits made during the current session.
 
@@ -48,31 +48,31 @@ python -m venv .venv
 ## Download and Use
 
 Download the latest version from the
-[Releases page](https://github.com/Petruchio96/photo-gps-editor/releases/latest).
+[Releases page](https://github.com/Petruchio96/fotofixer/releases/latest).
 ExifTool is included, so nothing else needs to be installed.
 
 ### Linux
 
-`Photo_GPS_Editor-x86_64.AppImage` is a single file. Make it executable and run it:
+`FotoFixer-x86_64.AppImage` is a single file. Make it executable and run it:
 
 ```bash
-chmod +x Photo_GPS_Editor-x86_64.AppImage
-./Photo_GPS_Editor-x86_64.AppImage
+chmod +x FotoFixer-x86_64.AppImage
+./FotoFixer-x86_64.AppImage
 ```
 
 You can also double-click it in your file manager after making it executable.
 If you see a FUSE error, run it with `APPIMAGE_EXTRACT_AND_RUN=1` in front of
 the command, or install your distribution's FUSE package.
 
-`photo-gps-editor-linux-x86_64.tar.gz` contains the same app as a folder.
-Extract it and run `Photo GPS Editor` inside the folder.
+`fotofixer-linux-x86_64.tar.gz` contains the same app as a folder.
+Extract it and run `FotoFixer` inside the folder.
 
 The Linux build uses the system Perl to run ExifTool. Perl is installed by
 default on most Linux distributions.
 
 ### Windows
 
-Download `photo-gps-editor-windows-x86_64-setup.exe` and run it. It installs
+Download `fotofixer-windows-x86_64-setup.exe` and run it. It installs
 for your user only (no administrator prompt) and adds a Start menu shortcut.
 To update, run the newer setup; it replaces the old version in place and
 keeps your settings. Uninstall from Settings > Apps.
@@ -82,8 +82,8 @@ If Windows SmartScreen warns about an unrecognized app, choose
 
 ### macOS
 
-Download `photo-gps-editor-macos-arm64.zip` and unzip it to get
-**Photo GPS Editor**. This build is for Apple Silicon Macs (M1 and later).
+Download `fotofixer-macos-arm64.zip` and unzip it to get
+**FotoFixer**. This build is for Apple Silicon Macs (M1 and later).
 
 The first time you open it, macOS blocks it because it is not from an
 identified developer. Open **System Settings → Privacy & Security** and click

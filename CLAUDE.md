@@ -1,9 +1,10 @@
-# Photo GPS Editor
+# FotoFixer – When & Where
 
 Python + PySide6 desktop app for viewing and editing GPS metadata and dates in
 photos (JPG, HEIC, and camera RAW: CR2, CR3, DNG, NEF, ARW, RAF, ORF, RW2,
-PEF, SRW) through ExifTool. Runs on Linux Mint, Windows 11, and
-macOS (Apple Silicon).
+PEF, SRW) through ExifTool. Runs on Linux Mint, Windows 11, and macOS (Apple
+Silicon). Called Photo GPS Editor until 1.9.0; the local checkout folder may
+still be named `photo_gps_editor`.
 
 Read `PROJECT_CONTEXT.md` before starting work. It is the source of truth for
 status, architecture, and the current UI. Upcoming work, its order, and its

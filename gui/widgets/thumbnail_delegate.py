@@ -80,7 +80,9 @@ class ThumbnailDelegate(QStyledItemDelegate):
         if pick_disabled:
             _paint_washed_out(painter, option, pick_disabled if isinstance(pick_disabled, str) else "No GPS")
         elif index.data(IN_LIST_ROLE):
-            _paint_washed_out(painter, option, "In Photo List")
+            # True: "In Photo List"; or the picker's own label ("Being Changed").
+            in_list = index.data(IN_LIST_ROLE)
+            _paint_washed_out(painter, option, in_list if isinstance(in_list, str) else "In Photo List")
         elif index.data(FADED_ROLE):
             painter.fillRect(option.rect, QColor(255, 255, 255, 170))
         if index.data(SOURCE_ROLE):

@@ -17,6 +17,10 @@ plans live only in `docs/ROADMAP.md`.
 - On Windows (Git Bash): `.venv/Scripts/python` instead of `.venv/bin/python`
 - Build locally: see `packaging/README.md` (PyInstaller one-folder build and
   the Windows installer)
+- Web version: `python packaging/fetch_web_vendor.py` once, then serve the
+  repository root (`python3 -m http.server 8765`) and open
+  `http://127.0.0.1:8765/web/`; tests: `node --test web/tests`; container:
+  `docker/check_container.sh` (needs Docker)
 - CI: `.github/workflows/build.yml` tests and builds Linux, Windows, and macOS on
   every push; a `v*` tag attaches the builds to a draft release
 
@@ -26,6 +30,10 @@ plans live only in `docs/ROADMAP.md`.
 - `services/`: workflow logic; `services/workflow_facade.py` is the GUI's entry point
 - `gui/`: main window, widgets, presenters, window mixins, background loading
 - `tests/`: unittest suite, including real mouse/keyboard GUI tests
+- `web/`: the web version (Docker version): static page, ES modules with no
+  build step, ExifTool as WebAssembly in `web/worker/`, vendored files in
+  `web/vendor/` (fetched, not in git), Node tests in `web/tests/`
+- `docker/`: the container (nginx-unprivileged), compose file, and checks
 
 ## Rules
 
@@ -35,7 +43,12 @@ plans live only in `docs/ROADMAP.md`.
 - Prioritize functionality and workflow correctness before visual polish.
 - Prefer targeted edits over full-file rewrites; add helpful comments to new
   code, but leave existing comments alone unless they become wrong.
-- Every button needs a hover hint (a test enforces this).
+- Every button needs a hover hint (a test enforces this, in `web/` too:
+  make buttons with `el()` from `web/app/dom.js`).
+- `web/`: no inline styles or scripts (the container's Content-Security-Policy
+  forbids them); styles go in `web/app/styles.css`, dynamic styling through
+  classes. Only one ExifTool call at a time (the worker's queue); pass bytes,
+  not `File` objects, to ExifTool.
 - Color theme, wherever it fits (not forced): blue (`#1f6feb`) = what already
   exists (photos with GPS, Has GPS, the GPS badge, the location source, photo
   dots on the map); orange (`#d97706`) = what is new or about to change (the

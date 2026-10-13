@@ -11,3 +11,9 @@ tools/macos/exiftool
 tools/macos/lib/
 tools/linux/exiftool
 tools/linux/lib/
+
+# The web version's vendored ExifTool WebAssembly (packaging/fetch_web_vendor.py)
+web/vendor/*.js
+web/vendor/*.wasm
+web/vendor/*.gz
+web/vendor/VERSIONS.txt

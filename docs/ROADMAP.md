@@ -329,10 +329,62 @@ Generic Docker, Caddy, and Traefik examples go in the same document.
    for editing, which needs a new design (uploads, temp storage and cleanup,
    size limits, the Synology proxy's 60 s timeout); the rejected NAS-mount
    design is not it.
+
+   **Result (2026-10-12): GO.** Branch `web-trial`, report in
+   `web_trial/TRIAL_REPORT.md`. JPG, both HEICs, and the CR2 written by the
+   WebAssembly build are byte-identical to ExifTool 13.59's; the DNG and
+   CR3 differ only in the XMPToolkit version string, and the CR3's QuickTime
+   dates. What Phase 1 onwards must carry over from the trial:
+   - `@uswriting/exiftool` 1.0.9 + `@6over3/zeroperl-ts` 1.0.10 (Apache-2.0,
+     ExifTool 13.42 inside): vendor both JS files and `zeroperl.wasm`
+     (24 MB, 7 MB gzip). No cross-origin isolation needed (no shared
+     memory), so no COOP/COEP.
+   - **Patch the vendored zeroperl file system** (quadratic append; the
+     trial's `vendor/zeroperl.js` has the fix): RAW writes 0.6 s instead
+     of 15 s in the browser. One ExifTool call at a time (a queue in the
+     worker; two at once crash the instance). Pass bytes (`Uint8Array`),
+     not `File` objects (2× faster reads). In the worker, set
+     `globalThis.window`/`document` before importing (zeroperl's browser
+     detection), and pass a `fetch` option for the wasm's URL.
+   - **CR3 QuickTime dates:** the wasm process is in UTC, so write
+     `QuickTime:CreateDate`/`ModifyDate` explicitly with the UTC value the
+     app computes (the visitor's zone, or the photo's offset); a zone
+     suffix and `-api QuickTimeUTC` do nothing. EXIF dates need nothing.
+   - Pyodide 314.0.7 (Python 3.14) from npm + the `tzdata` wheel: 12 MB,
+     loads in 2 s on a PC; the pure modules ran unchanged with real time
+     zone data. iPad timing still to measure; the JS-port fallback stands.
+   - Saving through a `FileSystemFileHandle` works (tested via OPFS). Still
+     by hand: Lightroom and Synology Photos on the written files
+     (`~/Pictures/FotoFixer web trial/`), the real folder picker, Safari
+     and the iPad.
 1. **Skeleton.** Container, compose, optional password, headers, CI build,
    `LICENSE`; open a folder / add photos / drag and drop; Photo List with
    thumbnails, GPS badges, Show filter, selection; the summary pane. Deploy
    on the NAS.
+
+   **Built 2026-10-12 (branch `web-skeleton`):** `web/` (no build step:
+   `index.html`, `app/*.js` modules, `worker/exif_worker.js`, `vendor/`
+   fetched by `packaging/fetch_web_vendor.py`), `docker/` (Dockerfile on
+   `nginx-unprivileged`, `nginx.conf` with the headers, the password
+   entrypoint, `compose.yaml`, `check_container.sh`), the `web` CI job
+   (Node tests + container checks), `LICENSE` (MIT). Add Photos is a menu:
+   Open a Folder (Chrome/Edge, read-write, subfolders included), Choose
+   Photos, Choose a Folder; plus drag and drop. Left for later phases:
+   - **The Add Photos picker dialog** of the mockups (folder tree, folder
+     tiles, "Add Photos in Subfolders"): the menu covers the three sources
+     for now.
+   - **HEIC thumbnails in Chrome/Edge/Firefox:** iPhone HEICs carry no JPEG
+     thumbnail ExifTool can extract, and only Safari decodes HEIC itself,
+     so those tiles show the photo icon (with the GPS badge). Fix: a small
+     HEIF decoder in WebAssembly (libheif), vendored like ExifTool.
+   - **Deploy on the NAS:** the image builds in CI; the Synology steps
+     (`docs/SELF_HOSTING.md`) are Phase 5's, and the GHCR image too. Until
+     then build locally with `docker compose -f docker/compose.yaml up -d
+     --build`.
+   - Reading is one photo at a time through the worker (about 0.3 to 1 s
+     per photo, 2 to 3 s for a DNG that needs the second PreviewImage
+     call); fine for a folder, slow for a thousand photos. A second worker
+     instance would double it if ever needed.
 2. **Location editing.** Apply/clear GPS (typed, pasted, from a photo),
    overwrite confirmation, backups (folder mode), undo/redo, save in place or
    download (one file or a zip), progress.

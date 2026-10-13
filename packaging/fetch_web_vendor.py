@@ -1,25 +1,34 @@
 """
-Download the browser-side ExifTool (WebAssembly) into web/vendor/.
+Prepare what the web version loads but git doesn't hold: the browser-side
+ExifTool (WebAssembly), Pyodide, and a zip of the app's own pure Python
+modules.
 
 Usage (from the repository root):
-    python packaging/fetch_web_vendor.py            # -> web/vendor/
-    python packaging/fetch_web_vendor.py --out DIR  # the Docker build uses this
+    python packaging/fetch_web_vendor.py                      # -> web/vendor/, web/py/
+    python packaging/fetch_web_vendor.py --out DIR --py-out DIR   # the Docker build
 
 Why this file exists:
     The web version runs ExifTool in the visitor's browser through
     @uswriting/exiftool (ExifTool as a Perl script) on @6over3/zeroperl-ts
-    (Perl compiled to WebAssembly, with the ExifTool library baked in). The
-    24 MB .wasm is too big to keep in git, so, like packaging/fetch_exiftool.py
-    does for the desktop app, this script downloads pinned versions from the
-    npm registry, checks their SHA-256, and unpacks the three files the page
-    loads:
+    (Perl compiled to WebAssembly, with the ExifTool library baked in), and
+    the app's own coordinate and date logic through Pyodide (Python as
+    WebAssembly). Those are 24 MB and 12 MB, too big for git, so, like
+    packaging/fetch_exiftool.py does for the desktop app, this script
+    downloads pinned versions from the npm registry (and the tzdata wheel
+    from the Pyodide CDN), checks their SHA-256, and unpacks the files the
+    page loads:
 
-        web/vendor/exiftool.js      the ExifTool wrapper (parseMetadata, writeMetadata)
-        web/vendor/zeroperl.js      the Perl runtime (patched, see below)
-        web/vendor/zeroperl.wasm    Perl + ExifTool 13.42 as WebAssembly
+        web/vendor/exiftool.js          the ExifTool wrapper (parseMetadata, writeMetadata)
+        web/vendor/zeroperl.js          the Perl runtime (patched, see below)
+        web/vendor/zeroperl.wasm        Perl + ExifTool 13.42 as WebAssembly
+        web/vendor/pyodide/             pyodide.mjs, pyodide.asm.mjs, pyodide.asm.wasm,
+                                        python_stdlib.zip, pyodide-lock.json, the tzdata wheel
+        web/py/fotofixer_py.zip         core/ and services/ modules the browser runs
+                                        (BROWSER_MODULES; tests/test_fetch_web_vendor.py
+                                        checks they do no I/O)
 
-    Two small changes are made to the files as they are unpacked (the Phase 0
-    trial found both; see docs/ROADMAP.md):
+    Two small changes are made to the ExifTool files as they are unpacked
+    (the Phase 0 trial found both; see docs/ROADMAP.md):
       - exiftool.js imports zeroperl by its npm name; the page has no bundler,
         so the import becomes the relative file name.
       - zeroperl's in-memory file system grew a file by reallocating and
@@ -43,15 +52,19 @@ import io
 import sys
 import tarfile
 import urllib.request
+import zipfile
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_OUT = PROJECT_ROOT / "web" / "vendor"
+DEFAULT_PY_OUT = PROJECT_ROOT / "web" / "py"
 
 EXIFTOOL_PACKAGE_VERSION = "1.0.9"
 ZEROPERL_PACKAGE_VERSION = "1.0.10"
+PYODIDE_VERSION = "314.0.7"
+TZDATA_WHEEL = "tzdata-2025.3-py2.py3-none-any.whl"
 
-# name -> (download URL, SHA-256 of the .tgz, files to take: tar path -> output name)
+# name -> (download URL, SHA-256 of the archive, files to take: archive path -> output path)
 PACKAGES = {
     "@uswriting/exiftool": (
         f"https://registry.npmjs.org/@uswriting/exiftool/-/exiftool-{EXIFTOOL_PACKAGE_VERSION}.tgz",
@@ -66,7 +79,45 @@ PACKAGES = {
             "package/dist/esm/zeroperl.wasm": "zeroperl.wasm",
         },
     ),
+    "pyodide": (
+        f"https://registry.npmjs.org/pyodide/-/pyodide-{PYODIDE_VERSION}.tgz",
+        "66b7949e5a0cba2250b586d7e368bf12fb482800748d182c4618254b685ffaa0",
+        {
+            "package/pyodide.mjs": "pyodide/pyodide.mjs",
+            "package/pyodide.asm.mjs": "pyodide/pyodide.asm.mjs",
+            "package/pyodide.asm.wasm": "pyodide/pyodide.asm.wasm",
+            "package/python_stdlib.zip": "pyodide/python_stdlib.zip",
+            "package/pyodide-lock.json": "pyodide/pyodide-lock.json",
+        },
+    ),
 }
+
+# Single files (not archives): URL, SHA-256, output path.
+FILES = {
+    TZDATA_WHEEL: (
+        f"https://cdn.jsdelivr.net/pyodide/v{PYODIDE_VERSION}/full/{TZDATA_WHEEL}",
+        "9ce669f4f075843c7ff6a3f3dc306ebafa504717ec7beb6aa2233693722ddcfc",
+        f"pyodide/{TZDATA_WHEEL}",
+    ),
+}
+
+# The app's own modules the browser runs through Pyodide: pure logic with no
+# file or process I/O (docs/ROADMAP.md, "Logic in the browser").
+BROWSER_MODULES = (
+    "core/__init__.py",
+    "core/coordinates.py",
+    "core/models.py",
+    "core/photo_dates.py",
+    "core/time_zones.py",
+    "core/map_tiles.py",
+    "core/file_types.py",
+    "services/__init__.py",
+    "services/coordinate_service.py",
+    "services/date_time_service.py",
+    "services/gps_edit_history.py",
+    "services/models.py",
+)
+PY_ZIP_NAME = "fotofixer_py.zip"
 
 
 class PatchError(RuntimeError):
@@ -132,7 +183,7 @@ PATCHES = {"exiftool.js": patch_exiftool, "zeroperl.js": patch_zeroperl}
 
 def download(url: str, expected_sha256: str) -> bytes:
     print(f"Downloading {url}")
-    with urllib.request.urlopen(url, timeout=120) as response:
+    with urllib.request.urlopen(url, timeout=180) as response:
         data = response.read()
     digest = hashlib.sha256(data).hexdigest()
     if digest != expected_sha256:
@@ -140,7 +191,14 @@ def download(url: str, expected_sha256: str) -> bytes:
     return data
 
 
-def fetch(out_dir: Path) -> None:
+def _write(out_dir: Path, name: str, data: bytes) -> None:
+    target = out_dir / name
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_bytes(data)
+    print(f"  {name}: {len(data) / 1048576:.1f} MB")
+
+
+def fetch_vendor(out_dir: Path) -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
     for name, (url, sha256, wanted) in PACKAGES.items():
         archive = download(url, sha256)
@@ -153,20 +211,40 @@ def fetch(out_dir: Path) -> None:
                 patch = PATCHES.get(out_name)
                 if patch is not None:
                     data = patch(data.decode("utf-8")).encode("utf-8")
-                (out_dir / out_name).write_bytes(data)
-                print(f"  {out_name}: {len(data) / 1048576:.1f} MB")
+                _write(out_dir, out_name, data)
+    for url, sha256, out_name in FILES.values():
+        _write(out_dir, out_name, download(url, sha256))
     (out_dir / "VERSIONS.txt").write_text(
         f"@uswriting/exiftool {EXIFTOOL_PACKAGE_VERSION} (ExifTool 13.42)\n"
         f"@6over3/zeroperl-ts {ZEROPERL_PACKAGE_VERSION}\n"
+        f"pyodide {PYODIDE_VERSION} + {TZDATA_WHEEL}\n"
     )
 
 
+def build_python_zip(py_out: Path, project_root: Path = PROJECT_ROOT) -> Path:
+    """
+    Zip the browser-side Python modules (BROWSER_MODULES) with their package
+    paths, for Pyodide's unpackArchive.
+    """
+    py_out.mkdir(parents=True, exist_ok=True)
+    target = py_out / PY_ZIP_NAME
+    with zipfile.ZipFile(target, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for module in BROWSER_MODULES:
+            archive.write(project_root / module, module)
+    print(f"  {PY_ZIP_NAME}: {len(BROWSER_MODULES)} modules, {target.stat().st_size / 1024:.0f} KB")
+    return target
+
+
 def main(argv: list[str]) -> int:
-    parser = argparse.ArgumentParser(description="Download the browser-side ExifTool into web/vendor/.")
-    parser.add_argument("--out", type=Path, default=DEFAULT_OUT, help="output folder (default: web/vendor)")
+    parser = argparse.ArgumentParser(description="Prepare the web version's vendored files and Python modules.")
+    parser.add_argument("--out", type=Path, default=DEFAULT_OUT, help="vendor output folder (default: web/vendor)")
+    parser.add_argument("--py-out", type=Path, default=DEFAULT_PY_OUT, help="Python zip output folder (default: web/py)")
+    parser.add_argument("--python-only", action="store_true", help="only rebuild the Python zip (no downloads)")
     args = parser.parse_args(argv)
     try:
-        fetch(args.out)
+        if not args.python_only:
+            fetch_vendor(args.out)
+        build_python_zip(args.py_out)
     except (RuntimeError, OSError) as error:
         print(f"error: {error}", file=sys.stderr)
         return 1

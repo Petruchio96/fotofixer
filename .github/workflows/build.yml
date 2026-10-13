@@ -15,11 +15,14 @@ on:
   push:
     branches: ["**"]
     tags: ["v*"]
-    # Pushes that only touch the web version run web.yml instead. (Path
-    # filters don't apply to tags, so a release still builds everything.)
+    # Pushes that only touch the web version run web.yml instead, and
+    # docs-only pushes build nothing. (Path filters don't apply to tags, so
+    # a release still builds everything.)
     paths-ignore:
       - "web/**"
       - "docker/**"
+      - "docs/**"
+      - "**.md"
   workflow_dispatch:
 
 permissions:

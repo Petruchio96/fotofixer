@@ -129,3 +129,28 @@ test("clear empties everything and goes back to All", () => {
   assert.equal(store.selection.size, 0);
   assert.equal(store.view, "all");
 });
+
+test("download mode: a change waits for Download; undoing it back to the original drops the bytes", () => {
+  const { store, ids } = storeWith("a.jpg");
+  const london = { latitude: 51.5007, longitude: -0.1246 };
+  store.setInfo(ids[0], { gps: null });
+  const changed = new Uint8Array([1, 2, 3]);
+  store.setGps(ids[0], london, changed);
+  assert.deepEqual(store.pendingDownloadIds(), ids);
+  assert.equal(store.get(ids[0]).bytes, changed);
+  // Undo writes the original state back: nothing to download, no bytes kept.
+  store.setGps(ids[0], null, new Uint8Array([4]));
+  assert.deepEqual(store.pendingDownloadIds(), []);
+  assert.equal(store.get(ids[0]).bytes, null);
+  // Changed and downloaded: the download is the new baseline, kept in memory.
+  store.setGps(ids[0], london, changed);
+  store.markDownloaded(ids);
+  assert.deepEqual(store.pendingDownloadIds(), []);
+  assert.equal(store.get(ids[0]).bytes, changed);
+  assert.deepEqual(store.get(ids[0]).originalGps, london);
+  // A later change back to no GPS differs from the downloaded version: pending again.
+  const again = new Uint8Array([5]);
+  store.setGps(ids[0], null, again);
+  assert.deepEqual(store.pendingDownloadIds(), ids);
+  assert.equal(store.get(ids[0]).bytes, again);
+});

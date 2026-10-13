@@ -1,13 +1,20 @@
-# Only web/, packaging/fetch_web_vendor.py, and docker/ go into the image.
+# What the image build needs: web/, the vendor script with the Python
+# modules it zips, and docker/.
 *
 !web/
 !packaging/fetch_web_vendor.py
+!core/
+!services/
 !docker/
-# Not in the image: the tests, and vendor files fetched locally (the build
-# fetches its own).
+# Not in the image: the tests, caches, and vendor files fetched locally (the
+# build fetches its own).
 web/tests/
 web/vendor/*.js
 web/vendor/*.wasm
 web/vendor/*.gz
 web/vendor/VERSIONS.txt
+web/vendor/pyodide/
+web/py/
 web/package.json
+core/__pycache__/
+services/__pycache__/

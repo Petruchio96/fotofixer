@@ -2,11 +2,12 @@
 // write access), file and folder inputs, and drag and drop. Each source
 // yields entries the PhotoStore understands:
 //
-//   {name, relPath, size, lastModified, handle, getFile}
+//   {name, relPath, size, lastModified, handle, parent, getFile}
 //
 // handle is a FileSystemFileHandle when the browser gave one (Chrome/Edge:
-// an opened or dropped folder or file), which later phases write back
-// through; otherwise null and the photo can only be downloaded.
+// an opened or dropped folder or file), which changes are written back
+// through, and parent its folder handle (for backup copies); otherwise
+// both are null and the photo can only be downloaded.
 
 import { isSupportedName } from "./file_types.js";
 
@@ -14,15 +15,21 @@ function isHidden(name) {
   return name.startsWith(".");
 }
 
-function entryFromFile(file, relPath, handle = null) {
+function entryFromFile(file, relPath, handle = null, parent = null) {
   return {
     name: file.name,
     relPath,
     size: file.size,
     lastModified: file.lastModified,
     handle,
+    parent,
     getFile: async () => (handle ? handle.getFile() : file),
   };
+}
+
+/** An entry for a file handle (a backup copy just made, for example). */
+export async function entryFromFileHandle(handle, relPath, parent = null) {
+  return entryFromFile(await handle.getFile(), relPath, handle, parent);
 }
 
 /** Walk a directory handle; subfolders too when recursive. */
@@ -35,7 +42,7 @@ export async function entriesFromDirectoryHandle(directory, { recursive = true, 
       if (recursive) entries.push(...(await entriesFromDirectoryHandle(handle, { recursive, prefix: base })));
     } else if (isSupportedName(name)) {
       const file = await handle.getFile();
-      entries.push(entryFromFile(file, base + name, handle));
+      entries.push(entryFromFile(file, base + name, handle, directory));
     }
   }
   return entries;
@@ -106,6 +113,7 @@ export async function entriesFromDrop(dataTransfer) {
       if (handle.kind === "directory") {
         entries.push(...(await entriesFromDirectoryHandle(handle)));
       } else if (!isHidden(handle.name) && isSupportedName(handle.name)) {
+        // A dropped file: writable, but without its folder (no backups).
         entries.push(entryFromFile(await handle.getFile(), handle.name, handle));
       }
     } else if (typeof item.webkitGetAsEntry === "function" && item.webkitGetAsEntry()) {

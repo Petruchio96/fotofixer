@@ -274,9 +274,11 @@ browser. Phase 1 (the skeleton, branch `web-skeleton`, 2026-10-12):
   hardened defaults, `check_container.sh` (what CI runs)
 - Tests: `node --test web/tests/*.test.mjs` (the store, file types vs the Python list,
   save mode, hover hints), `tests/test_fetch_web_vendor.py` (the patches),
-  and `.github/workflows/web.yml` (tests, image build, container checks;
-  it runs only for pushes that touch the web version, and `build.yml`
-  skips those)
+  and the `web` job of `.github/workflows/build.yml` (tests, image build,
+  container checks). That workflow's `changes` job skips the desktop
+  builds for web-only pushes and the web job for desktop-only ones; skipped
+  jobs still report, so `main`'s ruleset can require all four checks and
+  GitHub's auto-merge waits for them
 - Run it: `python packaging/fetch_web_vendor.py` (also builds
   `web/py/fotofixer_py.zip` from the pure modules listed in its
   `BROWSER_MODULES`; `tests/test_fetch_web_vendor.py` checks they do no

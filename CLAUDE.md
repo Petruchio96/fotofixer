@@ -23,8 +23,11 @@ plans live only in `docs/ROADMAP.md`.
   container's security headers) and open `http://127.0.0.1:8765/web/`;
   tests: `node --test web/tests/*.test.mjs`; container:
   `docker/check_container.sh` (needs Docker)
-- CI: `.github/workflows/build.yml` tests and builds Linux, Windows, and macOS on
-  every push; a `v*` tag attaches the builds to a draft release
+- CI: `.github/workflows/build.yml` on every push: the desktop tests and
+  builds (Linux, Windows, macOS) when desktop files changed, the web job
+  (tests + container) when web files changed, skipped otherwise (skipped jobs
+  still report their checks); a `v*` tag builds everything and attaches the
+  builds to a draft release
 
 ## Layout
 
@@ -70,7 +73,9 @@ plans live only in `docs/ROADMAP.md`.
 ## Git
 
 - Solo project using a PR flow: feature branch, push, `gh pr create`, CI, merge
-  with GitHub's merge button (merge commit).
+  (merge commit). `main` requires the four CI checks (a ruleset; admins can
+  bypass for direct docs-only pushes), so GitHub's auto-merge is available:
+  the PR merges itself once the checks pass.
 - Never commit or push until the user says to; they review changes in VS Code first.
 - No AI attribution (Co-Authored-By) lines in commits or PRs.
 - New versions only for major UI improvements, significant new features, or

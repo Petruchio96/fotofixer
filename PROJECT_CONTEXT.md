@@ -237,7 +237,7 @@ browser. Phase 1 (the skeleton, branch `web-skeleton`, 2026-10-12):
   `APP_USERNAME`/`APP_PASSWORD`/`APP_PASSWORD_FILE` (bcrypt via htpasswd,
   written to tmpfs at start), `ACCESS_LOG=off`, `compose.yaml` with the
   hardened defaults, `check_container.sh` (what CI runs)
-- Tests: `node --test web/tests` (the store, file types vs the Python list,
+- Tests: `node --test web/tests/*.test.mjs` (the store, file types vs the Python list,
   save mode, hover hints), `tests/test_fetch_web_vendor.py` (the patches),
   and `.github/workflows/web.yml` (tests, image build, container checks;
   it runs only for pushes that touch the web version, and `build.yml`

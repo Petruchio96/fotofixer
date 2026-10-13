@@ -39,7 +39,7 @@ jobs:
           node-version: "22"
 
       - name: Run the web tests
-        run: node --test web/tests
+        run: node --test web/tests/*.test.mjs
 
       - name: Build the container
         run: docker build -f docker/Dockerfile -t fotofixer:ci .

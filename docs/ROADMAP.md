@@ -12,6 +12,8 @@ and remove finished items.
    2026-10-12). The design is browser-only: a static container, editing in
    each visitor's own browser, photos never leave their computer. It ships
    as **version 1.10.0** (desktop and Docker versions released together).
+   All six branches are built (2026-10-13); the last, `web-publish`, is
+   the 1.10.0 release once merged, tagged, and published.
 2. **Then whatever else is wanted before the app is feature complete**
    (for example the not-scheduled items below), as 1.x releases. Feature
    complete is **2.0.0**.
@@ -281,7 +283,10 @@ Containers don't update themselves; this one follows the usual practice:
   `https://api.github.com` to `connect-src` (the mockups assume this: the
   Settings page shows "Version X is available. Ask the person who runs this
   site to update it."), or bake the version into the image and drop the
-  notice.
+  notice. Since Phase 5 the version is baked in (`web/app/version.js`,
+  shown under Settings with a link to the releases page, and the image's
+  tags and labels), so dropping the notice costs nothing; the choice is
+  still the user's.
 
 ### Mockups
 
@@ -379,9 +384,8 @@ Generic Docker, Caddy, and Traefik examples go in the same document.
      so those tiles show the photo icon (with the GPS badge). Fix: a small
      HEIF decoder in WebAssembly (libheif), vendored like ExifTool.
    - **Deploy on the NAS:** the image builds in CI; the Synology steps
-     (`docs/SELF_HOSTING.md`) are Phase 5's, and the GHCR image too. Until
-     then build locally with `docker compose -f docker/compose.yaml up -d
-     --build`.
+     (`docs/SELF_HOSTING.md`) and the GHCR image came with Phase 5. The
+     NAS deployment itself is the user's, after the 1.10.0 release.
    - Reading is one photo at a time through the worker (about 0.3 to 1 s
      per photo, 2 to 3 s for a DNG that needs the second PreviewImage
      call); fine for a folder, slow for a thousand photos. A second worker
@@ -451,6 +455,26 @@ Generic Docker, Caddy, and Traefik examples go in the same document.
 5. **Polish and publish.** iPad pass in Safari, `docs/SELF_HOSTING.md`, a
    README section, the GHCR workflow, version **1.10.0** in the same PR, and
    the release.
+
+   **Built 2026-10-13 (branch `web-publish`):** `.github/workflows/docker.yml`
+   builds `linux/amd64` + `linux/arm64` and pushes
+   `ghcr.io/petruchio96/fotofixer` (`X.Y.Z`, `X.Y`, `latest`) when a
+   release is published (pre-releases skipped; `workflow_dispatch` with a
+   tag rebuilds one), and `edge` from pushes to `main` that touch the web
+   version; the Dockerfile's vendor stage runs on the build platform
+   (`--platform=$BUILDPLATFORM`) so only nginx is emulated for arm64.
+   `docker/compose.yaml` runs the published image (building locally is
+   the commented alternative). `docs/SELF_HOSTING.md` (visitors' needs,
+   the env vars, Synology, Caddy, Traefik, updates, security,
+   troubleshooting), a README section, Settings shows the version
+   (`web/app/version.js`, which `tests/test_docker_publish.py` ties to
+   `pyproject.toml` along with the workflow's and compose file's fixed
+   points), `RELEASE_CHECKLIST.md` gained the web version's checks and the
+   image. Version 1.10.0. Still by hand (the user): the Safari and iPad
+   pass, making the GHCR package public after the first publish, and the
+   NAS steps themselves. After the release, Part 3 can be condensed to what
+   is still open (the deferred items in each phase's note, and the open
+   question).
 
 ### Tests
 

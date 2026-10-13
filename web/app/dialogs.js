@@ -3,6 +3,7 @@
 // open() plus a callback, never a blocking exec()).
 
 import { el, clear } from "./dom.js";
+import { APP_VERSION, PROJECT_URL } from "./version.js";
 
 function openDialog({ title, body, buttons, defaultValue = "cancel", tone = "info" }) {
   return new Promise((resolve) => {
@@ -155,6 +156,13 @@ export async function showSettings({ keepBackups, canSaveInPlace, esriKey = "" }
     keyInput,
     el("div", { className: "dialog-row" }, [pasteButton, removeButton]),
     el("p", { className: "note", textContent: "Settings are saved in this browser only." }),
+    // The version (the same number as the desktop app and the container
+    // image), so a visitor can tell whether the site runs the latest one.
+    el("p", { className: "note version" }, [
+      `FotoFixer – When & Where ${APP_VERSION}. `,
+      el("a", { href: PROJECT_URL, target: "_blank", rel: "noopener", textContent: "Project page and releases" }),
+      ".",
+    ]),
   ];
   const answer = await openDialog({
     title: "Settings",

@@ -11,9 +11,13 @@
 # The first stage downloads the pinned browser-side ExifTool and Pyodide
 # (too big for git) and zips the app's Python modules, with
 # packaging/fetch_web_vendor.py, exactly as a developer does locally. The
-# second stage is the image that ships.
+# second stage is the image that ships. Published for linux/amd64 and
+# linux/arm64 by .github/workflows/docker.yml (ghcr.io/petruchio96/fotofixer).
 
-FROM python:3.12-alpine AS vendor
+# --platform=$BUILDPLATFORM: this stage's output (downloads and a zip) is the
+# same for every architecture, so a multi-platform build runs it once,
+# natively, instead of once per platform under emulation.
+FROM --platform=$BUILDPLATFORM python:3.12-alpine AS vendor
 WORKDIR /src
 COPY packaging/fetch_web_vendor.py packaging/
 COPY core/ core/

@@ -97,4 +97,7 @@ plans live only in `docs/ROADMAP.md`.
   The branch that bumps the version is the release: merge its PR, tag `main`,
   add the notes to CI's draft, publish (`RELEASE_CHECKLIST.md`, Publish).
 - Version bumps touch `pyproject.toml`, `APP_VERSION` in `gui/main_window.py`,
-  and the `PROJECT_CONTEXT.md` snapshot (`README.md` has no version number).
+  `APP_VERSION` in `web/app/version.js` (a test checks it matches), and the
+  `PROJECT_CONTEXT.md` snapshot (`README.md` has no version number).
+- Publishing a release also publishes the container image
+  (`.github/workflows/docker.yml` → `ghcr.io/petruchio96/fotofixer`).

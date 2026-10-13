@@ -9,12 +9,16 @@
 
 services:
   fotofixer:
-    # Until the image is published on GHCR (planned: ghcr.io/petruchio96/fotofixer),
-    # build it from this repository:
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile
-    image: fotofixer:local
+    # The published image (built by .github/workflows/docker.yml from each
+    # release; linux/amd64 and linux/arm64). Pin a version with
+    # ghcr.io/petruchio96/fotofixer:1.10 if you'd rather update by hand.
+    image: ghcr.io/petruchio96/fotofixer:latest
+    # To build from this repository instead (a checkout is needed), comment
+    # the image line out and uncomment these, then add --build to the
+    # command above:
+    # build:
+    #   context: ..
+    #   dockerfile: docker/Dockerfile
     container_name: fotofixer
     restart: unless-stopped
     ports:

@@ -1,4 +1,6 @@
 PySide6
 Pillow
+# HEIC/HEIF thumbnails (Qt can't decode HEIF on Linux or Windows).
+pillow-heif
 # Time zone rules for zoneinfo; Windows has no system copy.
 tzdata

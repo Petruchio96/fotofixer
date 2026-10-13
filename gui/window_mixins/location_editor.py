@@ -121,11 +121,16 @@ class LocationEditorMixin:
         """
         Choose any photo file to use its location (see use_location_from_file).
         """
-        self._pick_photo_file("Use the Location from a Photo", self.use_location_from_file)
+        self._pick_photo_file(
+            "Use the Location from a Photo",
+            self.use_location_from_file,
+            blocked=set(self.get_selected_paths()),
+        )
 
     def use_location_from_file(self, path: Path) -> None:
         """
-        Read the GPS coordinates of a photo file into New Location.
+        Read the GPS coordinates of a photo file into New Location. (The
+        picker doesn't offer photos selected to change.)
         """
         info = self.workflow.read_photo_info(path)
         if info.gps_error:
@@ -296,7 +301,9 @@ class LocationEditorMixin:
         self._apply_pick_mode_lock()
 
     def _photos_with_gps_count(self) -> int:
-        return sum(1 for item in self.session.thumbnail_items if item.has_gps)
+        """Photos that can be the location source: with GPS and not selected to change."""
+        selected = set(self.get_selected_paths())
+        return sum(1 for item in self.session.thumbnail_items if item.has_gps and item.path not in selected)
 
     def _update_pick_button(self) -> None:
         """
@@ -310,7 +317,8 @@ class LocationEditorMixin:
         self.pick_location_button.setToolTip(
             PICK_BUTTON_TIP
             if can_pick
-            else "No photos in the Photo List have GPS coordinates to copy."
+            else "No photo in the Photo List has GPS coordinates to copy, other than the photos "
+            "selected to change (a photo can't be both)."
         )
 
     def _refresh_pick_marks(self) -> None:
@@ -318,14 +326,17 @@ class LocationEditorMixin:
         Dim the photos that can't be picked while picking ("No GPS"; for a
         time "No Date" or "Being Changed"); clear the dimming otherwise.
         """
-        selected = set(self.get_selected_paths()) if self._pick_kind == "time" else set()
+        selected = set(self.get_selected_paths())
         for path_text, item in self._grid_items_by_path.items():
             if not self._picking_location:
                 label = ""
             elif self._pick_kind == "time":
                 label = self._time_pick_label(Path(path_text), selected)
+            elif item.data(THUMBNAIL_LATITUDE_ROLE) is None:
+                label = "No GPS"
             else:
-                label = "No GPS" if item.data(THUMBNAIL_LATITUDE_ROLE) is None else ""
+                # A photo selected to change can't also be the source.
+                label = "Being Changed" if Path(path_text) in selected else ""
             if (item.data(PICK_DISABLED_ROLE) or "") != label:
                 item.setData(PICK_DISABLED_ROLE, label or None)
 
@@ -413,13 +424,32 @@ class LocationEditorMixin:
         """
         Mark the source photo in the grid (blue outline, SOURCE): where the
         location came from, or on the Date & Time tab, the time.
+
+        On the Location tab a photo is either the source or being changed,
+        never both: the location source can't be selected (and is
+        deselected when it becomes the source). It's selectable again once
+        it stops being the source (the source card's ✕, Clear, typed
+        coordinates, or another photo as the source). The Date & Time tab
+        keeps its own rules (its time source can be selected; Shift leaves
+        it out).
         """
         source = self._time_source if self.is_date_mode else self._location_source
         source_text = str(source) if source else None
+        blocked_text = None if self.is_date_mode or self._location_source is None else str(self._location_source)
         for path_text, item in self._grid_items_by_path.items():
             is_source = path_text == source_text
             if bool(item.data(SOURCE_ROLE)) != is_source:
                 item.setData(SOURCE_ROLE, is_source)
+            flags = item.flags()
+            if path_text == blocked_text:
+                if flags & Qt.ItemIsSelectable:
+                    item.setSelected(False)
+                    item.setFlags(flags & ~Qt.ItemIsSelectable)
+            elif not flags & Qt.ItemIsSelectable:
+                item.setFlags(flags | Qt.ItemIsSelectable)
+                # It couldn't be selected until now: clear any selection Qt
+                # kept for it while it was the source (it stays deselected).
+                item.setSelected(False)
 
     def paste_coordinates_from_clipboard(self) -> None:
         clipboard_text = QApplication.clipboard().text().strip()

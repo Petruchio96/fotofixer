@@ -1,6 +1,7 @@
 import base64
 import json
 import subprocess
+import shutil
 import tempfile
 import unittest
 from pathlib import Path
@@ -483,6 +484,32 @@ class ExifToolWrapperIntegrationTests(unittest.TestCase):
         # Undo writes back exactly what was read before.
         self.wrapper.write_date_tags(photo, before)
         self.assertEqual(self.wrapper.read_gps(photo)["date_tags"], before)
+
+    def test_gps_and_dates_in_heic(self) -> None:
+        """iPhone photos: GPS, all three dates, and the time zone."""
+        heic = self.temp_path / "IMG_1234.HEIC"
+        shutil.copy(Path(__file__).parent / "fixtures" / "sample.heic", heic)
+        dates = {
+            "DateTimeOriginal": "2026:05:23 11:16:41",
+            "CreateDate": "2026:05:23 11:16:41",
+            "ModifyDate": "2026:05:23 11:16:41",
+            "OffsetTimeOriginal": "-05:00",
+            "OffsetTimeDigitized": "-05:00",
+            "OffsetTime": "-05:00",
+        }
+        before = self.wrapper.read_gps(heic)["date_tags"]
+        self.wrapper.write_gps(heic, 40.5865, -111.6558)
+        self.wrapper.write_date_tags(heic, dates)
+
+        read = self.wrapper.read_gps_many([heic])[heic]
+        self.assertAlmostEqual(read["latitude"], 40.5865, places=4)
+        self.assertAlmostEqual(read["longitude"], -111.6558, places=4)
+        for tag, value in dates.items():
+            self.assertEqual(read["date_tags"][tag], value, tag)
+
+        # Undo puts the dates back exactly.
+        self.wrapper.write_date_tags(heic, before)
+        self.assertEqual(self.wrapper.read_gps(heic)["date_tags"], before)
 
     def test_backup_keeps_untouched_original_across_edits(self) -> None:
         photo = self._make_photo("backup.jpg")

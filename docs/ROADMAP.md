@@ -12,22 +12,10 @@ and remove finished items.
    browser-only: a static container, editing in each visitor's own browser,
    photos never leave their computer. When it's done, the app is feature
    complete: **version 2.0.0**.
-   - **Pick the app's new name before the first image is published.** The
-     GHCR image, the page title, the self-hosting docs, and the address the
-     user plans to share (`photo-gps-date-changer.iramnas.synology.me`) all
-     carry it, and renaming a published image later strands anyone who
-     pulled the old one. The desktop rename itself (item 3) can wait.
-2. **HEIC (iPhone) support in the desktop app** (below), one branch with a
-   version bump, on Linux, Windows, and macOS. The web version supports HEIC
-   from its start, so this can land before, during, or after it.
-3. **Rename the app** (below), one branch. "Photo GPS Editor" no longer fits:
-   it edits dates and times too. The update checker (1.8.0) finds each
-   download by name, so the rename must also change the names in
-   `core/updates.py` (`RELEASE_ASSETS`), `.github/workflows/build.yml`, and
-   the installer (`packaging/windows_installer.iss`: install folder,
-   shortcuts, setup file name; its fixed `AppId` keeps upgrades working).
-   Copies already out there look for the old names, so keep those for one
-   release (or teach the checker both) so they can still update themselves.
+   - **The name: FotoFixer – When & Where** (chosen 2026-10-12; the desktop
+     app has it since 1.9.0). The web version uses it from its first image:
+     the GHCR image (`fotofixer`), the page title, the self-hosting docs, and
+     the address the user plans to share.
 
 Not scheduled:
 
@@ -36,90 +24,49 @@ Not scheduled:
   version has drag and drop from the start.)
 - **Macs.** No release has been tested on a real Mac yet; test when one is
   available.
+- **Geotagging from a GPS track** (below): load a track log from a phone,
+  watch, or GPS logger and give each photo the location recorded at the
+  moment it was taken. A future feature, in the desktop and web apps.
 
 ## Versions
 
 - 1.8.0 (2026-10-12, the in-app update checker) is the latest release.
-- While the web version is built, desktop fixes and small improvements are
-  **1.8.x**, and HEIC support gets its own bump (1.9.0 if it ships first).
+- **1.9.0** (branch `more-file-types`, unreleased): the rename to FotoFixer –
+  When & Where, HEIC/HEIF, and more
+  RAW formats. While the web version is built, desktop fixes and small
+  improvements after it are **1.9.x**.
   The usual rules in `CLAUDE.md` still decide whether a branch gets a bump
   at all.
 - **2.0.0** marks the web version: the desktop app plus the browser version,
-  feature complete. The rename that follows is 2.1.0.
+  feature complete.
 - A release is never its own branch or PR. The branch that bumps the version
   is the release: merge its PR, tag, notes, publish (`RELEASE_CHECKLIST.md`).
 
 ---
 
-## Rename the app
+## Geotagging from a GPS track (future)
 
-"Photo GPS Editor" describes only half of what the app does now that it
-edits dates and times as well as GPS. Pick a new name first (the user's
-choice), then change it everywhere in one branch, with a version bump.
+Added 2026-10-12 (the user's idea, after comparing GeoSetter and GeoTag,
+which both do this). Not scheduled yet.
 
-What the name touches (about 50 places outside the tests):
+What it does: load a track file that lists times and GPS positions (a phone,
+watch, or GPS logger records one while you walk or drive), and the app gives
+each selected photo the position recorded at the moment the photo was taken.
 
-- **Window titles and menus:** the main window, map, picker, Settings, About.
-- **App identity:** `setApplicationName`/`setOrganizationName` in `app.py`.
-  These decide where settings and the error log live (registry
-  `HKCU\Software\Photo GPS Editor`, `%LOCALAPPDATA%\Photo GPS Editor`,
-  `~/.config/Photo GPS Editor`). Changing them would lose the saved
-  settings (backups option, Esri key, last folder, map size). So either
-  copy the old settings across once at startup, or keep the old internal
-  identity and change only what users see.
-- **Builds:** `photo_gps_editor.spec` (exe and `.app` names), the AppImage
-  (`packaging/build_appimage.sh`, its `.desktop` file), and the download
-  file names in `.github/workflows/build.yml`.
-- **Project:** `pyproject.toml` name, the README, `PROJECT_CONTEXT.md`,
-  `CLAUDE.md`, the map tile User-Agent (OpenStreetMap asks apps to identify
-  themselves), and optionally the GitHub repository (GitHub redirects the
-  old address).
-- **Release notes** for the version that renames it: say what the app used
-  to be called, so people find it.
-
-**The bridge: copies of 1.8.0 must still be able to update.** The update
-checker in 1.8.0 finds the next version by exact names, so the first
-release under the new name has to be one those copies can find and install:
-
-- **Download file names** (`RELEASE_ASSETS` in `core/updates.py`):
-  `photo-gps-editor-windows-x86_64-setup.exe`,
-  `photo-gps-editor-macos-arm64.zip`,
-  `photo-gps-editor-linux-x86_64.tar.gz`, and
-  `Photo_GPS_Editor-x86_64.AppImage`.
-- **Names inside the downloads.** For the Linux tarball folder and the
-  macOS app, 1.8.0 writes its own update script, which expects
-  `FOLDER_NAME` "Photo GPS Editor", `BUNDLE_NAME` "Photo GPS Editor.app",
-  and `POSIX_EXE_NAME` "Photo GPS Editor". If they change, the swap stops
-  safely, but the app doesn't reopen by itself. The AppImage swap and
-  Windows Setup need only the file name (and the installer's fixed
-  `AppId`).
-- **The clean way:** one release under the current name teaches the checker
-  (and its update script) the new names before the rename ships. The HEIC
-  release (above in the Order) is the natural bridge; any 1.8.x fix would
-  do too. It needs no release of its own.
-- **The other way:** the rename release also uploads its files under the
-  old names and keeps the old names inside the downloads, for that one
-  release.
-
----
-
-## HEIC support (desktop)
-
-The desktop app reads and writes JPG, CR2, CR3, and DNG. iPhones save HEIC
-by default, so friends' and family's photos often are. Add it on Linux,
-Windows, and macOS:
-
-- `.heic`/`.heif` in `core/file_types.py`. ExifTool 13.59 writes GPS and
-  dates to HEIC.
-- Thumbnails: Qt can't decode HEIC, so use the embedded preview through
-  `read_embedded_previews`. Check that iPhone HEICs have an extractable
-  `ThumbnailImage`/`PreviewImage`, and fall back to the file icon when they
-  don't.
-- Tests with a real iPhone HEIC fixture (GPS and date writes, thumbnails).
-- A significant feature, so it gets a version bump in its own PR.
-- If it ships before the rename, make it the rename's bridge release:
-  teach the update checker the new names too (see "The bridge" under
-  "Rename the app").
+- **Files:** GPX first (Garmin, Strava, most GPS apps export it); later KML
+  and CSV. ExifTool can read GPX itself (`-geotag`), or the app matches the
+  times in `core/`/`services/` (pure Python, so the web version reuses it).
+- **Matching works on the moment taken** (the app's rule): the photo's
+  date, time, and time zone become a UTC moment, compared with the track's
+  UTC times. Between two track points, the position is interpolated.
+- **Camera clock off:** the user can enter an offset (or use the existing
+  Shift first). A photo with no time zone needs one chosen before matching.
+- **Limits:** a photo taken far from any track point (default: more than a
+  few minutes before the first point, after the last, or across a long gap)
+  is skipped and listed, not guessed.
+- **UI:** probably a third source on the Location tab ("From a GPS Track"),
+  with the track drawn on the map and the matched photos as dots before
+  Apply; step-4-style before → after list; Undo as usual. Mockup first.
 
 ---
 
@@ -133,7 +80,7 @@ rejected: the container must never touch photo files.
 
 It works like BentoPDF. Someone hosts one container. Friends and family open
 its address (the user's will be something like
-`https://photo-gps-date-changer.iramnas.synology.me`, behind the Synology
+`https://fotofixer.iramnas.synology.me`, behind the Synology
 reverse proxy) and edit GPS and dates in photos **on their own computer**.
 Anyone can self-host the same image on any Docker host and share it the same
 way.
@@ -157,7 +104,7 @@ Decisions with the user:
 - **Esri satellite:** each visitor enters their own key, saved only in their
   browser and sent straight to Esri. The host's key is never involved, and
   no key is ever in the repo or image.
-- HEIC from the start (and in the desktop app, above).
+- HEIC from the start (the desktop app has it since 1.9.0).
 - Image for `linux/amd64` + `linux/arm64` on GHCR. MIT license (add
   `LICENSE`). PCs, Macs, and iPads (about 1024 px and up); phones out of
   scope.
@@ -344,7 +291,7 @@ appears only when the host sets a password.
 1. Container Manager > Project > Create with `docker/compose.yaml` (image
    from GHCR). Optionally set `APP_USERNAME`/`APP_PASSWORD` in `.env`.
 2. Control Panel > Login Portal > Advanced > Reverse Proxy: source HTTPS,
-   the hostname (for example `photo-gps-date-changer.iramnas.synology.me`),
+   the hostname (for example `fotofixer.iramnas.synology.me`),
    port 443; destination `http://localhost:8080`; add the HSTS header.
 3. Security > Certificate: a Let's Encrypt certificate covering that
    hostname (DSM can issue one for subdomains of a synology.me address;
@@ -421,7 +368,5 @@ Vaultwarden and other light containers.
 
 ## Open questions
 
-1. The app's new name, needed before the first image is published (see
-   Order).
-2. The in-page update notice: allow the browser to ask GitHub, or drop it
+1. The in-page update notice: allow the browser to ask GitHub, or drop it
    (see "Updates for the container").

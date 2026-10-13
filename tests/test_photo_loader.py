@@ -53,7 +53,7 @@ class PhotoLoaderTests(unittest.TestCase):
         self.assertIsNone(info.gps_error)
 
     def test_load_photo_info_rejects_unsupported_file_without_exif_call(self) -> None:
-        path = Path("/tmp/photo.png")
+        path = Path("/tmp/photo.gif")
 
         info = self.loader.load_photo_info(path)
 
@@ -87,7 +87,7 @@ class PhotoLoaderTests(unittest.TestCase):
 
     def test_load_photo_infos_preserves_unsupported_file_handling(self) -> None:
         supported = Path("/tmp/photo.jpg")
-        unsupported = Path("/tmp/photo.png")
+        unsupported = Path("/tmp/photo.gif")
         self.exiftool.bulk_response = {
             supported: {"latitude": 40.5, "longitude": -111.8},
         }

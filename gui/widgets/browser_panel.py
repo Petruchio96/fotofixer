@@ -211,6 +211,11 @@ class ThumbnailGrid(QListWidget):
         changed = False
         with QSignalBlocker(self):
             for item in items:
+                # A photo that can't be selected (the location source) is
+                # skipped: Qt would record the selection anyway, hidden, and
+                # show it once the photo becomes selectable again.
+                if not item.flags() & Qt.ItemIsSelectable:
+                    continue
                 if item.isSelected() != selected:
                     item.setSelected(selected)
                     changed = True

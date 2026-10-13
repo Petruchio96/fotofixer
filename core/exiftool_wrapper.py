@@ -33,7 +33,7 @@ import threading
 from pathlib import Path
 from typing import IO
 
-from core.file_types import is_raw_file
+from core.file_types import may_hold_preview
 from core.models import EmbeddedPreview
 from core.photo_dates import ALL_DATE_TAGS
 from core.process_guard import NO_WINDOW_FLAGS, start_guarded_process, stop_process_tree
@@ -165,8 +165,8 @@ class ExifToolWrapper:
         if not paths:
             return {}
 
-        raw_paths = [path for path in paths if is_raw_file(path)]
-        other_paths = [path for path in paths if not is_raw_file(path)]
+        raw_paths = [path for path in paths if may_hold_preview(path)]
+        other_paths = [path for path in paths if not may_hold_preview(path)]
 
         gps_by_path: dict[Path, dict] = {}
         if other_paths:

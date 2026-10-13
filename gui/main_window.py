@@ -43,7 +43,11 @@ from services.gps_edit_history import EDIT_DATE, EDIT_GPS, GpsEditHistory, Photo
 from services.models import OverwriteEntry, WorkflowSession
 from services.workflow_facade import PhotoWorkflowFacade
 
-APP_VERSION = "1.8.0"
+APP_VERSION = "1.9.0"
+# The app's name, and the subtitle shown with it where people first meet it
+# (window title, About). Called Photo GPS Editor until 1.9.0.
+APP_NAME = "FotoFixer"
+APP_SUBTITLE = "When & Where"
 
 # QSettings key for the "Keep Backup Copies of Originals" option.
 KEEP_BACKUPS_SETTING = "keep_backup_copies"
@@ -84,7 +88,8 @@ class MainWindow(
         # Saved preferences. Tests pass their own QSettings to stay isolated.
         self.settings = settings if settings is not None else QSettings()
 
-        self.setWindowTitle("Photo GPS Editor")
+        # The name, and the subtitle that says what it does.
+        self.setWindowTitle(f"{APP_NAME} – {APP_SUBTITLE}")
         self.resize(1500, 920)
         self.setMinimumSize(1280, 820)
 
@@ -481,7 +486,8 @@ class MainWindow(
             self._report_write_failures(f"undo the {what} change for", failed_paths)
             self._set_status_message(f"{what[0].upper()}{what[1:]} change undone.", "info")
 
-        self._restore_edit_states(states, f"Undoing the {what} change", done)
+        # Undo puts the photos back: it never backs up the version it's undoing.
+        self._restore_edit_states(states, f"Undoing the {what} change", done, make_backups=False)
 
     def redo_gps_edit(self) -> None:
         states = self.gps_history.redo_states()
@@ -500,21 +506,24 @@ class MainWindow(
 
         self._restore_edit_states(states, f"Redoing the {what} change", done)
 
-    def _restore_edit_states(self, states: dict, text: str, on_done) -> None:
+    def _restore_edit_states(self, states: dict, text: str, on_done, *, make_backups: bool = True) -> None:
         """
         Write the remembered states back, GPS or dates (see gps_history.kind),
-        then on_done(failure messages, backups made).
+        then on_done(failure messages, backups made). make_backups False:
+        no backup copies even with Keep Backup Copies of Originals on (undo).
         """
         if self.gps_history.kind == EDIT_DATE:
-            self._restore_date_states(states, text, on_done)
+            self._restore_date_states(states, text, on_done, make_backups=make_backups)
         else:
-            self._restore_gps_states(states, text, on_done)
+            self._restore_gps_states(states, text, on_done, make_backups=make_backups)
 
     def _restore_gps_states(
         self,
         states: dict[Path, tuple[float | None, float | None]],
         text: str,
         on_done,
+        *,
+        make_backups: bool = True,
     ) -> None:
         self._restore_states(
             text,
@@ -525,15 +534,22 @@ class MainWindow(
                 on_progress=progress,
             ),
             on_done,
+            make_backups=make_backups,
         )
 
-    def _restore_states(self, text: str, total: int, write, on_done) -> None:
+    def _restore_states(self, text: str, total: int, write, on_done, *, make_backups: bool = True) -> None:
         """
         Write remembered states back to files in the background (write does
         it; see _run_writes), and put the photo list back the way it was
         when the edit was made. Then on_done(failure messages, the backups
         the writes made, which are added to the list).
+
+        make_backups False (undo): no backup copies even with Keep Backup
+        Copies of Originals on. Otherwise undoing a location added to a photo
+        without GPS "backed up" the location being removed.
         """
+        if not make_backups:
+            write = self._without_backups(write)
         # A load still running would replace the list put back here.
         self.cancel_loading()
         snapshot = self.gps_history.photo_list
@@ -558,6 +574,25 @@ class MainWindow(
             on_done(list(result.execution_result.failed_paths), backups)
 
         self._run_writes(text, total, write, done)
+
+    def _without_backups(self, write):
+        """
+        write with the writer's backups switched off while it runs (on the
+        background thread), then switched back. Input is blocked meanwhile
+        (see _run_writes), so Settings can't change the option at the same
+        time.
+        """
+        writer = self.workflow.writer
+
+        def run(progress):
+            keep = getattr(writer, "keep_backups", False)
+            writer.keep_backups = False
+            try:
+                return write(progress)
+            finally:
+                writer.keep_backups = keep
+
+        return run
 
     def _run_writes(self, text: str, total: int, write, on_done) -> None:
         """
@@ -779,15 +814,23 @@ class MainWindow(
         """
         self._open_photo_picker(title, single=False, on_chosen=on_chosen)
 
-    def _pick_photo_file(self, title: str, on_chosen: Callable[[Path], None]) -> None:
+    def _pick_photo_file(
+        self,
+        title: str,
+        on_chosen: Callable[[Path], None],
+        *,
+        blocked: set[Path] | None = None,
+    ) -> None:
         """
         Choose one photo (to use its location) with the app's picker.
         on_chosen(path) runs after the picker closes with a photo chosen.
+        blocked: photos that can't be chosen ("Being Changed").
         """
         self._open_photo_picker(
             title,
             single=True,
             on_chosen=lambda paths: on_chosen(paths[0]),
+            blocked=blocked,
         )
 
     def _open_photo_picker(
@@ -796,6 +839,7 @@ class MainWindow(
         *,
         single: bool,
         on_chosen: Callable[[list[Path]], None],
+        blocked: set[Path] | None = None,
     ) -> None:
         """
         Show the picker without blocking the code: it is modal, but the app
@@ -813,6 +857,7 @@ class MainWindow(
             background=self.background,
             single=single,
             include_subfolders=self._picker_include_subfolders,
+            blocked=blocked,
         )
         # Kept until the next picker opens, so background results that arrive
         # after it closes still find a live (ignored) object.
@@ -896,9 +941,9 @@ class MainWindow(
         self.show_message(self._build_about_dialog())
 
     def _build_about_dialog(self) -> QMessageBox:
-        repo_url = "https://github.com/Petruchio96/photo-gps-editor"
+        repo_url = "https://github.com/Petruchio96/fotofixer"
         about_dialog = QMessageBox(self)
-        about_dialog.setWindowTitle(f"About Photo GPS Editor {APP_VERSION}")
+        about_dialog.setWindowTitle(f"About {APP_NAME} {APP_VERSION}")
         about_dialog.setIconPixmap(
             QIcon(str(resource_path("assets/app_icon_128.png"))).pixmap(64, 64)
         )
@@ -906,9 +951,10 @@ class MainWindow(
 
         link_label = QLabel(
             (
-                f"<p><strong>Photo GPS Editor {APP_VERSION}</strong></p>"
-                "<p>A desktop application for viewing photo GPS metadata, "
-                "copying coordinates, and applying GPS data to one or more selected files.</p>"
+                f"<p><strong>{APP_NAME} – {APP_SUBTITLE}</strong><br>Version {APP_VERSION}</p>"
+                "<p>Fixes where and when photos were taken: the GPS location and the "
+                "date, time, and time zone of photos from cameras and phones.</p>"
+                "<p>Formerly Photo GPS Editor.</p>"
                 "<p>Instructions and more information:<br>"
                 f'<a href="{repo_url}">{repo_url}</a></p>'
             )

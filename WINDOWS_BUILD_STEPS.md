@@ -36,14 +36,14 @@ cd "$HOME\Documents\Programming"
 Clone the repository:
 
 ```powershell
-git clone https://github.com/Petruchio96/photo-gps-editor.git
-cd photo-gps-editor
+git clone https://github.com/Petruchio96/fotofixer.git
+cd fotofixer
 ```
 
 If the repository already exists on Windows, use this instead:
 
 ```powershell
-cd "$HOME\Documents\Programming\photo-gps-editor"
+cd "$HOME\Documents\Programming\fotofixer"
 git fetch
 git checkout main
 git pull
@@ -128,16 +128,16 @@ OK
 From the repository root:
 
 ```powershell
-.\.venv\Scripts\python -m PyInstaller photo_gps_editor.spec --noconfirm
+.\.venv\Scripts\python -m PyInstaller fotofixer.spec --noconfirm
 ```
 
 The expected executable is:
 
 ```text
-dist\Photo GPS Editor\Photo GPS Editor.exe
+dist\FotoFixer\FotoFixer.exe
 ```
 
-To also build the installer (`photo-gps-editor-windows-x86_64-setup.exe`) from
+To also build the installer (`fotofixer-windows-x86_64-setup.exe`) from
 that folder, see "Windows installer" in `packaging/README.md`: install Inno
 Setup 6 with winget and run `ISCC` on `packaging\windows_installer.iss`.
 
@@ -146,7 +146,7 @@ Setup 6 with winget and run `ISCC` on `packaging\windows_installer.iss`.
 From the repository root:
 
 ```powershell
-& "dist\Photo GPS Editor\Photo GPS Editor.exe"
+& "dist\FotoFixer\FotoFixer.exe"
 ```
 
 If Windows SmartScreen warns about the app, choose the option to run anyway for
@@ -156,20 +156,20 @@ local testing. The app is not code-signed yet.
 
 Use copied test photos, not original photos. Work through
 `RELEASE_CHECKLIST.md`; the app's error log is at
-`%LOCALAPPDATA%\Photo GPS Editor\Photo GPS Editor\error-log.txt`.
+`%LOCALAPPDATA%\FotoFixer\FotoFixer\error-log.txt`.
 
 ## 9. Test On Another Windows Machine
 
 Copy this whole folder to another Windows machine:
 
 ```text
-dist\Photo GPS Editor
+dist\FotoFixer
 ```
 
 Run:
 
 ```text
-Photo GPS Editor.exe
+FotoFixer.exe
 ```
 
 Confirm it works on a machine without Python and without ExifTool installed.
@@ -180,14 +180,14 @@ Releases don't use a hand-made zip: pushing a `v*` tag makes GitHub Actions
 build all three systems and attach these files to a draft release:
 
 ```text
-photo-gps-editor-windows-x86_64-setup.exe
-photo-gps-editor-macos-arm64.zip
-photo-gps-editor-linux-x86_64.tar.gz
-Photo_GPS_Editor-x86_64.AppImage
+fotofixer-windows-x86_64-setup.exe
+fotofixer-macos-arm64.zip
+fotofixer-linux-x86_64.tar.gz
+FotoFixer-x86_64.AppImage
 ```
 
 To zip a local build (for example to copy it to another machine):
 
 ```powershell
-Compress-Archive -Path "dist\Photo GPS Editor" -DestinationPath "dist\photo-gps-editor-windows-x86_64.zip" -Force
+Compress-Archive -Path "dist\FotoFixer" -DestinationPath "dist\fotofixer-windows-x86_64.zip" -Force
 ```

@@ -440,6 +440,10 @@ class PhotoPickerDialog(QDialog):
         single:
             Choose one photo (to use its location) instead of photos to add.
             Folders can then be opened but not selected.
+        blocked:
+            One-photo mode: photos that can't be chosen, shown washed out as
+            "Being Changed" (the photos selected to change can't also be the
+            location source).
         include_subfolders:
             Whether "Add Photos in Subfolders" starts checked.
     """
@@ -457,6 +461,7 @@ class PhotoPickerDialog(QDialog):
         place_sections: PlaceSections | None = None,
         single: bool = False,
         include_subfolders: bool = False,
+        blocked: set[Path] | None = None,
     ) -> None:
         super().__init__(parent)
         self.setObjectName("photoPicker")
@@ -466,7 +471,15 @@ class PhotoPickerDialog(QDialog):
 
         self._single = single
         self._start_include_subfolders = include_subfolders
-        self._in_list = set() if single else {Path(path) for path in in_list}
+        # Photos shown washed out that can't be chosen, and why.
+        if single:
+            self._in_list = {Path(path) for path in blocked or ()}
+            self._in_list_label = "Being Changed"
+            self._in_list_tip = "Selected to change in the Photo List, so it can't be the source too"
+        else:
+            self._in_list = {Path(path) for path in in_list}
+            self._in_list_label = "In Photo List"
+            self._in_list_tip = "Already in the Photo List"
         self._workflow = workflow
         self._thumbnail_loader = thumbnail_loader
         self._background = background
@@ -930,8 +943,8 @@ class PhotoPickerDialog(QDialog):
                     self._set_gps(item, has_gps)
                 if path in self._in_list:
                     item.setFlags(Qt.ItemIsEnabled)
-                    item.setData(IN_LIST_ROLE, True)
-                    item.setToolTip(f"{path.name}\nAlready in the Photo List")
+                    item.setData(IN_LIST_ROLE, self._in_list_label)
+                    item.setToolTip(f"{path.name}\n{self._in_list_tip}")
                 self.grid.addItem(item)
                 self._items_by_path[str(path)] = item
             # Selected earlier (before leaving this folder): select again.

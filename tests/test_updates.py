@@ -94,7 +94,7 @@ class ParseReleaseTests(unittest.TestCase):
         self.assertEqual(release.version, (1, 7, 0))
         self.assertEqual(release.title, "Version 1.7")
         self.assertIn("## What's new", release.notes)
-        self.assertEqual(release.page_url, "https://github.com/Petruchio96/photo-gps-editor/releases/tag/v1.7.0")
+        self.assertEqual(release.page_url, "https://github.com/Petruchio96/fotofixer/releases/tag/v1.7.0")
         self.assertEqual(sorted(asset.name for asset in release.assets), sorted(RELEASE_ASSETS))
         for asset in release.assets:
             self.assertGreater(asset.size, 0, asset.name)
@@ -140,7 +140,7 @@ class InstallKindTests(unittest.TestCase):
     def _kind(self, platform: str, *, frozen: bool = True, executable: Path | None = None, env=None) -> InstallKind:
         return detect_install_kind(
             frozen=frozen, platform=platform,
-            executable=executable or self.root / "Photo GPS Editor",
+            executable=executable or self.root / "FotoFixer",
             environ=env or {},
         )
 
@@ -152,24 +152,24 @@ class InstallKindTests(unittest.TestCase):
         )
 
     def test_windows_installed_or_portable(self) -> None:
-        exe = self.root / "Photo GPS Editor.exe"
+        exe = self.root / "FotoFixer.exe"
         self.assertEqual(self._kind("win32", executable=exe), InstallKind.WINDOWS_PORTABLE)
         (self.root / "unins000.exe").write_bytes(b"")
         self.assertEqual(self._kind("win32", executable=exe), InstallKind.WINDOWS_INSTALLED)
 
     def test_mac_app_or_translocated(self) -> None:
-        app_exe = Path("/Applications/Photo GPS Editor.app/Contents/MacOS/Photo GPS Editor")
+        app_exe = Path("/Applications/FotoFixer.app/Contents/MacOS/FotoFixer")
         self.assertEqual(self._kind("darwin", executable=app_exe), InstallKind.MAC_APP)
-        moved = Path("/private/var/folders/x/AppTranslocation/ABC/d/Photo GPS Editor.app/Contents/MacOS/Photo GPS Editor")
+        moved = Path("/private/var/folders/x/AppTranslocation/ABC/d/FotoFixer.app/Contents/MacOS/FotoFixer")
         self.assertEqual(self._kind("darwin", executable=moved), InstallKind.MAC_TRANSLOCATED)
 
     def test_linux_appimage_or_folder(self) -> None:
         self.assertEqual(self._kind("linux"), InstallKind.LINUX_FOLDER)
-        env = {"APPIMAGE": "/home/me/Apps/Photo_GPS_Editor-x86_64.AppImage", "APPIMAGE_EXTRACT_AND_RUN": "1"}
+        env = {"APPIMAGE": "/home/me/Apps/FotoFixer-x86_64.AppImage", "APPIMAGE_EXTRACT_AND_RUN": "1"}
         self.assertEqual(self._kind("linux", env=env), InstallKind.LINUX_APPIMAGE)
 
     def test_install_targets(self) -> None:
-        exe = self.root / "Photo GPS Editor"
+        exe = self.root / "FotoFixer"
         self.assertEqual(install_target(InstallKind.WINDOWS_INSTALLED, exe, {}), exe)
         self.assertEqual(
             install_target(InstallKind.LINUX_APPIMAGE, exe, {"APPIMAGE": "/apps/x.AppImage"}),
@@ -180,8 +180,8 @@ class InstallKindTests(unittest.TestCase):
         self.assertIsNone(install_target(InstallKind.LINUX_FOLDER, exe, {}))
         (self.root / "_internal").mkdir()
         self.assertEqual(install_target(InstallKind.LINUX_FOLDER, exe, {}), self.root)
-        app_exe = Path("/Applications/Photo GPS Editor.app/Contents/MacOS/Photo GPS Editor")
-        self.assertEqual(install_target(InstallKind.MAC_APP, app_exe, {}), Path("/Applications/Photo GPS Editor.app"))
+        app_exe = Path("/Applications/FotoFixer.app/Contents/MacOS/FotoFixer")
+        self.assertEqual(install_target(InstallKind.MAC_APP, app_exe, {}), Path("/Applications/FotoFixer.app"))
         self.assertIsNone(install_target(InstallKind.MAC_APP, exe, {}))
         for kind in (InstallKind.SOURCE, InstallKind.CONTAINER, InstallKind.WINDOWS_PORTABLE, InstallKind.MAC_TRANSLOCATED):
             self.assertIsNone(install_target(kind, exe, {}), kind)
@@ -190,7 +190,7 @@ class InstallKindTests(unittest.TestCase):
 class UpdatePlanTests(unittest.TestCase):
     def setUp(self) -> None:
         self.asset = Asset(name=LINUX_APPIMAGE_ASSET, url="https://github.com/a", size=10, sha256=GOOD_SHA)
-        self.target = Path("/apps/Photo_GPS_Editor-x86_64.AppImage")
+        self.target = Path("/apps/FotoFixer-x86_64.AppImage")
 
     def test_source_and_container_only_notice(self) -> None:
         for kind in (InstallKind.SOURCE, InstallKind.CONTAINER):
@@ -239,7 +239,7 @@ class UpdatePlanTests(unittest.TestCase):
 class DownloadChecksTests(unittest.TestCase):
     def test_trusted_download_urls(self) -> None:
         for url in (
-            "https://github.com/Petruchio96/photo-gps-editor/releases/download/v1.7.0/x.zip",
+            "https://github.com/Petruchio96/fotofixer/releases/download/v1.7.0/x.zip",
             "https://objects.githubusercontent.com/github-production-release-asset/1/2?x=y",
             "https://release-assets.githubusercontent.com/github-production-release-asset/1/2?x=y",
             "https://api.github.com/repos/x/y/releases/latest",
@@ -258,7 +258,7 @@ class DownloadChecksTests(unittest.TestCase):
             self.assertFalse(is_trusted_download_url(url), url)
 
     def test_trusted_page_urls(self) -> None:
-        self.assertTrue(is_trusted_page_url("https://github.com/Petruchio96/photo-gps-editor/releases/tag/v1.7.0"))
+        self.assertTrue(is_trusted_page_url("https://github.com/Petruchio96/fotofixer/releases/tag/v1.7.0"))
         self.assertFalse(is_trusted_page_url("https://objects.githubusercontent.com/x"))
         self.assertFalse(is_trusted_page_url("http://github.com/x"))
 
@@ -288,7 +288,7 @@ class DownloadChecksTests(unittest.TestCase):
 
     def test_cleanup_download_dir_never_raises(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
-            folder = Path(temp) / "Photo GPS Editor update"
+            folder = Path(temp) / "FotoFixer update"
             folder.mkdir()
             (folder / "setup.exe").write_bytes(b"x")
             updates.cleanup_download_dir(folder)
@@ -307,7 +307,7 @@ class HandOverTests(unittest.TestCase):
     def _script(self, kind: InstallKind, target: str = "/Apps/My Photos/target") -> str:
         return posix_update_script(
             kind,
-            downloaded=Path("/tmp/Photo GPS Editor update/download"),
+            downloaded=Path("/tmp/FotoFixer update/download"),
             target=Path(target),
             app_pid=4242,
             log_path=Path("/home/me/.local/share/update-log.txt"),
@@ -332,17 +332,17 @@ class HandOverTests(unittest.TestCase):
 
     def test_folder_script_unpacks_and_swaps(self) -> None:
         script = self._script(InstallKind.LINUX_FOLDER)
-        self.assertIn("tar -xzf '/tmp/Photo GPS Editor update/download' -C \"$stage\"", script)
-        self.assertIn("test -x \"$stage\"/'Photo GPS Editor'/'Photo GPS Editor'", script)
+        self.assertIn("tar -xzf '/tmp/FotoFixer update/download' -C \"$stage\"", script)
+        self.assertIn('test -x "$stage"/FotoFixer/FotoFixer', script)
         self.assertIn("rm -rf \"$backup\" \"$stage\"", script)
-        self.assertIn("nohup '/Apps/My Photos/target'/'Photo GPS Editor' >/dev/null", script)
+        self.assertIn("nohup '/Apps/My Photos/target'/FotoFixer >/dev/null", script)
 
     def test_mac_script_uses_ditto_and_open(self) -> None:
-        script = self._script(InstallKind.MAC_APP, "/Applications/Photo GPS Editor.app")
+        script = self._script(InstallKind.MAC_APP, "/Applications/FotoFixer.app")
         self.assertIn("ditto -x -k", script)
         self.assertNotIn("unzip", script)
         self.assertIn("xattr -dr com.apple.quarantine", script)
-        self.assertIn("open -n '/Applications/Photo GPS Editor.app'", script)
+        self.assertIn("open -n /Applications/FotoFixer.app", script)
 
     def test_other_kinds_have_no_script(self) -> None:
         with self.assertRaises(ValueError):
@@ -378,7 +378,7 @@ class RunScriptTests(unittest.TestCase):
 
     def test_appimage_is_replaced_and_relaunched(self) -> None:
         marker = self.root / "relaunched"
-        target = self.root / "apps" / "Photo_GPS_Editor-x86_64.AppImage"
+        target = self.root / "apps" / "FotoFixer-x86_64.AppImage"
         target.parent.mkdir()
         target.write_text("#!/bin/sh\necho old\n")
         download = self.root / "download"
@@ -399,18 +399,18 @@ class RunScriptTests(unittest.TestCase):
 
     def test_folder_is_swapped_and_relaunched(self) -> None:
         marker = self.root / "relaunched"
-        target = self.root / "apps" / "Photo GPS Editor"
+        target = self.root / "apps" / "FotoFixer"
         (target / "_internal").mkdir(parents=True)
-        (target / "Photo GPS Editor").write_text("#!/bin/sh\necho old\n")
+        (target / "FotoFixer").write_text("#!/bin/sh\necho old\n")
         (target / "_internal" / "stale.so").write_text("old")
         download = self.root / "download.tar.gz"
         with tarfile.open(download, "w:gz") as tar:
             exe = f"#!/bin/sh\ntouch {shlex_quote(marker)}\n".encode()
-            info = tarfile.TarInfo("Photo GPS Editor/Photo GPS Editor")
+            info = tarfile.TarInfo("FotoFixer/FotoFixer")
             info.size = len(exe)
             info.mode = 0o755
             tar.addfile(info, io.BytesIO(exe))
-            info = tarfile.TarInfo("Photo GPS Editor/_internal/new.so")
+            info = tarfile.TarInfo("FotoFixer/_internal/new.so")
             info.size = 3
             tar.addfile(info, io.BytesIO(b"new"))
 
@@ -423,17 +423,17 @@ class RunScriptTests(unittest.TestCase):
         self.assertTrue((target / "_internal" / "new.so").exists())
         self.assertFalse((target / "_internal" / "stale.so").exists())
         self.assertFalse(target.with_name(target.name + ".old").exists())
-        self.assertEqual([p.name for p in target.parent.iterdir()], ["Photo GPS Editor"])
+        self.assertEqual([p.name for p in target.parent.iterdir()], ["FotoFixer"])
         self.assertFalse(download.exists())
         self._wait_for(marker)
 
     def test_bad_download_leaves_the_old_folder_alone(self) -> None:
-        target = self.root / "apps" / "Photo GPS Editor"
+        target = self.root / "apps" / "FotoFixer"
         (target / "_internal").mkdir(parents=True)
-        (target / "Photo GPS Editor").write_text("#!/bin/sh\necho old\n")
+        (target / "FotoFixer").write_text("#!/bin/sh\necho old\n")
         download = self.root / "download.tar.gz"
         with tarfile.open(download, "w:gz") as tar:
-            info = tarfile.TarInfo("Photo GPS Editor/readme.txt")
+            info = tarfile.TarInfo("FotoFixer/readme.txt")
             info.size = 2
             tar.addfile(info, io.BytesIO(b"hi"))
 
@@ -443,8 +443,8 @@ class RunScriptTests(unittest.TestCase):
         ))
 
         self.assertEqual(code, 1)
-        self.assertEqual((target / "Photo GPS Editor").read_text(), "#!/bin/sh\necho old\n")
-        self.assertEqual([p.name for p in target.parent.iterdir()], ["Photo GPS Editor"])
+        self.assertEqual((target / "FotoFixer").read_text(), "#!/bin/sh\necho old\n")
+        self.assertEqual([p.name for p in target.parent.iterdir()], ["FotoFixer"])
         self.assertIn("Could not unpack the update.", self.log.read_text())
 
     def _wait_for(self, marker: Path) -> None:

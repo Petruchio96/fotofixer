@@ -1,6 +1,6 @@
 [project]
-name = "photo-gps-editor"
-version = "1.8.0"
+name = "fotofixer"
+version = "1.9.0"
 description = "Desktop app for changing GPS metadata in image files"
 requires-python = ">=3.12"
 

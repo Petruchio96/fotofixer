@@ -146,7 +146,7 @@ class BackgroundRunner(QObject):
         # A daemon thread never keeps the app from exiting.
         self._thread = threading.Thread(
             target=self._run_jobs,
-            name="photo-gps-editor-background",
+            name="fotofixer-background",
             daemon=True,
         )
         self._thread.start()

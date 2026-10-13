@@ -25,7 +25,7 @@ from PySide6.QtGui import (
     QTransform,
 )
 
-from core.file_types import JPEG_EXTENSIONS, is_raw_file
+from core.file_types import JPEG_EXTENSIONS, is_heif_file, may_hold_preview
 from gui import system_thumbnails
 from core.models import EmbeddedPreview
 from gui.widgets.icons import draw_location_pin
@@ -152,7 +152,7 @@ class ThumbnailLoader:
                     images[path] = cached
         remaining = [path for path in paths if path not in images]
 
-        raw_paths = [path for path in remaining if is_raw_file(path)]
+        raw_paths = [path for path in remaining if may_hold_preview(path)]
         jpeg_paths = [path for path in remaining if path.suffix.lower() in JPEG_EXTENSIONS]
         previews: dict[Path, EmbeddedPreview] = {}
         for reader, reader_paths in (
@@ -172,6 +172,8 @@ class ThumbnailLoader:
                 image = self._preview_to_image(previews[path])
             if image is None and path.suffix.lower() in JPEG_EXTENSIONS:
                 image = self._read_jpeg_image(path)
+            elif image is None and is_heif_file(path):
+                image = self._read_heif_image(path)
             images[path] = image
             if image is not None and self.use_system_cache:
                 system_thumbnails.write(path, image)
@@ -273,6 +275,43 @@ class ThumbnailLoader:
         image = reader.read()
         return None if image.isNull() else image
 
+    def _read_heif_image(self, path: Path) -> QImage | None:
+        """
+        Read a HEIC/HEIF at thumbnail size with pillow-heif: Qt can't decode
+        HEIF on Linux or Windows. Uses the smallest thumbnail stored in the
+        file that is still big enough (iPhones store one), so the full photo
+        is decoded only when there is none. libheif applies the file's own
+        rotation, so the image comes out upright.
+
+        Returns:
+            A QImage, or None if pillow-heif is missing or the file can't be
+            read (the file then gets the plain icon).
+        """
+        try:
+            import pillow_heif
+        except ImportError:
+            return None
+        try:
+            heif = pillow_heif.open_heif(str(path), convert_hdr_to_8bit=True)
+            primary = heif[heif.primary_index]
+            thumbnails = [primary.get_thumbnail(index) for index in range(len(primary.info.get("thumbnails", [])))]
+            big_enough = [
+                thumbnail for thumbnail in thumbnails if min(thumbnail.size) >= self.thumbnail_size // 2
+            ]
+            source = min(big_enough, key=lambda image: image.size[0] * image.size[1]) if big_enough else primary
+            image = _heif_to_qimage(source)
+        except Exception:
+            # Thumbnails are a convenience: an unreadable file gets the icon.
+            return None
+        if image is None:
+            return None
+        return image.scaled(
+            self.thumbnail_size,
+            self.thumbnail_size,
+            Qt.KeepAspectRatio,
+            Qt.SmoothTransformation,
+        )
+
     def _build_badged_icon(self, icon: QIcon) -> QIcon:
         """
         Draw the GPS badge in the upper-right corner of an existing icon: an
@@ -351,6 +390,18 @@ def _apply_exif_orientation(image: QImage, orientation: int) -> QImage:
     if rotation:
         image = image.transformed(QTransform().rotate(rotation))
     return image
+
+
+def _heif_to_qimage(heif_image) -> QImage | None:
+    """A decoded pillow-heif image (8-bit RGB or RGBA) as a QImage."""
+    formats = {"RGB": QImage.Format_RGB888, "RGBA": QImage.Format_RGBA8888}
+    image_format = formats.get(heif_image.mode)
+    if image_format is None:
+        return None
+    width, height = heif_image.size
+    data = bytes(heif_image.data)
+    # copy(): the QImage must own its pixels once data goes away.
+    return QImage(data, width, height, heif_image.stride, image_format).copy()
 
 
 def _crop_to_aspect(image: QImage, width: int, height: int) -> QImage:

@@ -633,7 +633,7 @@ class DateTimeEditorMixin:
             done,
         )
 
-    def _restore_date_states(self, states: dict, text: str, on_done) -> None:
+    def _restore_date_states(self, states: dict, text: str, on_done, *, make_backups: bool = True) -> None:
         """Undo/redo of a date change: write the remembered date tags back."""
         self._restore_states(
             text,
@@ -644,4 +644,5 @@ class DateTimeEditorMixin:
                 on_progress=progress,
             ),
             on_done,
+            make_backups=make_backups,
         )

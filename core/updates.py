@@ -30,7 +30,7 @@ from enum import Enum
 from pathlib import Path
 from urllib.parse import urlsplit
 
-REPO = "Petruchio96/photo-gps-editor"
+REPO = "Petruchio96/fotofixer"
 LATEST_RELEASE_API_URL = f"https://api.github.com/repos/{REPO}/releases/latest"
 RELEASES_PAGE_URL = f"https://github.com/{REPO}/releases"
 
@@ -39,10 +39,10 @@ RELEASES_PAGE_URL = f"https://github.com/{REPO}/releases"
 # first one (packaging/windows_installer.iss); a test ties the three together.
 # The checker finds its download by name, so a rename must keep the old
 # names for one release (or teach the checker both).
-WINDOWS_SETUP_ASSET = "photo-gps-editor-windows-x86_64-setup.exe"
-MACOS_ZIP_ASSET = "photo-gps-editor-macos-arm64.zip"
-LINUX_TARBALL_ASSET = "photo-gps-editor-linux-x86_64.tar.gz"
-LINUX_APPIMAGE_ASSET = "Photo_GPS_Editor-x86_64.AppImage"
+WINDOWS_SETUP_ASSET = "fotofixer-windows-x86_64-setup.exe"
+MACOS_ZIP_ASSET = "fotofixer-macos-arm64.zip"
+LINUX_TARBALL_ASSET = "fotofixer-linux-x86_64.tar.gz"
+LINUX_APPIMAGE_ASSET = "FotoFixer-x86_64.AppImage"
 RELEASE_ASSETS = (LINUX_APPIMAGE_ASSET, LINUX_TARBALL_ASSET, WINDOWS_SETUP_ASSET, MACOS_ZIP_ASSET)
 
 # Where the API and the downloads may come from, redirects included. GitHub
@@ -57,14 +57,14 @@ TRUSTED_HOSTS = frozenset({
 
 # Set this to a version like 1.0.0 to make the app think it is older than it
 # is, so the update path can be tried against the real latest release.
-PRETEND_VERSION_ENV = "PHOTO_GPS_EDITOR_PRETEND_VERSION"
+PRETEND_VERSION_ENV = "FOTOFIXER_PRETEND_VERSION"
 # Exported by the Docker image (the future web version): no self-update there.
-CONTAINER_ENV = "PHOTO_GPS_EDITOR_CONTAINER"
+CONTAINER_ENV = "FOTOFIXER_CONTAINER"
 
-# Names inside the downloads (see photo_gps_editor.spec and build.yml).
-FOLDER_NAME = "Photo GPS Editor"
-BUNDLE_NAME = "Photo GPS Editor.app"
-POSIX_EXE_NAME = "Photo GPS Editor"
+# Names inside the downloads (see fotofixer.spec and build.yml).
+FOLDER_NAME = "FotoFixer"
+BUNDLE_NAME = "FotoFixer.app"
+POSIX_EXE_NAME = "FotoFixer"
 # Inno Setup's uninstaller, next to the exe of an installed copy.
 WINDOWS_UNINSTALLER = "unins000.exe"
 
@@ -196,7 +196,7 @@ class InstallKind(Enum):
 
     WINDOWS_INSTALLED = "windows_installed"    # by Setup: unins000.exe next to the exe
     WINDOWS_PORTABLE = "windows_portable"      # an old zip, unpacked by hand
-    MAC_APP = "mac_app"                        # Photo GPS Editor.app
+    MAC_APP = "mac_app"                        # FotoFixer.app
     MAC_TRANSLOCATED = "mac_translocated"      # the .app run from a read-only copy macOS made
     LINUX_APPIMAGE = "linux_appimage"
     LINUX_FOLDER = "linux_folder"              # the tarball's folder
@@ -426,10 +426,10 @@ def posix_update_script(
     # POSIX paths whatever the test machine runs on.
     new = q(downloaded.as_posix())
     old = q(target.as_posix())
-    stage = q((target.parent / ".photo-gps-editor-update").as_posix())
+    stage = q((target.parent / ".fotofixer-update").as_posix())
     lines = [
         "#!/bin/sh",
-        "# Written by Photo GPS Editor to install an update. Safe to delete.",
+        "# Written by FotoFixer to install an update. Safe to delete.",
         "set -u",
         f"exec >>{q(log_path.as_posix())} 2>&1",
         f'echo "== $(date) updating {old} from {new} (waiting for pid {int(app_pid)})"',

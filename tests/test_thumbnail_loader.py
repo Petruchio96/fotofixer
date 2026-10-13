@@ -113,6 +113,28 @@ class RawThumbnailTests(unittest.TestCase):
         self.assertEqual(set(images), {first, jpeg, second})
         self.assertTrue(all(image is not None and not image.isNull() for image in images.values()))
 
+    def test_heic_tries_an_embedded_preview_then_decodes_with_pillow_heif(self) -> None:
+        heic = self.folder / "IMG_1234.HEIC"
+        heic.write_bytes((Path(__file__).parent / "fixtures" / "sample.heic").read_bytes())
+        reader_calls = []
+
+        def reader(paths):
+            reader_calls.append(list(paths))
+            return {}
+
+        loader = ThumbnailLoader(thumbnail_size=64, preview_reader=reader)
+        images = loader.load_images([heic])
+
+        self.assertEqual(reader_calls, [[heic]])
+        # No preview inside: decoded with pillow-heif (64x48 sample).
+        self.assertEqual((images[heic].width(), images[heic].height()), (64, 48))
+
+    def test_unreadable_heic_gets_no_image(self) -> None:
+        broken = self.folder / "broken.heic"
+        broken.write_bytes(b"not a heic")
+        loader = ThumbnailLoader(thumbnail_size=64)
+        self.assertIsNone(loader.load_images([broken])[broken])
+
     def test_jpeg_uses_its_small_embedded_thumbnail_before_reading_the_photo(self) -> None:
         with_thumbnail = self.folder / "with.jpg"
         without_thumbnail = self.folder / "without.jpg"

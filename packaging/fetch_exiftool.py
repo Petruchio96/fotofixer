@@ -9,7 +9,7 @@ Usage (from the repository root):
 Why this file exists:
     Every build bundles its own ExifTool, so all three run the same version.
     This script downloads a pinned ExifTool version, checks it against the published SHA-256 checksum,
-    and unpacks it into the layout photo_gps_editor.spec expects:
+    and unpacks it into the layout fotofixer.spec expects:
 
         windows -> tools/windows/exiftool.exe
                    tools/windows/exiftool_files/

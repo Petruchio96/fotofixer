@@ -26,17 +26,17 @@ Build from the repository root:
 ```bash
 .venv/bin/python -m pip install PyInstaller
 .venv/bin/python packaging/fetch_exiftool.py linux
-.venv/bin/python -m PyInstaller photo_gps_editor.spec --noconfirm
-tar -C dist -czf dist/photo-gps-editor-linux-x86_64.tar.gz 'Photo GPS Editor'
+.venv/bin/python -m PyInstaller fotofixer.spec --noconfirm
+tar -C dist -czf dist/fotofixer-linux-x86_64.tar.gz 'FotoFixer'
 ```
 
 The Linux output is:
 
 ```text
-dist/Photo GPS Editor/
-  Photo GPS Editor
+dist/FotoFixer/
+  FotoFixer
   _internal/
-dist/photo-gps-editor-linux-x86_64.tar.gz
+dist/fotofixer-linux-x86_64.tar.gz
 ```
 
 The PyInstaller spec bundles:
@@ -64,20 +64,20 @@ Build on Windows rather than cross-compiling from Linux.
 5. Run:
 
 ```powershell
-python -m PyInstaller photo_gps_editor.spec --noconfirm
+python -m PyInstaller fotofixer.spec --noconfirm
 ```
 
-The Windows output will be a one-folder app containing `Photo GPS Editor.exe`.
+The Windows output will be a one-folder app containing `FotoFixer.exe`.
 The release file is the installer below, built by CI (see above); see
 `WINDOWS_BUILD_STEPS.md` for the full Windows walkthrough.
 
 ### Windows installer
 
 `packaging/windows_installer.iss` is an Inno Setup 6 script that wraps the
-one-folder build as `photo-gps-editor-windows-x86_64-setup.exe`, the Windows
+one-folder build as `fotofixer-windows-x86_64-setup.exe`, the Windows
 download (there is no separate zip). The installer:
 
-- installs per user to `%LOCALAPPDATA%\Programs\Photo GPS Editor`, with no
+- installs per user to `%LOCALAPPDATA%\Programs\FotoFixer`, with no
   admin prompt;
 - adds a Start menu shortcut, an optional desktop shortcut, and an uninstaller
   (Settings > Apps);
@@ -85,8 +85,8 @@ download (there is no separate zip). The installer:
   `_internal` folder is removed first, so nothing stale lingers) and closes a
   running copy first; its fixed `AppId` is what makes it the same program, so
   keep it even if the app is renamed;
-- keeps the settings (registry `HKCU\Software\Photo GPS Editor`) and the
-  error log (`%LOCALAPPDATA%\Photo GPS Editor`) on uninstall, as they are
+- keeps the settings (registry `HKCU\Software\FotoFixer`) and the
+  error log (`%LOCALAPPDATA%\FotoFixer`) on uninstall, as they are
   outside the install folder;
 - after a silent install (`/SILENT /SP- /NOCANCEL /NORESTART /SUPPRESSMSGBOXES
   /CLOSEAPPLICATIONS /LOG=…`, which the in-app update check uses) reopens the
@@ -100,10 +100,10 @@ To build it locally, after the PyInstaller build:
 ```powershell
 winget install --id JRSoftware.InnoSetup --scope user
 $version = python -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])"
-& "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe" "/DAppVersion=$version" "/DSourceDir=$PWD\dist\Photo GPS Editor" /Odist packaging\windows_installer.iss
+& "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe" "/DAppVersion=$version" "/DSourceDir=$PWD\dist\FotoFixer" /Odist packaging\windows_installer.iss
 ```
 
-The output is `dist\photo-gps-editor-windows-x86_64-setup.exe`. The installer
+The output is `dist\fotofixer-windows-x86_64-setup.exe`. The installer
 is not code-signed, so a downloaded copy shows "Windows protected your PC" the
 first time: More info > Run anyway. (A copy built on the same PC doesn't.)
 
@@ -118,8 +118,8 @@ Build on a Mac (Apple Silicon builds run on Apple Silicon Macs only).
 4. Run:
 
 ```bash
-python -m PyInstaller photo_gps_editor.spec --noconfirm
-ditto -c -k --keepParent "dist/Photo GPS Editor.app" dist/photo-gps-editor-macos-arm64.zip
+python -m PyInstaller fotofixer.spec --noconfirm
+ditto -c -k --keepParent "dist/FotoFixer.app" dist/fotofixer-macos-arm64.zip
 ```
 
 The app is not signed or notarized, so macOS blocks it the first time it is
@@ -144,7 +144,7 @@ APPIMAGETOOL=/tmp/appimagetool-x86_64.AppImage packaging/build_appimage.sh
 The AppImage output is:
 
 ```text
-dist/Photo_GPS_Editor-x86_64.AppImage
+dist/FotoFixer-x86_64.AppImage
 ```
 
 If a Linux system reports a FUSE error when running the AppImage, install or
@@ -152,7 +152,7 @@ enable FUSE for normal AppImage launching. For testing, this fallback avoids
 FUSE by extracting first:
 
 ```bash
-APPIMAGE_EXTRACT_AND_RUN=1 dist/Photo_GPS_Editor-x86_64.AppImage
+APPIMAGE_EXTRACT_AND_RUN=1 dist/FotoFixer-x86_64.AppImage
 ```
 
 ## Updates
@@ -179,4 +179,4 @@ bundle's symlinks and execute bits survive. What Setup or the script did is
 logged to `update-log.txt` next to the error log.
 
 To try it without a newer release, run any build with
-`PHOTO_GPS_EDITOR_PRETEND_VERSION=1.0.0`: it then offers the latest release.
+`FOTOFIXER_PRETEND_VERSION=1.0.0`: it then offers the latest release.

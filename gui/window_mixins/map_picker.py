@@ -72,7 +72,7 @@ class MapPickerMixin:
         return NetworkTileFetcher(
             user_agent=(
                 f"PhotoGPSEditor/{self.app_version} "
-                "(+https://github.com/Petruchio96/photo-gps-editor)"
+                "(+https://github.com/Petruchio96/fotofixer)"
             ),
             cache_directory=Path(cache_root) / "map-tiles",
             parent=self,

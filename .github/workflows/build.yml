@@ -1,4 +1,4 @@
-# Test and package Photo GPS Editor on Linux, Windows, and macOS.
+# Test and package FotoFixer on Linux, Windows, and macOS.
 #
 # - Every push to any branch: run the tests and build all three apps (the
 #   Windows one as an installer). Download the builds from the workflow run's
@@ -84,7 +84,7 @@ jobs:
         run: python -m unittest discover -s tests -v
 
       - name: Build app with PyInstaller
-        run: python -m PyInstaller photo_gps_editor.spec --noconfirm
+        run: python -m PyInstaller fotofixer.spec --noconfirm
 
       # Linux: folder tarball plus AppImage
       - name: Package (Linux)
@@ -93,14 +93,14 @@ jobs:
           # appimagetool is itself an AppImage; this avoids needing FUSE.
           APPIMAGE_EXTRACT_AND_RUN: "1"
         run: |
-          "dist/Photo GPS Editor/_internal/tools/linux/exiftool" -ver
-          tar -C dist -czf dist/photo-gps-editor-linux-x86_64.tar.gz "Photo GPS Editor"
+          "dist/FotoFixer/_internal/tools/linux/exiftool" -ver
+          tar -C dist -czf dist/fotofixer-linux-x86_64.tar.gz "FotoFixer"
           curl -fsSL -o appimagetool \
             https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
           chmod +x appimagetool
           APPIMAGETOOL="$PWD/appimagetool" packaging/build_appimage.sh
           mkdir release-files
-          mv dist/photo-gps-editor-linux-x86_64.tar.gz dist/Photo_GPS_Editor-x86_64.AppImage release-files/
+          mv dist/fotofixer-linux-x86_64.tar.gz dist/FotoFixer-x86_64.AppImage release-files/
 
       # Windows: the installer (packaging/windows_installer.iss) wraps the
       # one-folder app. Built with the runner's Inno Setup, or Chocolatey's
@@ -109,26 +109,26 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          & "dist\Photo GPS Editor\_internal\tools\windows\exiftool.exe" -ver
+          & "dist\FotoFixer\_internal\tools\windows\exiftool.exe" -ver
           New-Item -ItemType Directory release-files | Out-Null
           $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
           if (-not (Test-Path $iscc)) {
             choco install innosetup -y --no-progress
           }
           $version = python -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])"
-          & $iscc "/DAppVersion=$version" "/DSourceDir=$PWD\dist\Photo GPS Editor" `
+          & $iscc "/DAppVersion=$version" "/DSourceDir=$PWD\dist\FotoFixer" `
             /Orelease-files packaging\windows_installer.iss
-          Get-Item release-files\photo-gps-editor-windows-x86_64-setup.exe
+          Get-Item release-files\fotofixer-windows-x86_64-setup.exe
 
       # macOS: zipped .app bundle (ditto keeps the bundle's symlinks intact)
       - name: Package (macOS)
         if: runner.os == 'macOS'
         run: |
-          bundled_exiftool=$(find "dist/Photo GPS Editor.app" -name exiftool -type f | head -n 1)
+          bundled_exiftool=$(find "dist/FotoFixer.app" -name exiftool -type f | head -n 1)
           "$bundled_exiftool" -ver
           mkdir release-files
-          ditto -c -k --keepParent "dist/Photo GPS Editor.app" \
-            "release-files/photo-gps-editor-macos-$(uname -m).zip"
+          ditto -c -k --keepParent "dist/FotoFixer.app" \
+            "release-files/fotofixer-macos-$(uname -m).zip"
 
       # Each file is uploaded as-is (archive: false), so a download from the
       # run's Artifacts section is the file itself, not a zip around it (the
@@ -138,7 +138,7 @@ jobs:
         if: runner.os == 'Linux'
         uses: actions/upload-artifact@v7
         with:
-          path: release-files/Photo_GPS_Editor-x86_64.AppImage
+          path: release-files/FotoFixer-x86_64.AppImage
           archive: false
           if-no-files-found: error
           retention-days: 30
@@ -147,7 +147,7 @@ jobs:
         if: runner.os == 'Linux'
         uses: actions/upload-artifact@v7
         with:
-          path: release-files/photo-gps-editor-linux-x86_64.tar.gz
+          path: release-files/fotofixer-linux-x86_64.tar.gz
           archive: false
           if-no-files-found: error
           retention-days: 30
@@ -156,7 +156,7 @@ jobs:
         if: runner.os == 'Windows'
         uses: actions/upload-artifact@v7
         with:
-          path: release-files/photo-gps-editor-windows-x86_64-setup.exe
+          path: release-files/fotofixer-windows-x86_64-setup.exe
           archive: false
           if-no-files-found: error
           retention-days: 30
@@ -166,7 +166,7 @@ jobs:
         if: runner.os == 'macOS'
         uses: actions/upload-artifact@v7
         with:
-          path: release-files/photo-gps-editor-macos-arm64.zip
+          path: release-files/fotofixer-macos-arm64.zip
           archive: false
           if-no-files-found: error
           retention-days: 30
@@ -196,10 +196,10 @@ jobs:
       - name: Check all four build files are here
         run: |
           ls -l release-files
-          for file in Photo_GPS_Editor-x86_64.AppImage \
-              photo-gps-editor-linux-x86_64.tar.gz \
-              photo-gps-editor-windows-x86_64-setup.exe \
-              photo-gps-editor-macos-arm64.zip; do
+          for file in FotoFixer-x86_64.AppImage \
+              fotofixer-linux-x86_64.tar.gz \
+              fotofixer-windows-x86_64-setup.exe \
+              fotofixer-macos-arm64.zip; do
             test -f "release-files/$file" || { echo "Missing: $file"; exit 1; }
           done
 

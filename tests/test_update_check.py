@@ -27,7 +27,7 @@ from core.updates import (
     InstallKind,
 )
 from gui import update_checker
-from gui.main_window import MainWindow
+from gui.main_window import APP_VERSION, MainWindow
 from gui.update_checker import (
     CHECK_ON_START_SETTING,
     DOWNLOAD_CANCELLED,
@@ -38,7 +38,7 @@ from gui.update_checker import (
 )
 from gui.window_mixins import update_check
 
-PAGE_URL = "https://github.com/Petruchio96/photo-gps-editor/releases/tag/v9.0.0"
+PAGE_URL = "https://github.com/Petruchio96/fotofixer/releases/tag/v9.0.0"
 DOWNLOAD_DATA = b"setup " * 5000
 
 
@@ -49,7 +49,7 @@ def release_json(tag: str = "v9.0.0", *, data: bytes = DOWNLOAD_DATA, asset_url:
     for name in (WINDOWS_SETUP_ASSET, MACOS_ZIP_ASSET, LINUX_APPIMAGE_ASSET, LINUX_TARBALL_ASSET):
         assets.append({
             "name": name,
-            "browser_download_url": asset_url or f"https://github.com/Petruchio96/photo-gps-editor/releases/download/{tag}/{name}",
+            "browser_download_url": asset_url or f"https://github.com/Petruchio96/fotofixer/releases/download/{tag}/{name}",
             "size": len(data),
             "digest": digest,
         })
@@ -129,7 +129,7 @@ class UpdateCheckTests(unittest.TestCase):
         self.window._open_url = self.opened_urls.append
         # An installed Windows copy unless a test says otherwise.
         self.window._install_kind = InstallKind.WINDOWS_INSTALLED
-        self.window._install_target = self.root / "Photo GPS Editor.exe"
+        self.window._install_target = self.root / "FotoFixer.exe"
         self.window.show()
 
     def tearDown(self) -> None:
@@ -152,7 +152,7 @@ class UpdateCheckTests(unittest.TestCase):
         banner = self.window.update_banner
         self.assertTrue(banner.isVisible())
         self.assertIn("Version 9.0.0 is available", banner.text_label.text())
-        self.assertIn("you have 1.8.0", banner.text_label.text())
+        self.assertIn(f"you have {APP_VERSION}", banner.text_label.text())
         self.assertEqual(banner.action_button.text(), "Update")
         self.assertIn("install it", banner.action_button.toolTip())
         self.assertEqual(self.fetcher.release_requests, [updates.LATEST_RELEASE_API_URL])
@@ -160,7 +160,7 @@ class UpdateCheckTests(unittest.TestCase):
             self.assertTrue(button.toolTip(), button.text())
 
     def test_banner_stays_hidden_for_the_same_or_an_older_version(self) -> None:
-        for tag in ("v1.8.0", "v1.0.0"):
+        for tag in (f"v{APP_VERSION}", "v1.0.0"):
             self.fetcher.body = release_json(tag)
             self.settings.remove(LAST_CHECK_SETTING)
             self._automatic_check()
@@ -258,11 +258,11 @@ class UpdateCheckTests(unittest.TestCase):
         self.assertLess(actions.index(self.window.check_updates_action), actions.index(self.window.about_action))
 
     def test_manual_check_shows_up_to_date(self) -> None:
-        self.fetcher.body = release_json("v1.8.0")
+        self.fetcher.body = release_json(f"v{APP_VERSION}")
         self.window.check_for_updates()
         dialog = self._dialog()
         self.assertTrue(dialog.isVisible())
-        self.assertIn("up to date (version 1.8.0)", dialog.headline.text())
+        self.assertIn(f"up to date (version {APP_VERSION})", dialog.headline.text())
         self.assertFalse(dialog.action_button.isVisible())
         self.assertFalse(self.window.update_banner.isVisible())
 
@@ -308,14 +308,14 @@ class UpdateCheckTests(unittest.TestCase):
     # --- what each copy is offered ---
 
     def test_button_per_install_kind(self) -> None:
-        writable_target = self.root / "apps" / "Photo_GPS_Editor-x86_64.AppImage"
+        writable_target = self.root / "apps" / "FotoFixer-x86_64.AppImage"
         writable_target.parent.mkdir()
         writable_target.write_bytes(b"old")
         cases = [
             (InstallKind.WINDOWS_INSTALLED, self.root / "x.exe", "Update", "install it"),
             (InstallKind.LINUX_APPIMAGE, writable_target, "Update", "replace this AppImage"),
             (InstallKind.LINUX_FOLDER, writable_target.parent, "Update", "replace the app's folder"),
-            (InstallKind.MAC_APP, self.root / "apps" / "Photo GPS Editor.app", "Update", "replace the app"),
+            (InstallKind.MAC_APP, self.root / "apps" / "FotoFixer.app", "Update", "replace the app"),
             (InstallKind.WINDOWS_PORTABLE, None, "Download", "run the new Setup"),
             (InstallKind.MAC_TRANSLOCATED, None, "Download", "Applications"),
             (InstallKind.LINUX_FOLDER, None, "Download", "laid out"),
@@ -378,7 +378,7 @@ class UpdateCheckTests(unittest.TestCase):
         self.assertEqual(len(self.spawned), 1)
 
     def test_posix_update_runs_the_script_detached(self) -> None:
-        target = self.root / "apps" / "Photo_GPS_Editor-x86_64.AppImage"
+        target = self.root / "apps" / "FotoFixer-x86_64.AppImage"
         target.parent.mkdir()
         target.write_bytes(b"old")
         self.window._install_kind = InstallKind.LINUX_APPIMAGE

@@ -39,7 +39,7 @@ class WindowsInstallerScriptTests(unittest.TestCase):
     def test_installs_per_user_without_admin(self) -> None:
         self.assertIn("PrivilegesRequired=lowest", self.script)
         self.assertIn("DefaultDirName={localappdata}\\Programs\\{#MyAppName}", self.script)
-        self.assertIn('#define MyAppName "Photo GPS Editor"', self.script)
+        self.assertIn('#define MyAppName "FotoFixer"', self.script)
 
     def test_upgrade_clears_the_old_build_first(self) -> None:
         start = self.script.index("[InstallDelete]")

@@ -23,6 +23,7 @@ Why this file exists:
         web/vendor/zeroperl.wasm        Perl + ExifTool 13.42 as WebAssembly
         web/vendor/pyodide/             pyodide.mjs, pyodide.asm.mjs, pyodide.asm.wasm,
                                         python_stdlib.zip, pyodide-lock.json, the tzdata wheel
+        web/vendor/leaflet/             the map library (ES module build, its CSS and images)
         web/py/fotofixer_py.zip         core/ and services/ modules the browser runs
                                         (BROWSER_MODULES; tests/test_fetch_web_vendor.py
                                         checks they do no I/O)
@@ -62,6 +63,7 @@ DEFAULT_PY_OUT = PROJECT_ROOT / "web" / "py"
 EXIFTOOL_PACKAGE_VERSION = "1.0.9"
 ZEROPERL_PACKAGE_VERSION = "1.0.10"
 PYODIDE_VERSION = "314.0.7"
+LEAFLET_VERSION = "1.9.4"
 TZDATA_WHEEL = "tzdata-2025.3-py2.py3-none-any.whl"
 
 # name -> (download URL, SHA-256 of the archive, files to take: archive path -> output path)
@@ -77,6 +79,20 @@ PACKAGES = {
         {
             "package/dist/esm/index.js": "zeroperl.js",
             "package/dist/esm/zeroperl.wasm": "zeroperl.wasm",
+        },
+    ),
+    # The map (BSD-2-Clause). The ES module build, loaded when the map opens.
+    "leaflet": (
+        f"https://registry.npmjs.org/leaflet/-/leaflet-{LEAFLET_VERSION}.tgz",
+        "84c65a256e50657896f54c33bd857b6849ebe94c817803be818bf32a3dde0b77",
+        {
+            "package/dist/leaflet-src.esm.js": "leaflet/leaflet.esm.js",
+            "package/dist/leaflet.css": "leaflet/leaflet.css",
+            "package/dist/images/layers.png": "leaflet/images/layers.png",
+            "package/dist/images/layers-2x.png": "leaflet/images/layers-2x.png",
+            "package/dist/images/marker-icon.png": "leaflet/images/marker-icon.png",
+            "package/dist/images/marker-icon-2x.png": "leaflet/images/marker-icon-2x.png",
+            "package/dist/images/marker-shadow.png": "leaflet/images/marker-shadow.png",
         },
     ),
     "pyodide": (
@@ -218,6 +234,7 @@ def fetch_vendor(out_dir: Path) -> None:
         f"@uswriting/exiftool {EXIFTOOL_PACKAGE_VERSION} (ExifTool 13.42)\n"
         f"@6over3/zeroperl-ts {ZEROPERL_PACKAGE_VERSION}\n"
         f"pyodide {PYODIDE_VERSION} + {TZDATA_WHEEL}\n"
+        f"leaflet {LEAFLET_VERSION}\n"
     )
 
 

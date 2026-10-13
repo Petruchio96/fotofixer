@@ -64,6 +64,8 @@ curl -fs -o /dev/null http://127.0.0.1:18080/vendor/pyodide/pyodide.mjs || fail 
 curl -fs -o /dev/null http://127.0.0.1:18080/vendor/pyodide/python_stdlib.zip || fail "python_stdlib.zip missing"
 curl -fs -o /dev/null http://127.0.0.1:18080/vendor/pyodide/tzdata-2025.3-py2.py3-none-any.whl || fail "tzdata wheel missing"
 curl -fs -o /dev/null http://127.0.0.1:18080/py/fotofixer_py.zip || fail "py/fotofixer_py.zip missing"
+curl -fs -o /dev/null http://127.0.0.1:18080/vendor/leaflet/leaflet.esm.js || fail "leaflet.esm.js missing"
+curl -fsI http://127.0.0.1:18080/vendor/leaflet/leaflet.css | grep -qi "^content-type: text/css" || fail "leaflet.css missing or not text/css"
 code=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:18080/tests/photo_store.test.mjs)
 [ "$code" = "404" ] || fail "tests are in the image (got $code)"
 stop

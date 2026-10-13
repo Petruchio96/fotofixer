@@ -411,6 +411,23 @@ Generic Docker, Caddy, and Traefik examples go in the same document.
    reads the clipboard when clicked instead).
 3. **Map.** Leaflet, OSM and USGS, Esri with the visitor's key, the pin,
    photo dots and previews, Use This Location, Back/Clear.
+
+   **Built 2026-10-13 (branch `web-map`):** Pick from a Map in the Location
+   tab opens `web/app/map_view.js`, a `<dialog>` with Leaflet 1.9.4
+   (vendored by `packaging/fetch_web_vendor.py`, loaded when the map
+   opens): Street / Satellite (Esri with the key from Settings, USGS
+   without; `map_tiles.js` mirrors `core/map_tiles.py`, a test checks it),
+   Show All Photo Locations, Go to Selected Location, zoom buttons; a
+   click or a dragged pin fills the fields; blue dots for photos with GPS
+   (orange when selected) with name hints and the preview popup
+   (thumbnail zooms, "1 of 2" for dots within 2 px, Use This Location);
+   the coordinate readout; Back through the locations set on the map,
+   Clear, Cancel / Select Location, Esc. The pin follows New Location
+   while the map is open. Settings gained the Esri key (this browser
+   only, sent only to Esri in the tile address) with Paste and Remove Key.
+   Not ported: the desktop's 0.3 s click-versus-pan rule (Leaflet
+   separates clicks from drags itself), the space-bar pan mode, and the
+   tile disk cache (the browser's HTTP cache does that).
 4. **Date & Time.** Shift, Set, Change Time Zone, camera groups.
 5. **Polish and publish.** iPad pass in Safari, `docs/SELF_HOSTING.md`, a
    README section, the GHCR workflow, version **1.10.0** in the same PR, and

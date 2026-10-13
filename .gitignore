@@ -21,3 +21,4 @@ web/vendor/VERSIONS.txt
 # The web version's Pyodide and Python module zip (packaging/fetch_web_vendor.py)
 web/vendor/pyodide/
 web/py/
+web/vendor/leaflet/

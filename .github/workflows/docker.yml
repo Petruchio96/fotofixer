@@ -1,5 +1,5 @@
 # Publish the web version's container image to GitHub Container Registry
-# (docs/ROADMAP.md, Part 3, "Publishing the image").
+# (PROJECT_CONTEXT.md, "Web version", Publishing; docs/SELF_HOSTING.md).
 #
 # - When a GitHub release is *published* (not a draft, not a pre-release):
 #   builds docker/Dockerfile for linux/amd64 and linux/arm64 at the release's

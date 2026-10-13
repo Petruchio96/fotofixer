@@ -1,0 +1,48 @@
+# Test the web version (docs/ROADMAP.md, Part 3) and build and check its
+# container. Runs only when the web version changes; the desktop builds in
+# build.yml skip those pushes in turn.
+#
+# - Every push that touches web/, docker/, or the vendor fetch script: the
+#   JavaScript unit tests, then the image is built and checked the way
+#   docker/check_container.sh does locally (page, headers, WebAssembly type,
+#   the optional password).
+# - "Run workflow" on the Actions tab runs it manually.
+
+name: Web
+
+on:
+  push:
+    branches: ["**"]
+    paths:
+      - "web/**"
+      - "docker/**"
+      - "packaging/fetch_web_vendor.py"
+      - ".github/workflows/web.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: web-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  web:
+    name: Web app and container
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+
+      - name: Run the web tests
+        run: node --test web/tests
+
+      - name: Build the container
+        run: docker build -f docker/Dockerfile -t fotofixer:ci .
+
+      - name: Check the container
+        run: IMAGE=fotofixer:ci docker/check_container.sh

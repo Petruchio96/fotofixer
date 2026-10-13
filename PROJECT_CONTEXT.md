@@ -239,8 +239,9 @@ browser. Phase 1 (the skeleton, branch `web-skeleton`, 2026-10-12):
   hardened defaults, `check_container.sh` (what CI runs)
 - Tests: `node --test web/tests` (the store, file types vs the Python list,
   save mode, hover hints), `tests/test_fetch_web_vendor.py` (the patches),
-  and the `web` job in `.github/workflows/build.yml` (tests, image build,
-  container checks)
+  and `.github/workflows/web.yml` (tests, image build, container checks;
+  it runs only for pushes that touch the web version, and `build.yml`
+  skips those)
 - Run it: `python packaging/fetch_web_vendor.py`, `python3 -m http.server
   8765` in the repository root, open `http://127.0.0.1:8765/web/`
 

@@ -366,8 +366,9 @@ Generic Docker, Caddy, and Traefik examples go in the same document.
    `index.html`, `app/*.js` modules, `worker/exif_worker.js`, `vendor/`
    fetched by `packaging/fetch_web_vendor.py`), `docker/` (Dockerfile on
    `nginx-unprivileged`, `nginx.conf` with the headers, the password
-   entrypoint, `compose.yaml`, `check_container.sh`), the `web` CI job
-   (Node tests + container checks), `LICENSE` (MIT). Add Photos is a menu:
+   entrypoint, `compose.yaml`, `check_container.sh`), its own CI workflow
+   (`web.yml`: Node tests + container checks; `build.yml` skips web-only
+   pushes), `LICENSE` (MIT). Add Photos is a menu:
    Open a Folder (Chrome/Edge, read-write, subfolders included), Choose
    Photos, Choose a Folder; plus drag and drop. Left for later phases:
    - **The Add Photos picker dialog** of the mockups (folder tree, folder

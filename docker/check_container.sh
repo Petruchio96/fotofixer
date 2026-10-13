@@ -15,21 +15,36 @@ if [ -z "$IMAGE" ]; then
     docker build -f docker/Dockerfile -t "$IMAGE" .
 fi
 
-run_opts=(--rm -d --read-only --tmpfs /tmp --cap-drop ALL --security-opt no-new-privileges:true -p 127.0.0.1:18080:8080)
-fail() { echo "FAIL: $*" >&2; exit 1; }
+# Not --rm: a container that dies at start must keep its logs for us.
+run_opts=(-d --read-only --tmpfs /tmp --cap-drop ALL --security-opt no-new-privileges:true -p 127.0.0.1:18080:8080)
+cid=""
+stop() {
+    if [ -n "$cid" ]; then
+        docker stop "$cid" >/dev/null 2>&1 || true
+        docker rm -f "$cid" >/dev/null 2>&1 || true
+    fi
+    cid=""
+}
+trap stop EXIT
+fail() {
+    echo "FAIL: $*" >&2
+    if [ -n "$cid" ]; then
+        echo "--- container logs:" >&2
+        docker logs "$cid" >&2 || true
+    fi
+    exit 1
+}
 wait_up() {
     for _ in $(seq 1 30); do
         curl -fs -o /dev/null http://127.0.0.1:18080/healthz && return 0
         sleep 1
     done
-    docker logs "$1" || true
     fail "the container did not answer on /healthz"
 }
 
 echo "== open (no password)"
 cid=$(docker run "${run_opts[@]}" "$IMAGE")
-trap 'docker stop "$cid" >/dev/null 2>&1 || true' EXIT
-wait_up "$cid"
+wait_up
 headers=$(curl -fsi http://127.0.0.1:18080/)
 grep -qi "^content-security-policy: .*wasm-unsafe-eval" <<<"$headers" || fail "no Content-Security-Policy header"
 grep -qi "^x-content-type-options: nosniff" <<<"$headers" || fail "no X-Content-Type-Options header"
@@ -44,11 +59,11 @@ curl -fs -o /dev/null http://127.0.0.1:18080/worker/exif_worker.js || fail "work
 curl -fs -o /dev/null http://127.0.0.1:18080/vendor/exiftool.js || fail "vendor/exiftool.js missing"
 code=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:18080/tests/photo_store.test.mjs)
 [ "$code" = "404" ] || fail "tests are in the image (got $code)"
-docker stop "$cid" >/dev/null
+stop
 
 echo "== with a password"
 cid=$(docker run "${run_opts[@]}" -e APP_USERNAME=friend -e APP_PASSWORD='s3cret pass' "$IMAGE")
-wait_up "$cid"
+wait_up
 code=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:18080/)
 [ "$code" = "401" ] || fail "expected 401 without the password, got $code"
 code=$(curl -s -o /dev/null -w "%{http_code}" -u 'friend:wrong' http://127.0.0.1:18080/)
@@ -56,16 +71,28 @@ code=$(curl -s -o /dev/null -w "%{http_code}" -u 'friend:wrong' http://127.0.0.1
 code=$(curl -s -o /dev/null -w "%{http_code}" -u 'friend:s3cret pass' http://127.0.0.1:18080/)
 [ "$code" = "200" ] || fail "expected 200 with the password, got $code"
 curl -fs http://127.0.0.1:18080/healthz | grep -q ok || fail "/healthz should not need the password"
-docker stop "$cid" >/dev/null
+stop
 
 echo "== with a password file"
 secret=$(mktemp)
 printf 'from-a-file' > "$secret"
+# The container reads it as the nginx user, not as us (mktemp makes it 0600).
+chmod 644 "$secret"
 cid=$(docker run "${run_opts[@]}" -v "$secret:/run/secrets/pw:ro" -e APP_PASSWORD_FILE=/run/secrets/pw "$IMAGE")
-wait_up "$cid"
+wait_up
 code=$(curl -s -o /dev/null -w "%{http_code}" -u 'fotofixer:from-a-file' http://127.0.0.1:18080/)
 [ "$code" = "200" ] || fail "expected 200 with the password from the file, got $code"
-docker stop "$cid" >/dev/null
+stop
+rm -f "$secret"
+
+echo "== an unreadable password file stops the container with a message"
+secret=$(mktemp)
+printf 'hidden' > "$secret"
+chmod 600 "$secret"
+cid=$(docker run "${run_opts[@]}" -v "$secret:/run/secrets/pw:ro" -e APP_PASSWORD_FILE=/run/secrets/pw "$IMAGE")
+sleep 3
+docker logs "$cid" 2>&1 | grep -q "cannot read APP_PASSWORD_FILE" || fail "no message about the unreadable password file"
+stop
 rm -f "$secret"
 
 echo "== nothing secret in the image"
@@ -73,5 +100,4 @@ if docker run --rm --entrypoint sh "$IMAGE" -c 'grep -rIlE "(api[_-]?key|token|p
     fail "something in the image looks like a key"
 fi
 
-trap - EXIT
 echo "all container checks passed"

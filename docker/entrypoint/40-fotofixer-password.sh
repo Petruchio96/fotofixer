@@ -19,7 +19,13 @@ mkdir -p "$dir"
 
 password="${APP_PASSWORD:-}"
 if [ -n "${APP_PASSWORD_FILE:-}" ]; then
-    password="$(cat "$APP_PASSWORD_FILE")"
+    # Read as the container's user (nginx, uid 101): the file must be
+    # readable by it. Docker secrets are (mode 0444); a bind-mounted file
+    # made with a 0600 mode is not.
+    if ! password="$(cat "$APP_PASSWORD_FILE")"; then
+        echo "FotoFixer: cannot read APP_PASSWORD_FILE ($APP_PASSWORD_FILE) as user $(id -un); make it readable (chmod 644) or use APP_PASSWORD." >&2
+        exit 1
+    fi
 fi
 
 if [ -n "$password" ]; then

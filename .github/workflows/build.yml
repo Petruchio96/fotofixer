@@ -7,6 +7,7 @@
 # - Pushing a tag like v1.2.0: also attach the builds to that GitHub release
 #   (a draft release is created if one does not exist yet).
 # - "Run workflow" on the Actions tab runs it manually.
+# - The web version has its own workflow, web.yml.
 
 name: Build
 
@@ -14,6 +15,11 @@ on:
   push:
     branches: ["**"]
     tags: ["v*"]
+    # Pushes that only touch the web version run web.yml instead. (Path
+    # filters don't apply to tags, so a release still builds everything.)
+    paths-ignore:
+      - "web/**"
+      - "docker/**"
   workflow_dispatch:
 
 permissions:
@@ -233,25 +239,3 @@ jobs:
           done
           ! grep -q MISSING digests.txt
           test "$(wc -l < digests.txt)" -eq 4
-
-  # The web version (docs/ROADMAP.md, Part 3): the JavaScript unit tests,
-  # then the container is built and checked like docker/check_container.sh
-  # does locally (page, headers, WebAssembly type, optional password).
-  web:
-    name: Web app and container
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-
-      - name: Run the web tests
-        run: node --test web/tests
-
-      - name: Build the container
-        run: docker build -f docker/Dockerfile -t fotofixer:ci .
-
-      - name: Check the container
-        run: IMAGE=fotofixer:ci docker/check_container.sh

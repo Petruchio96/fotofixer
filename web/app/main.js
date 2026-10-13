@@ -2,21 +2,22 @@
 // visitor's browser. This module wires the pieces together and runs the
 // pipelines: loading (file -> bytes -> ExifTool in the worker -> the Photo
 // List, one photo at a time, the thumbnail made on this thread) and
-// changing (Apply / Remove GPS / undo / redo -> ExifTool in the worker ->
-// the file on disk, or a download).
+// changing (Apply / Remove GPS / date changes / undo / redo -> ExifTool in
+// the worker -> the file on disk, or a download).
 
 import { PhotoStore, formatCoordinates } from "./photo_store.js";
 import { createPhotoListView } from "./photo_list_view.js";
 import { createChangePane } from "./summary_view.js";
 import { PICK_PROMPT } from "./location_view.js";
+import { TIME_PICK_PROMPT } from "./date_view.js";
 import { ExifClient } from "./exif_client.js";
 import { detectSaveMode, saveModeText, zipName, backupName, isBackupName } from "./save_mode.js";
 import { entriesFromFolderPicker, entriesFromFileList, entriesFromDrop, entryFromFileHandle } from "./file_sources.js";
 import { thumbnailFromPreview, thumbnailFromFile } from "./thumbnails.js";
 import { isJpegName, isHeifName } from "./file_types.js";
-import { EditHistory, EDIT_GPS } from "./edit_history.js";
+import { EditHistory, EDIT_GPS, EDIT_DATE } from "./edit_history.js";
 import { overwriteQuestion, changeMessage } from "./location_state.js";
-import { askOverwrite, confirmRemoveGps, showFailures, showNotice, showSettings } from "./dialogs.js";
+import { askOverwrite, confirmRemoveGps, confirmKeepClock, showFailures, showNotice, showSettings } from "./dialogs.js";
 import { buildStoredZip } from "./zip_store.js";
 import { createMapDialog } from "./map_view.js";
 
@@ -61,6 +62,7 @@ document.getElementById("settingsButton").addEventListener("click", async () => 
 const store = new PhotoStore();
 const history = new EditHistory();
 const exif = new ExifClient(new URL("../worker/exif_worker.js", import.meta.url));
+let pythonReady = false;
 
 function photosWord(count) {
   return count === 1 ? "photo" : "photos";
@@ -136,12 +138,21 @@ async function readPhoto(photo) {
     const { gps, dates, make, model } = reply.tags;
     store.setInfo(photo.id, { gps, dates, make, model });
     await makeThumbnail(photo, file, reply.preview);
+    await describe(photo.id);
     console.debug(`${photo.name}: ExifTool ${readMs} ms, thumbnail ${Math.round(performance.now() - started) - readMs} ms`);
   } catch (error) {
     if (store.get(photo.id)) {
       store.setInfo(photo.id, { error: error.message === "cancelled" ? "Reading was cancelled" : String(error.message ?? error) });
     }
   }
+}
+
+/** The Date & Time mode's view of a photo (dates, zone, camera), from Python. */
+async function describe(id) {
+  const photo = store.get(id);
+  if (!photo || photo.status !== "ready" || !pythonReady) return;
+  const reply = await exif.dates("describe", { name: photo.name, dates: photo.dates ?? {}, make: photo.make, model: photo.model });
+  if (reply.ok && store.get(id)) store.setDescription(id, reply.result);
 }
 
 async function makeThumbnail(photo, file, preview) {
@@ -189,14 +200,30 @@ function setMessage(text, options = {}) {
 
 let writing = false;
 
+/** The same four tags the desktop writes (core/exiftool_wrapper.py); null clears them. */
+function gpsTags(gps) {
+  if (!gps) return { GPSLatitude: "", GPSLatitudeRef: "", GPSLongitude: "", GPSLongitudeRef: "" };
+  return {
+    GPSLatitude: Math.abs(gps.latitude),
+    GPSLatitudeRef: gps.latitude >= 0 ? "N" : "S",
+    GPSLongitude: Math.abs(gps.longitude),
+    GPSLongitudeRef: gps.longitude >= 0 ? "E" : "W",
+  };
+}
+
+/** Tag values for ExifTool: null (a tag that wasn't there) deletes. */
+function cleanTags(tags) {
+  return Object.fromEntries(Object.entries(tags).map(([tag, value]) => [tag, value === null ? "" : value]));
+}
+
 /**
- * Write gpsById (id -> {latitude, longitude} | null) into the photos, one
- * at a time: in place through the file handle when the photo has one
- * (with a backup copy first, when asked and the photo had GPS), else into
- * memory for Download. A failure on one photo never stops the others.
+ * Write states (id -> {tags, gps?}) into the photos, one at a time: in
+ * place through the file handle when the photo has one (with a backup copy
+ * first, when asked and the photo had GPS), else into memory for Download.
+ * A failure on one photo never stops the others.
  */
-async function writeStates(gpsById, { text, makeBackups }) {
-  const ids = [...gpsById.keys()];
+async function writeStates(states, { text, makeBackups }) {
+  const ids = [...states.keys()];
   const done = [];
   const failed = [];
   const backups = [];
@@ -209,24 +236,30 @@ async function writeStates(gpsById, { text, makeBackups }) {
     for (const [index, id] of ids.entries()) {
       const photo = store.get(id);
       if (!photo) continue;
-      const gps = gpsById.get(id);
+      const entry = states.get(id);
       try {
         const bytes = await photoBytes(photo);
         let backupBytes = null;
-        if (makeBackups && photo.handle && photo.parent && photo.gps && settings.keepBackups && !isBackupName(photo.name)) {
+        if (makeBackups && "gps" in entry && photo.handle && photo.parent && photo.gps && settings.keepBackups && !isBackupName(photo.name)) {
           backupBytes = bytes.slice();
         }
-        const reply = await exif.write(photo.name, bytes, gps);
+        const reply = await exif.write(photo.name, bytes, cleanTags(entry.tags));
         if (!reply.ok) throw new Error(reply.error);
+        let newBytes = null;
         if (photo.handle) {
           const backup = backupBytes ? await makeBackup(photo, backupBytes) : null;
           const writable = await photo.handle.createWritable();
           await writable.write(reply.bytes);
           await writable.close();
           if (backup) backups.push(backup);
-          store.setGps(id, gps);
         } else {
-          store.setGps(id, gps, reply.bytes);
+          newBytes = reply.bytes;
+        }
+        if ("gps" in entry) {
+          store.setGps(id, entry.gps, newBytes);
+        } else {
+          store.setDates(id, entry.tags, newBytes);
+          await describe(id);
         }
         done.push(id);
       } catch (error) {
@@ -284,14 +317,9 @@ async function deleteBackups(backups) {
   return failed;
 }
 
-function rememberEdit({ before, after, backups, snapshot }) {
-  history.record({ before, after, backups, snapshot, kind: EDIT_GPS });
-  updateUndoRedo();
-}
-
 function updateUndoRedo() {
-  undoButton.disabled = !history.canUndo || writing || store.picking;
-  redoButton.disabled = !history.canRedo || writing || store.picking;
+  undoButton.disabled = !history.canUndo || writing || Boolean(store.picking);
+  redoButton.disabled = !history.canRedo || writing || Boolean(store.picking);
 }
 
 /** The photos to keep selected after a change: the targets that failed, to retry. */
@@ -301,24 +329,23 @@ function failedTargets(selected, targets, done) {
   return selected.filter((id) => wanted.has(id) && !changed.has(id));
 }
 
-async function finishChange({ action, selected, targetIds, before, after, skipped = 0, result }) {
+async function finishChange({ kind, selected, targetIds, before, after, snapshot, result, message, failAction }) {
   if (result.done.length) {
-    rememberEdit({
+    history.record({
       before: new Map(result.done.map((id) => [id, before.get(id)])),
       after: new Map(result.done.map((id) => [id, after.get(id)])),
       backups: result.backups,
-      snapshot: result.snapshot,
+      snapshot,
+      kind,
     });
   } else {
     history.clear();
-    updateUndoRedo();
   }
+  updateUndoRedo();
   store.select(failedTargets(selected, targetIds, result.done));
   if (result.backups.length) addEntries(result.backups.map((backup) => backup.entry));
-  if (result.done.length) {
-    setMessage(changeMessage({ action, count: result.done.length, skipped, backups: result.backups.length }), { tone: "success", undo: true });
-  }
-  if (result.failed.length) reportFailures(action === "apply" ? "apply GPS to" : "remove GPS from", result.failed);
+  if (result.done.length) setMessage(message(result.done.length), { tone: "success", undo: true });
+  if (result.failed.length) reportFailures(failAction, result.failed);
 }
 
 async function applyLocation(state) {
@@ -345,10 +372,14 @@ async function applyLocation(state) {
   }
   const selected = store.selectedIds();
   const snapshot = store.snapshot();
-  const before = store.gpsStates(targetIds);
-  const after = new Map(targetIds.map((id) => [id, newLocation]));
+  const before = new Map(targetIds.map((id) => [id, { gps: store.get(id).gps, tags: gpsTags(store.get(id).gps) }]));
+  const after = new Map(targetIds.map((id) => [id, { gps: newLocation, tags: gpsTags(newLocation) }]));
   const result = await writeStates(after, { text: "Applying GPS", makeBackups: true });
-  await finishChange({ action: "apply", selected, targetIds, before, after, skipped, result: { ...result, snapshot } });
+  await finishChange({
+    kind: EDIT_GPS, selected, targetIds, before, after, snapshot, result,
+    message: (count) => changeMessage({ action: "apply", count, skipped, backups: result.backups.length }),
+    failAction: "apply GPS to",
+  });
 }
 
 async function removeGps(state) {
@@ -357,39 +388,72 @@ async function removeGps(state) {
   if (!(await confirmRemoveGps(ids.map((id) => store.get(id).name)))) return;
   const selected = store.selectedIds();
   const snapshot = store.snapshot();
-  const before = store.gpsStates(ids);
-  const after = new Map(ids.map((id) => [id, null]));
+  const before = new Map(ids.map((id) => [id, { gps: store.get(id).gps, tags: gpsTags(store.get(id).gps) }]));
+  const after = new Map(ids.map((id) => [id, { gps: null, tags: gpsTags(null) }]));
   const result = await writeStates(after, { text: "Removing GPS", makeBackups: true });
-  await finishChange({ action: "remove", selected, targetIds: ids, before, after, result: { ...result, snapshot } });
+  await finishChange({
+    kind: EDIT_GPS, selected, targetIds: ids, before, after, snapshot, result,
+    message: (count) => changeMessage({ action: "remove", count, backups: result.backups.length }),
+    failAction: "remove GPS from",
+  });
+}
+
+/**
+ * Date & Time: write the new dates (Shift, Set, or Change Time Zone) the
+ * bridge planned. Date changes never make backup copies; undo writes back
+ * the exact tags read before.
+ */
+async function applyDates(state) {
+  if (writing || !state?.canApply) return;
+  const ids = Object.keys(state.changes);
+  const selected = store.selectedIds();
+  const snapshot = store.snapshot();
+  const before = new Map(ids.map((id) => [id, { tags: state.before[id] }]));
+  const after = new Map(ids.map((id) => [id, { tags: state.changes[id] }]));
+  const mode = state.applyLabel.startsWith("Shift") ? "shift" : state.applyLabel.startsWith("Change") ? "zone" : "set";
+  const result = await writeStates(after, { text: mode === "zone" ? "Changing time zones" : "Changing dates", makeBackups: false });
+  changePane.date.reset();
+  await finishChange({
+    kind: EDIT_DATE, selected, targetIds: ids, before, after, snapshot, result,
+    message: (count) => {
+      const photos = `${count} ${photosWord(count)}`;
+      if (mode === "shift") return `Shifted ${photos} (${state.shiftText}).`;
+      if (mode === "zone") return `Changed the time zone of ${photos}${state.zoneName ? ` to ${state.zoneName}.` : "."}`;
+      return `Set the date on ${photos} to ${state.newDates[result.done[0]]}.`;
+    },
+    failAction: "change the date of",
+  });
 }
 
 async function undo() {
   const states = history.undoStates();
   if (writing || !states.size) return;
+  const what = history.kind === EDIT_DATE ? "Date" : "GPS";
   if (history.snapshot) {
     const readded = store.restoreSnapshot(history.snapshot);
     if (readded.length) queueReads(readded);
   }
   // Undo puts the photos back: it never backs up the version it's undoing.
-  const result = await writeStates(states, { text: "Undoing the GPS change", makeBackups: false });
+  const result = await writeStates(states, { text: `Undoing the ${what} change`, makeBackups: false });
   const failed = [...result.failed, ...(await deleteBackups(history.backups))];
   history.markUndone();
   updateUndoRedo();
   if (history.snapshot) store.select(history.snapshot.selectedIds);
-  setMessage("GPS change undone.");
-  if (failed.length) reportFailures("undo the GPS change for", failed);
+  setMessage(`${what} change undone.`);
+  if (failed.length) reportFailures(`undo the ${what} change for`, failed);
 }
 
 async function redo() {
   const states = history.redoStates();
   if (writing || !states.size) return;
-  const result = await writeStates(states, { text: "Redoing the GPS change", makeBackups: true });
+  const what = history.kind === EDIT_DATE ? "Date" : "GPS";
+  const result = await writeStates(states, { text: `Redoing the ${what} change`, makeBackups: history.kind === EDIT_GPS });
   history.setBackups(result.backups);
   history.markRedone();
   updateUndoRedo();
   if (result.backups.length) addEntries(result.backups.map((backup) => backup.entry));
-  setMessage("GPS change redone.", { undo: true });
-  if (result.failed.length) reportFailures("redo the GPS change for", result.failed);
+  setMessage(`${what} change redone.`, { undo: true });
+  if (result.failed.length) reportFailures(`redo the ${what} change for`, result.failed);
 }
 
 function reportFailures(action, failures) {
@@ -435,7 +499,7 @@ async function downloadChanged() {
   setMessage(ids.length === 1 ? "1 photo downloaded. Replace the original on your computer with it." : `${ids.length} photos downloaded as a zip. Replace the originals on your computer with them.`, { tone: "success" });
 }
 
-// ----- the location source -----
+// ----- the sources: a location or a time from a photo -----
 
 function useLocationFromPhoto(id) {
   const photo = store.get(id);
@@ -445,29 +509,72 @@ function useLocationFromPhoto(id) {
   return true;
 }
 
+async function readFileInfo(file) {
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  const reply = await exif.read(file.name, bytes);
+  if (!reply.ok) throw new Error(reply.error);
+  return reply.tags;
+}
+
 async function useLocationFromFile(file) {
   try {
-    const bytes = new Uint8Array(await file.arrayBuffer());
-    const reply = await exif.read(file.name, bytes);
-    if (!reply.ok) {
-      await showNotice("Could Not Read Photo", `Could not read GPS from ${file.name}: ${reply.error}`, "warning");
-      return;
-    }
-    const gps = reply.tags.gps;
-    if (!gps) {
+    const tags = await readFileInfo(file);
+    if (!tags.gps) {
       await showNotice("No GPS Coordinates", `${file.name} has no GPS coordinates.`);
       return;
     }
-    changePane.location.setFields(gps.latitude.toFixed(6), gps.longitude.toFixed(6));
-    setMessage(`Using the location from ${file.name}: ${formatCoordinates(gps)}.`, { tone: "success" });
+    changePane.location.setFields(tags.gps.latitude.toFixed(6), tags.gps.longitude.toFixed(6));
+    setMessage(`Using the location from ${file.name}: ${formatCoordinates(tags.gps)}.`, { tone: "success" });
   } catch (error) {
-    await showNotice("Could Not Read Photo", String(error.message ?? error), "warning");
+    await showNotice("Could Not Read Photo", `Could not read GPS from ${file.name}: ${error.message ?? error}`, "warning");
   }
 }
 
+function useTimeFromPhoto(id) {
+  const photo = store.get(id);
+  if (!photo?.dateTaken) return false;
+  changePane.date.setSource(id);
+  setMessage(`Using the time from ${photo.name}: ${photo.dateText}.`, { tone: "success" });
+  return true;
+}
+
+async function useTimeFromFile(file) {
+  try {
+    const tags = await readFileInfo(file);
+    const described = await exif.dates("describe", { name: file.name, dates: tags.dates, make: tags.make, model: tags.model });
+    if (!described.ok || !described.result.dateTaken) {
+      await showNotice("No Date", `${file.name} has no date taken, so its time can't be used.`);
+      return;
+    }
+    changePane.date.setSource(null, { name: file.name, dates: tags.dates, make: tags.make, model: tags.model });
+    setMessage(`Using the time from ${file.name}: ${described.result.dateText}.`, { tone: "success" });
+  } catch (error) {
+    await showNotice("Could Not Read Photo", `Could not read the date from ${file.name}: ${error.message ?? error}`, "warning");
+  }
+}
+
+// ----- pick mode: From a Photo in the Photo List (a location, or a time) -----
+
+function stopPicking() {
+  store.setPicking(null);
+  updateUndoRedo();
+}
+
 function togglePick() {
-  if (store.picking) store.setPicking(false);
-  else if (store.pickableCount()) store.setPicking(true);
+  if (store.picking) stopPicking();
+  else if (store.pickableCount()) {
+    listView.setPickPrompt(PICK_PROMPT);
+    store.setPicking("location");
+  }
+  updateUndoRedo();
+}
+
+function togglePickTime() {
+  if (store.picking) stopPicking();
+  else if (store.timePickableCount()) {
+    listView.setPickPrompt(TIME_PICK_PROMPT.replaceAll("{reference}", changePane.date.referenceName()));
+    store.setPicking("time");
+  }
   updateUndoRedo();
 }
 
@@ -495,11 +602,12 @@ const listView = createPhotoListView(document.getElementById("photoList"), store
   },
   clearList() {
     cancelLoading();
-    store.setPicking(false);
+    stopPicking();
     store.clear();
     history.clear();
     updateUndoRedo();
     changePane.location.clearFields();
+    changePane.date.reset();
     setMessage("");
   },
   removeSelected() {
@@ -509,14 +617,13 @@ const listView = createPhotoListView(document.getElementById("photoList"), store
   },
   cancelLoading,
   pickPhoto(id) {
-    if (useLocationFromPhoto(id)) store.setPicking(false);
-    updateUndoRedo();
+    const used = store.picking === "time" ? useTimeFromPhoto(id) : useLocationFromPhoto(id);
+    if (used) stopPicking();
   },
-  cancelPick: () => { if (store.picking) togglePick(); },
+  cancelPick: stopPicking,
   undo,
   download: downloadChanged,
 }, { canOpenFolder: saveMode === "inplace" });
-listView.setPickPrompt(PICK_PROMPT);
 
 const changePane = createChangePane(document.getElementById("photosToChange"), store, {
   saveModeText: modeText,
@@ -531,6 +638,19 @@ const changePane = createChangePane(document.getElementById("photosToChange"), s
     // The pin follows New Location while the map is open (typed, pasted,
     // copied from a photo); the map moves to it only when it is out of view.
     onLocationChange: (location) => { if (mapDialog.isOpen()) mapDialog.setPin(location, { reveal: true }); },
+  },
+  dateActions: {
+    dates: (op, payload) => exif.dates(op, payload),
+    togglePickTime,
+    timeFromFile: useTimeFromFile,
+    apply: applyDates,
+    addPhotos: () => document.querySelector(".pane-list .hdr-btn")?.click(),
+    confirmKeepClock,
+  },
+  // The Photo List follows the tab: GPS groups or camera groups.
+  onTabChange(mode) {
+    stopPicking();
+    store.setMode(mode);
   },
 });
 
@@ -553,12 +673,18 @@ store.subscribe((change) => {
   if (["info", "selection", "added", "removed", "thumb"].includes(change.type)) mapDialog.refreshDots();
 });
 
-exif.onPythonReady = (reply) => changePane.location.setPythonReady(reply.ok, reply.error);
+exif.onPythonReady = (reply) => {
+  pythonReady = reply.ok;
+  changePane.location.setPythonReady(reply.ok, reply.error);
+  changePane.date.setPythonReady(reply.ok, reply.error);
+  // Photos read before Python was ready get their dates described now.
+  if (reply.ok) for (const id of store.order) describe(id);
+};
 
 undoButton.addEventListener("click", undo);
 redoButton.addEventListener("click", redo);
 document.addEventListener("keydown", (event) => {
-  if (!(event.ctrlKey || event.metaKey) || event.target.matches("input, textarea")) return;
+  if (!(event.ctrlKey || event.metaKey) || event.target.matches("input, textarea, select")) return;
   const key = event.key.toLowerCase();
   if (key === "z" && !event.shiftKey) { event.preventDefault(); undo(); }
   else if (key === "y" || (key === "z" && event.shiftKey)) { event.preventDefault(); redo(); }
@@ -582,5 +708,5 @@ window.addEventListener("beforeunload", (event) => {
 // For automated checks against a local server only: the pieces a test
 // drives without the native file pickers (see docs/ROADMAP.md, Tests).
 if (["127.0.0.1", "localhost"].includes(location.hostname)) {
-  window.fotofixerDebug = { store, history, addEntries, exif };
+  window.fotofixerDebug = { store, history, addEntries, exif, changePane };
 }

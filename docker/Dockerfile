@@ -18,6 +18,9 @@ WORKDIR /src
 COPY packaging/fetch_web_vendor.py packaging/
 COPY core/ core/
 COPY services/ services/
+COPY gui/__init__.py gui/
+COPY gui/presenters/ gui/presenters/
+COPY web/bridge/ web/bridge/
 RUN python packaging/fetch_web_vendor.py --out /vendor --py-out /py \
     # Pre-compressed copies, served by nginx's gzip_static (24 MB -> 7 MB
     # on the wire with no CPU spent per visitor).

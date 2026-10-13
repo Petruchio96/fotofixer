@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { PhotoStore, photoKey, tileTooltip } from "../app/photo_store.js";
+import { PhotoStore, photoKey, tileTooltip, sortCameras, UNKNOWN_CAMERA } from "../app/photo_store.js";
 
 function entry(relPath, extra = {}) {
   return { name: relPath.split("/").pop(), relPath, size: 100, lastModified: 1, handle: null, getFile: async () => null, ...extra };
@@ -153,4 +153,80 @@ test("download mode: a change waits for Download; undoing it back to the origina
   store.setGps(ids[0], null, again);
   assert.deepEqual(store.pendingDownloadIds(), ids);
   assert.equal(store.get(ids[0]).bytes, again);
+});
+
+test("Date & Time mode: camera groups, date order, the camera filter, and camera checkboxes", () => {
+  const { store, ids } = storeWith("a.jpg", "b.jpg", "c.jpg", "d.jpg");
+  store.setInfo(ids[0], { dates: {} });
+  store.setDescription(ids[0], { dateTaken: "2026-10-03T10:00:00", dateText: "10/03/2026 10:00:00am", offsetText: "", camera: "Canon EOS R8" });
+  store.setDescription(ids[1], { dateTaken: null, dateText: "", offsetText: "", camera: "Canon EOS R8" });
+  store.setDescription(ids[2], { dateTaken: "2026-10-03T09:00:00", dateText: "10/03/2026 9:00:00am", offsetText: "MDT", camera: "Canon EOS R8" });
+  store.setDescription(ids[3], { dateTaken: "2026-10-03T08:00:00", dateText: "", offsetText: "", camera: null });
+  store.setMode("date");
+  const groups = store.groups();
+  assert.deepEqual(groups.map((g) => g.title), ["Canon EOS R8 (3)", "Unknown Camera (1)"]);
+  assert.deepEqual(groups[0].ids, [ids[2], ids[0], ids[1]], "date order, undated last");
+  assert.deepEqual(store.cameras(), ["Canon EOS R8", UNKNOWN_CAMERA]);
+  assert.deepEqual(sortCameras(["Unknown Camera", "b cam", "A cam"]), ["A cam", "b cam", "Unknown Camera"]);
+  store.setCameraFilter("Canon EOS R8");
+  assert.deepEqual(store.visibleIds(), [ids[0], ids[1], ids[2]]);
+  assert.equal(store.groups().length, 1);
+  store.setCameraFilter("all");
+  store.selectCamera("Canon EOS R8", true);
+  assert.equal(store.cameraSelected("Canon EOS R8"), true);
+  assert.equal(store.cameraSelected(UNKNOWN_CAMERA), false);
+  store.selectCamera("Canon EOS R8", false);
+  assert.equal(store.selection.size, 0);
+  // Removing the filtered camera's last photo falls back to All.
+  store.setCameraFilter(UNKNOWN_CAMERA);
+  store.remove([ids[3]]);
+  assert.equal(store.cameraFilter, "all");
+  store.setMode("location");
+  assert.equal(store.groups()[0].key, "needs");
+});
+
+test("pick mode kinds: time picking keeps the view and labels photos without a date", () => {
+  const { store, ids } = storeWith("a.jpg", "b.jpg", "c.jpg");
+  store.setInfo(ids[0], { gps: { latitude: 1, longitude: 2 } });
+  store.setDescription(ids[0], { dateTaken: "2026-10-03T10:00:00", dateText: "x", offsetText: "", camera: "A" });
+  store.setDescription(ids[1], { dateTaken: null, dateText: "", offsetText: "", camera: "A" });
+  store.setDescription(ids[2], { dateTaken: "2026-10-03T11:00:00", dateText: "y", offsetText: "", camera: "A" });
+  store.toggle(ids[2]);
+  assert.equal(store.timePickableCount(), 1);
+  store.setPicking("time");
+  assert.deepEqual(store.visibleIds(), ids, "the view stays");
+  assert.equal(store.pickLabel(ids[0]), "");
+  assert.equal(store.pickLabel(ids[1]), "No Date");
+  assert.equal(store.pickLabel(ids[2]), "Being Changed");
+  store.setPicking(null);
+  store.setPicking("location");
+  assert.deepEqual(store.visibleIds(), [ids[0]], "location picking shows Has GPS");
+  assert.equal(store.pickLabel(ids[1]), "No GPS");
+  store.setPicking(null);
+  store.setTimeSource(ids[0]);
+  assert.equal(store.canSelect(ids[0]), true, "the time source stays selectable");
+  store.setMode("date");
+  assert.equal(store.markedSourceId(), ids[0]);
+  store.setMode("location");
+  assert.equal(store.markedSourceId(), null);
+});
+
+test("a date write marks the photo for Download; undoing it back to the original clears that", () => {
+  const { store, ids } = storeWith("a.cr3");
+  store.setInfo(ids[0], { gps: null, dates: { DateTimeOriginal: "2026:10:03 09:14:02", OffsetTime: null } });
+  store.setDates(ids[0], { DateTimeOriginal: "2026:10:03 10:14:02", "QuickTime:CreateDate": "x", OffsetTime: "" }, new Uint8Array([1]));
+  assert.equal(store.get(ids[0]).dates.DateTimeOriginal, "2026:10:03 10:14:02");
+  assert.equal(store.get(ids[0]).dates.OffsetTime, null);
+  assert.equal("QuickTime:CreateDate" in store.get(ids[0]).dates, false);
+  assert.deepEqual(store.pendingDownloadIds(), ids);
+  // Undo writes the original tags back (a tag that wasn't there as ""): no download needed.
+  store.setDates(ids[0], { DateTimeOriginal: "2026:10:03 09:14:02", "QuickTime:CreateDate": "y", OffsetTime: "" }, new Uint8Array([2]));
+  assert.deepEqual(store.pendingDownloadIds(), []);
+  assert.equal(store.get(ids[0]).bytes, null);
+  store.setDates(ids[0], { DateTimeOriginal: "2026:10:03 10:14:02" }, new Uint8Array([3]));
+  store.markDownloaded(ids);
+  assert.deepEqual(store.pendingDownloadIds(), []);
+  // After the download, the downloaded dates are the baseline.
+  store.setDates(ids[0], { DateTimeOriginal: "2026:10:03 09:14:02" }, new Uint8Array([4]));
+  assert.deepEqual(store.pendingDownloadIds(), ids);
 });

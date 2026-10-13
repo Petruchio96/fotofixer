@@ -26,12 +26,17 @@ export class ExifClient {
   }
 
   /**
-   * Write GPS (gps = {latitude, longitude}) or clear it (gps = null) into a
-   * copy of the photo. Resolves with {ok, bytes} (the new file) or
-   * {ok: false, error}. The input bytes are handed to the worker.
+   * Write tags ({tag: value}, "" deletes) into a copy of the photo.
+   * Resolves with {ok, bytes} (the new file) or {ok: false, error}. The
+   * input bytes are handed to the worker.
    */
-  write(name, bytes, gps) {
-    return this._enqueue({ type: "write", name, bytes, gps }, [bytes.buffer]);
+  write(name, bytes, tags) {
+    return this._enqueue({ type: "write", name, bytes, tags }, [bytes.buffer]);
+  }
+
+  /** The Date & Time logic in Python: op "state", "describe", "convert_set_value", "keep_clock_text". */
+  dates(op, payload) {
+    return this._send({ type: "dates", op, payload });
   }
 
   /**

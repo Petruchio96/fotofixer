@@ -5,6 +5,8 @@
 !packaging/fetch_web_vendor.py
 !core/
 !services/
+!gui/__init__.py
+!gui/presenters/
 !docker/
 # Not in the image: the tests, caches, and vendor files fetched locally (the
 # build fetches its own).
@@ -18,4 +20,6 @@ web/py/
 web/package.json
 core/__pycache__/
 services/__pycache__/
+gui/presenters/__pycache__/
+web/bridge/__pycache__/
 web/vendor/leaflet/

@@ -72,6 +72,20 @@ export async function confirmRemoveGps(names) {
   return answer === "remove";
 }
 
+/** Change Time Zone's "Keep the clock time": asks first. Resolves true to keep it on. */
+export async function confirmKeepClock(text) {
+  const answer = await openDialog({
+    title: "Keep the Clock Time?",
+    body: el("p", { textContent: text }),
+    buttons: [
+      { label: "Cancel", value: "cancel", title: "Leave the clock times to change with the zone" },
+      { label: "Keep Clock Time", value: "keep", className: "primary", title: "Keep the clock times and change only the time zone" },
+    ],
+    defaultValue: "keep",
+  });
+  return answer === "keep";
+}
+
 /** Which files could not be changed, and why. */
 export function showFailures(action, failures) {
   const count = failures.length;

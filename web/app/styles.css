@@ -18,6 +18,10 @@
 
 * { box-sizing: border-box; }
 
+/* The views hide things with the hidden attribute; a class that sets
+   display (flex, grid, ...) would otherwise win and keep them visible. */
+[hidden] { display: none !important; }
+
 html, body { height: 100%; }
 
 body {

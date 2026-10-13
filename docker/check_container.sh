@@ -57,6 +57,13 @@ grep -qi "^content-encoding: gzip" <<<"$wasm" || fail "zeroperl.wasm is not serv
 curl -fs -o /dev/null http://127.0.0.1:18080/app/main.js || fail "app/main.js missing"
 curl -fs -o /dev/null http://127.0.0.1:18080/worker/exif_worker.js || fail "worker missing"
 curl -fs -o /dev/null http://127.0.0.1:18080/vendor/exiftool.js || fail "vendor/exiftool.js missing"
+pyodide=$(curl -fsI -H "Accept-Encoding: gzip" http://127.0.0.1:18080/vendor/pyodide/pyodide.asm.wasm)
+grep -qi "^content-type: application/wasm" <<<"$pyodide" || fail "pyodide.asm.wasm is not served as application/wasm"
+grep -qi "^content-encoding: gzip" <<<"$pyodide" || fail "pyodide.asm.wasm is not served pre-compressed"
+curl -fs -o /dev/null http://127.0.0.1:18080/vendor/pyodide/pyodide.mjs || fail "pyodide.mjs missing"
+curl -fs -o /dev/null http://127.0.0.1:18080/vendor/pyodide/python_stdlib.zip || fail "python_stdlib.zip missing"
+curl -fs -o /dev/null http://127.0.0.1:18080/vendor/pyodide/tzdata-2025.3-py2.py3-none-any.whl || fail "tzdata wheel missing"
+curl -fs -o /dev/null http://127.0.0.1:18080/py/fotofixer_py.zip || fail "py/fotofixer_py.zip missing"
 code=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:18080/tests/photo_store.test.mjs)
 [ "$code" = "404" ] || fail "tests are in the image (got $code)"
 stop

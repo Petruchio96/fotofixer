@@ -1,23 +1,28 @@
 # FotoFixer – When & Where, the web version: a static site served by nginx.
-# Nothing runs on the server; ExifTool runs as WebAssembly in each visitor's
-# browser and photos never leave their computer. See docs/ROADMAP.md, Part 3.
+# Nothing runs on the server; ExifTool and the app's Python logic run as
+# WebAssembly in each visitor's browser and photos never leave their
+# computer. See docs/ROADMAP.md, Part 3.
 #
 # Build (from the repository root):
 #   docker build -f docker/Dockerfile -t fotofixer .
 # Run:
 #   docker compose -f docker/compose.yaml up -d
 #
-# The first stage downloads the pinned browser-side ExifTool (24 MB of
-# WebAssembly, too big for git) with packaging/fetch_web_vendor.py, exactly as
-# a developer does locally. The second stage is the image that ships.
+# The first stage downloads the pinned browser-side ExifTool and Pyodide
+# (too big for git) and zips the app's Python modules, with
+# packaging/fetch_web_vendor.py, exactly as a developer does locally. The
+# second stage is the image that ships.
 
 FROM python:3.12-alpine AS vendor
 WORKDIR /src
 COPY packaging/fetch_web_vendor.py packaging/
-RUN python packaging/fetch_web_vendor.py --out /vendor \
+COPY core/ core/
+COPY services/ services/
+RUN python packaging/fetch_web_vendor.py --out /vendor --py-out /py \
     # Pre-compressed copies, served by nginx's gzip_static (24 MB -> 7 MB
     # on the wire with no CPU spent per visitor).
-    && gzip -9 -k /vendor/zeroperl.wasm /vendor/zeroperl.js /vendor/exiftool.js
+    && gzip -9 -k /vendor/zeroperl.wasm /vendor/zeroperl.js /vendor/exiftool.js \
+       /vendor/pyodide/pyodide.asm.wasm /vendor/pyodide/pyodide.asm.mjs /vendor/pyodide/pyodide-lock.json
 
 FROM nginxinc/nginx-unprivileged:1.27-alpine
 
@@ -34,6 +39,7 @@ COPY docker/nginx.conf /etc/nginx/conf.d/fotofixer.conf
 COPY --chmod=755 docker/entrypoint/40-fotofixer-password.sh /docker-entrypoint.d/40-fotofixer-password.sh
 COPY web/ /usr/share/nginx/html/
 COPY --from=vendor /vendor/ /usr/share/nginx/html/vendor/
+COPY --from=vendor /py/ /usr/share/nginx/html/py/
 USER nginx
 
 EXPOSE 8080

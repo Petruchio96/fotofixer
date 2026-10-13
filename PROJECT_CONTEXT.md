@@ -3,7 +3,7 @@
 ## Snapshot
 
 Last updated: 2026-10-12
-Web version: Phase 1 skeleton on branch `web-skeleton` (see "Web version" below); ships as 1.10.0 with the desktop app.
+Web version: Phase 1 (the skeleton) merged 2026-10-13; Phase 2 (Location editing) on branch `web-location` (see "Web version" below); ships as 1.10.0 with the desktop app.
 Version: 1.9.0 (branch `more-file-types`, unreleased): the app is renamed from Photo GPS Editor to **FotoFixer – When & Where** (window title, About, downloads `fotofixer-…` / `FotoFixer-x86_64.AppImage`, installer folder `…\Programs\FotoFixer`, settings under FotoFixer and copied once from the old name, repository `Petruchio96/fotofixer`); a photo is either the location source or being changed, never both; Undo never makes backups; HEIC/HEIF photos (iPhone `.heic`, `.heif`, Canon `.hif`; thumbnails through pillow-heif) and more RAW formats (Nikon NEF/NRW, Sony ARW, Fujifilm RAF, Olympus ORF, Panasonic RW2, Pentax PEF, Samsung SRW). 1.8.0 is the latest release (2026-10-12): the in-app update check (Help > Check for Updates, a once-a-day check after start-up, the orange "Version X is available" bar, and one-click updates: the installed Windows copy, the Linux AppImage and folder, and the macOS app download the release file, verify it, and replace themselves). 1.7.0 was released 2026-10-12 with everything since 1.6.1. 1.5.0, 1.6.0, and 1.6.2 were merged but never released. 1.4: the app's own Add Photos picker, the map (Pick from a Map, street map and satellite imagery), Edit > Settings, and the same pinned ExifTool on every system. 1.4.1: the blue pin GPS badge, the blue = existing / orange = new color theme, the map's Clear button, and no blocking dialogs. 1.5: the Add Photos picker shows folders with the photos and folders can be chosen to add their photos, plus deselect after Apply, the map's Back button and zoom from a photo's preview, backups named `<name>_original.<ext>` (only for photos that had GPS), tighter window spacing, and a clearer window edge on Windows 11. 1.6: Date & Time editing (shift the selected photos' dates or set one date, time zones; the Photo List groups photos by camera on that tab), laid out as four steps, and the picker's Select All Photos. 1.6.1: release fixes (Apply never writes to the location source photo, single-file CI downloads, updated release checklist). 1.6.2 (unreleased): Change Time Zone, a third Date & Time choice (the same moment in another zone, or keep the clock time), step 2 as three stacked cards that fold up to the one chosen, a progress bar for every change and undo/redo (written in the background), hover hints for cut-short rows in the changes list, and space-bar panning on the map; then Windows fixes (PR #16): the changes list keeps new dates in view, Set keeps the moment when its zone changes, the zone sits above the date and time, and the map opens on New Location with a Select Location / Cancel button; 1.7.0 (Windows polish 2): the Paste button re-checks the clipboard a moment after it changes instead of on every refresh (and waits while another program holds it, which on Windows logged "Retrying to obtain clipboard" every few minutes), the Windows look (a gap between the map icon and its text, darker placeholder and disabled text), `OffsetTimeDigitized` before `OffsetTime` as the zone fallback, and the release job's download keeps the macOS zip as uploaded (`skip-decompress: true`), plus the Windows installer (`photo-gps-editor-windows-x86_64-setup.exe`, which replaces the Windows zip: per-user install with a Start menu shortcut, in-place upgrades, uninstaller)
 Status: Two-pane layout (Photo List and Photos to Change, with Location and Date & Time tabs; Date & Time shifts or sets photo dates or changes their time zone), the app's own photo picker (folder tree; folders and photos, either can be chosen), a pop-out map for picking a location (OpenStreetMap, USGS, or Esri with the user's key), fast thumbnails (shared Linux thumbnail cache, embedded JPEG thumbnails), background loading, failure-tolerant writes, undo/redo that restores the photo list, optional backups, an error log, an in-app update check, and CI builds for Linux, Windows, and macOS.
 
@@ -229,8 +229,43 @@ browser. Phase 1 (the skeleton, branch `web-skeleton`, 2026-10-12):
   (Select All / Deselect All / Remove from List, Ctrl+A, Delete); groups
   "Photos without GPS Coordinates" then "with"; GPS badge pins; click to
   toggle, Shift-click for a range; a fresh list opens on Needs GPS; the
-  reading progress row with Cancel. The Photos to Change pane has the
-  summary and inert tabs until Phases 2 to 4
+  reading progress row with Cancel; the status row's messages with an
+  Undo link; the orange Download bar when changed photos wait
+- Location tab (Phase 2, branch `web-location`, 2026-10-13):
+  `location_view.js` draws it and `location_state.js` holds the rules
+  (a port of `gui/presenters/inspector_state.py`: labels, hints, overwrite
+  count, the source photo is never a target). From a Photo in the Photo
+  List is pick mode (the grid shows Has GPS, "No GPS" / "Being Changed"
+  tiles are dimmed, the banner, Esc or Cancel); From a Photo on This
+  Computer reads one file through the worker; typed or pasted pairs
+  auto-split; the blue source card and SOURCE tile outline; Apply asks
+  Cancel / Skip Photos with GPS / Replace, Remove GPS asks first (both
+  `<dialog>`s in `dialogs.js`, promise-based, never blocking). Coordinate
+  parsing runs `services/coordinate_service.py` unchanged through Pyodide
+  in the worker (`exif.parse`), loaded in the background after the page
+  opens; Apply waits for it
+- Writing (`main.js` `writeStates`): one photo at a time through
+  `exif.write` (ExifTool writes a copy; the same four GPS tags as the
+  desktop), with "Applying GPS… 2 of 5" and the panes locked. A photo with
+  a file handle (opened or dropped folder) is written in place, after a
+  `<name>_original.<ext>` backup when Settings > Keep Backup Copies of
+  Originals is on and the photo had GPS (never a backup of a backup, an
+  existing backup is left alone; backups join the list unselected). A
+  photo without a handle keeps its changed bytes in memory and waits in the
+  Download bar: one file downloads directly, several as a stored zip
+  (`zip_store.js`, no compression, under 4 GB) with their folder paths;
+  after a download the files are the new baseline and the history ends
+- Undo/redo (`edit_history.js`, a port of `services/gps_edit_history.py`,
+  single-step, memory only): writes the remembered states back, deletes
+  the backups the undone change made, re-adds photos removed since, and
+  restores the selection; a photo undone back to its original state leaves
+  the Download bar. Header Undo/Redo buttons and Ctrl+Z / Ctrl+Y; the
+  status row's Undo link. Settings (header): the backups option, in
+  `localStorage`
+- `window.fotofixerDebug` (`store`, `history`, `addEntries`, `exif`) exists
+  only on localhost, for driving checks without the native file pickers;
+  the checks must return small values only (a returned byte array froze
+  the desktop app)
 - `docker/`: `nginx-unprivileged` serving `web/`, security headers (CSP
   without inline styles or scripts, `wasm-unsafe-eval`, tile hosts),
   pre-compressed WebAssembly, `/healthz`, optional basic auth from
@@ -242,8 +277,11 @@ browser. Phase 1 (the skeleton, branch `web-skeleton`, 2026-10-12):
   and `.github/workflows/web.yml` (tests, image build, container checks;
   it runs only for pushes that touch the web version, and `build.yml`
   skips those)
-- Run it: `python packaging/fetch_web_vendor.py`, `python3 -m http.server
-  8765` in the repository root, open `http://127.0.0.1:8765/web/`
+- Run it: `python packaging/fetch_web_vendor.py` (also builds
+  `web/py/fotofixer_py.zip` from the pure modules listed in its
+  `BROWSER_MODULES`; `tests/test_fetch_web_vendor.py` checks they do no
+  I/O), then `python packaging/serve_web.py` (the repository root with the
+  container's security headers) and open `http://127.0.0.1:8765/web/`
 
 ## Known Issue
 

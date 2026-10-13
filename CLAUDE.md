@@ -17,9 +17,11 @@ plans live only in `docs/ROADMAP.md`.
 - On Windows (Git Bash): `.venv/Scripts/python` instead of `.venv/bin/python`
 - Build locally: see `packaging/README.md` (PyInstaller one-folder build and
   the Windows installer)
-- Web version: `python packaging/fetch_web_vendor.py` once, then serve the
-  repository root (`python3 -m http.server 8765`) and open
-  `http://127.0.0.1:8765/web/`; tests: `node --test web/tests/*.test.mjs`; container:
+- Web version: `python packaging/fetch_web_vendor.py` once (vendored
+  ExifTool WebAssembly, Pyodide, and the zip of the Python modules), then
+  `python packaging/serve_web.py` (serves the repository root with the
+  container's security headers) and open `http://127.0.0.1:8765/web/`;
+  tests: `node --test web/tests/*.test.mjs`; container:
   `docker/check_container.sh` (needs Docker)
 - CI: `.github/workflows/build.yml` tests and builds Linux, Windows, and macOS on
   every push; a `v*` tag attaches the builds to a draft release

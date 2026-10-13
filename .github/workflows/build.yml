@@ -15,11 +15,18 @@ on:
   push:
     branches: ["**"]
     tags: ["v*"]
-    # Pushes that only touch the web version run web.yml instead. (Path
-    # filters don't apply to tags, so a release still builds everything.)
+    # Pushes that only touch the web version run web.yml instead, and
+    # docs-only pushes build nothing. (Path filters don't apply to tags, so
+    # a release still builds everything.)
     paths-ignore:
       - "web/**"
       - "docker/**"
+      - "docs/**"
+      - "**.md"
+      # The web version's own scripts and their test (web.yml runs that test).
+      - "packaging/fetch_web_vendor.py"
+      - "packaging/serve_web.py"
+      - "tests/test_fetch_web_vendor.py"
   workflow_dispatch:
 
 permissions:

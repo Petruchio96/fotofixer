@@ -389,6 +389,26 @@ Generic Docker, Caddy, and Traefik examples go in the same document.
 2. **Location editing.** Apply/clear GPS (typed, pasted, from a photo),
    overwrite confirmation, backups (folder mode), undo/redo, save in place or
    download (one file or a zip), progress.
+
+   **Built 2026-10-13 (branch `web-location`):** the Location tab
+   (`web/app/location_view.js`, state rules ported from
+   `gui/presenters/inspector_state.py` in `location_state.js`), pick mode
+   and the location source in the Photo List, From a Photo on This
+   Computer, Paste, the overwrite question (Cancel / Skip / Replace) and
+   the Remove GPS confirmation as non-blocking `<dialog>`s, writes through
+   the worker (`exif.write`) one photo at a time with a progress row, in
+   place through file handles with `<name>_original.<ext>` backups (Settings
+   > Keep Backup Copies of Originals, this browser only) or into memory for
+   the Download bar (one file, or a stored zip from `zip_store.js`),
+   single-step undo/redo (`edit_history.js`, a port of
+   `services/gps_edit_history.py`; undo deletes the backups it made and
+   puts the list and selection back), header Undo/Redo/Settings. Coordinate
+   parsing runs the real `services/coordinate_service.py` through Pyodide
+   in the worker (12 MB more on the first visit; loads in about 2 s on a PC,
+   in the background). `packaging/serve_web.py` serves the page locally with
+   the container's CSP. Deferred: Pick from a Map (Phase 3), the right-click
+   "use this location" menu, and the clipboard watcher (the Paste button
+   reads the clipboard when clicked instead).
 3. **Map.** Leaflet, OSM and USGS, Esri with the visitor's key, the pin,
    photo dots and previews, Use This Location, Back/Clear.
 4. **Date & Time.** Shift, Set, Change Time Zone, camera groups.

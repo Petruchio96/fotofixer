@@ -1,12 +1,22 @@
-// ExifTool (WebAssembly) in a Web Worker, so the page stays responsive.
+// ExifTool (WebAssembly) and the app's Python logic (Pyodide) in a Web
+// Worker, so the page stays responsive.
 //
-// Messages in:  {id, type: "read", name, bytes}
-// Messages out: {id, ok: true, tags: {...}, preview: {bytes, orientation,
-//                width, height} | null}  or  {id, ok: false, error}
+// Messages in:
+//   {id, type: "read", name, bytes}
+//   {id, type: "write", name, bytes, gps: {latitude, longitude} | null}
+//   {id, type: "parse", op, a, b}
+// Messages out:
+//   read:  {id, ok: true, tags: {...}, preview: {bytes, orientation, width,
+//           height} | null}
+//   write: {id, ok: true, bytes}            (the changed file)
+//   parse: {id, ok: true, result}           (see parseCoordinates)
+//   any:   {id, ok: false, error}
+//   and once: {type: "python-ready", ok, error?} when Pyodide has loaded.
 //
-// The vendored package keeps one Perl instance and no queue; the page's
-// ExifClient sends one request at a time, and this worker answers them in
-// order, so the instance is never used by two calls at once.
+// The vendored ExifTool package keeps one Perl instance and no queue; the
+// page's ExifClient sends one read or write at a time, and this worker
+// answers them in order, so the instance is never used by two calls at
+// once. Parse messages run alongside; they only touch Pyodide.
 
 // zeroperl decides "browser or Node" by looking for window and document. A
 // worker has neither, so without this it would try Node's fs module.
@@ -16,6 +26,8 @@ globalThis.document = {};
 const WASM_URL = new URL("../vendor/zeroperl.wasm", import.meta.url);
 const exiftoolReady = import("../vendor/exiftool.js");
 const wasmFetch = () => fetch(WASM_URL);
+
+// ----- reading -----
 
 // What the Photo List needs, in one ExifTool call: GPS, the date tags (for
 // the Date & Time tab later), the camera, and the small EXIF thumbnail that
@@ -77,13 +89,94 @@ async function readOne(exiftool, name, bytes) {
   return { tags, preview };
 }
 
+// ----- writing -----
+
+/**
+ * The same tags the desktop writes (core/exiftool_wrapper.py write_gps /
+ * clear_gps): positive values with N/S and E/W references; empty values
+ * delete the tags. The package writes to a copy (-o) and returns it.
+ */
+async function writeOne(exiftool, name, bytes, gps) {
+  const tags = gps
+    ? {
+        GPSLatitude: Math.abs(gps.latitude),
+        GPSLatitudeRef: gps.latitude >= 0 ? "N" : "S",
+        GPSLongitude: Math.abs(gps.longitude),
+        GPSLongitudeRef: gps.longitude >= 0 ? "E" : "W",
+      }
+    : { GPSLatitude: "", GPSLatitudeRef: "", GPSLongitude: "", GPSLongitudeRef: "" };
+  const result = await exiftool.writeMetadata({ name, data: bytes }, tags, { fetch: wasmFetch });
+  if (!result.success) throw new Error(cleanError(result.error));
+  return new Uint8Array(result.data);
+}
+
+// ----- Python (Pyodide) -----
+
+// The app's own modules (core/, services/) zipped by
+// packaging/fetch_web_vendor.py; coordinate parsing is the first use.
+const PYODIDE_DIR = new URL("../vendor/pyodide/", import.meta.url);
+const PY_ZIP_URL = new URL("../py/fotofixer_py.zip", import.meta.url);
+const PY_SETUP = `
+import json, sys
+sys.path.insert(0, "/app")
+from services.coordinate_service import (
+    parse_coordinate_text, parse_manual_coordinates, parse_latitude_text, parse_longitude_text,
+)
+
+def _parse(op, a, b=None):
+    try:
+        if op == "pair":
+            result = parse_coordinate_text(a or "")
+            return json.dumps({"ok": True, "result": list(result) if result else None})
+        if op == "manual":
+            result = parse_manual_coordinates(a or "", b or "")
+            return json.dumps({"ok": True, "result": list(result) if result else None})
+        if op == "latitude":
+            return json.dumps({"ok": True, "result": parse_latitude_text(a or "")})
+        if op == "longitude":
+            return json.dumps({"ok": True, "result": parse_longitude_text(a or "")})
+        return json.dumps({"ok": False, "error": "unknown op " + str(op)})
+    except ValueError as error:
+        return json.dumps({"ok": False, "error": str(error)})
+`;
+
+const pythonReady = (async () => {
+  const { loadPyodide } = await import("../vendor/pyodide/pyodide.mjs");
+  const pyodide = await loadPyodide({ indexURL: PYODIDE_DIR.href });
+  const archive = await (await fetch(PY_ZIP_URL)).arrayBuffer();
+  pyodide.unpackArchive(archive, "zip", { extractDir: "/app" });
+  pyodide.runPython(PY_SETUP);
+  return pyodide.globals.get("_parse");
+})();
+pythonReady.then(
+  () => self.postMessage({ type: "python-ready", ok: true }),
+  (error) => self.postMessage({ type: "python-ready", ok: false, error: String(error?.message ?? error) }),
+);
+
+async function parseCoordinates(op, a, b) {
+  const parse = await pythonReady;
+  return JSON.parse(parse(op, a, b));
+}
+
+// ----- messages -----
+
 self.onmessage = async (event) => {
   const { id, type, name, bytes } = event.data;
-  if (type !== "read") return;
   try {
-    const exiftool = await exiftoolReady;
-    const { tags, preview } = await readOne(exiftool, name, bytes);
-    self.postMessage({ id, ok: true, tags, preview }, preview ? [preview.bytes.buffer] : []);
+    if (type === "read") {
+      const exiftool = await exiftoolReady;
+      const { tags, preview } = await readOne(exiftool, name, bytes);
+      self.postMessage({ id, ok: true, tags, preview }, preview ? [preview.bytes.buffer] : []);
+    } else if (type === "write") {
+      const exiftool = await exiftoolReady;
+      const out = await writeOne(exiftool, name, bytes, event.data.gps);
+      self.postMessage({ id, ok: true, bytes: out }, [out.buffer]);
+    } else if (type === "parse") {
+      const reply = await parseCoordinates(event.data.op, event.data.a, event.data.b);
+      self.postMessage({ id, ...reply });
+    } else {
+      self.postMessage({ id, ok: false, error: `unknown message type ${type}` });
+    }
   } catch (error) {
     self.postMessage({ id, ok: false, error: String(error?.message ?? error) });
   }

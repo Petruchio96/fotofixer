@@ -183,7 +183,7 @@ export function createLocationView(container, store, actions) {
       sourceId: store.sourceId,
     });
     state.newLocation = newLocation;
-    const picking = store.picking;
+    const picking = store.picking === "location";
     applyButton.textContent = state.applyLabel;
     applyButton.disabled = !state.canApply || picking || !pythonReady;
     removeButton.textContent = state.removeLabel;

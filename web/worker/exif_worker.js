@@ -3,13 +3,15 @@
 //
 // Messages in:
 //   {id, type: "read", name, bytes}
-//   {id, type: "write", name, bytes, gps: {latitude, longitude} | null}
+//   {id, type: "write", name, bytes, tags: {tag: value}}
 //   {id, type: "parse", op, a, b}
+//   {id, type: "dates", op, payload}
 // Messages out:
 //   read:  {id, ok: true, tags: {...}, preview: {bytes, orientation, width,
 //           height} | null}
 //   write: {id, ok: true, bytes}            (the changed file)
 //   parse: {id, ok: true, result}           (see parseCoordinates)
+//   dates: {id, ok: true, result}           (see web/bridge/fotofixer_bridge.py)
 //   any:   {id, ok: false, error}
 //   and once: {type: "python-ready", ok, error?} when Pyodide has loaded.
 //
@@ -92,19 +94,12 @@ async function readOne(exiftool, name, bytes) {
 // ----- writing -----
 
 /**
- * The same tags the desktop writes (core/exiftool_wrapper.py write_gps /
- * clear_gps): positive values with N/S and E/W references; empty values
- * delete the tags. The package writes to a copy (-o) and returns it.
+ * Write tags into a copy of the photo: {tag: value}, an empty value
+ * deletes the tag (the page builds the dicts: GPS like the desktop's
+ * write_gps / clear_gps, dates from the Python bridge). The package writes
+ * to a copy (-o) and returns it.
  */
-async function writeOne(exiftool, name, bytes, gps) {
-  const tags = gps
-    ? {
-        GPSLatitude: Math.abs(gps.latitude),
-        GPSLatitudeRef: gps.latitude >= 0 ? "N" : "S",
-        GPSLongitude: Math.abs(gps.longitude),
-        GPSLongitudeRef: gps.longitude >= 0 ? "E" : "W",
-      }
-    : { GPSLatitude: "", GPSLatitudeRef: "", GPSLongitude: "", GPSLongitudeRef: "" };
+async function writeOne(exiftool, name, bytes, tags) {
   const result = await exiftool.writeMetadata({ name, data: bytes }, tags, { fetch: wasmFetch });
   if (!result.success) throw new Error(cleanError(result.error));
   return new Uint8Array(result.data);
@@ -112,41 +107,30 @@ async function writeOne(exiftool, name, bytes, gps) {
 
 // ----- Python (Pyodide) -----
 
-// The app's own modules (core/, services/) zipped by
-// packaging/fetch_web_vendor.py; coordinate parsing is the first use.
+// The app's own modules (core/, services/, the Qt-free Date & Time
+// presenter) and the bridge that takes JSON, zipped by
+// packaging/fetch_web_vendor.py.
 const PYODIDE_DIR = new URL("../vendor/pyodide/", import.meta.url);
 const PY_ZIP_URL = new URL("../py/fotofixer_py.zip", import.meta.url);
+// The time zone database (core/time_zones.py needs it for daylight saving
+// and zone abbreviations); the wheel is vendored next to Pyodide.
+const TZDATA_URL = new URL("../vendor/pyodide/tzdata-2025.3-py2.py3-none-any.whl", import.meta.url);
 const PY_SETUP = `
-import json, sys
+import sys
 sys.path.insert(0, "/app")
-from services.coordinate_service import (
-    parse_coordinate_text, parse_manual_coordinates, parse_latitude_text, parse_longitude_text,
-)
-
-def _parse(op, a, b=None):
-    try:
-        if op == "pair":
-            result = parse_coordinate_text(a or "")
-            return json.dumps({"ok": True, "result": list(result) if result else None})
-        if op == "manual":
-            result = parse_manual_coordinates(a or "", b or "")
-            return json.dumps({"ok": True, "result": list(result) if result else None})
-        if op == "latitude":
-            return json.dumps({"ok": True, "result": parse_latitude_text(a or "")})
-        if op == "longitude":
-            return json.dumps({"ok": True, "result": parse_longitude_text(a or "")})
-        return json.dumps({"ok": False, "error": "unknown op " + str(op)})
-    except ValueError as error:
-        return json.dumps({"ok": False, "error": str(error)})
+sys.path.insert(0, "/app/web/bridge")
+import fotofixer_bridge
 `;
 
 const pythonReady = (async () => {
   const { loadPyodide } = await import("../vendor/pyodide/pyodide.mjs");
   const pyodide = await loadPyodide({ indexURL: PYODIDE_DIR.href });
+  await pyodide.loadPackage(TZDATA_URL.href);
   const archive = await (await fetch(PY_ZIP_URL)).arrayBuffer();
   pyodide.unpackArchive(archive, "zip", { extractDir: "/app" });
   pyodide.runPython(PY_SETUP);
-  return pyodide.globals.get("_parse");
+  const bridge = pyodide.pyimport("fotofixer_bridge");
+  return { parse: bridge.parse, dates: bridge.dates };
 })();
 pythonReady.then(
   () => self.postMessage({ type: "python-ready", ok: true }),
@@ -154,8 +138,14 @@ pythonReady.then(
 );
 
 async function parseCoordinates(op, a, b) {
-  const parse = await pythonReady;
+  const { parse } = await pythonReady;
   return JSON.parse(parse(op, a, b));
+}
+
+/** The Date & Time tab's logic (see web/bridge/fotofixer_bridge.py). */
+async function dates(op, payload) {
+  const bridge = await pythonReady;
+  return JSON.parse(bridge.dates(op, JSON.stringify(payload ?? {})));
 }
 
 // ----- messages -----
@@ -169,10 +159,13 @@ self.onmessage = async (event) => {
       self.postMessage({ id, ok: true, tags, preview }, preview ? [preview.bytes.buffer] : []);
     } else if (type === "write") {
       const exiftool = await exiftoolReady;
-      const out = await writeOne(exiftool, name, bytes, event.data.gps);
+      const out = await writeOne(exiftool, name, bytes, event.data.tags);
       self.postMessage({ id, ok: true, bytes: out }, [out.buffer]);
     } else if (type === "parse") {
       const reply = await parseCoordinates(event.data.op, event.data.a, event.data.b);
+      self.postMessage({ id, ...reply });
+    } else if (type === "dates") {
+      const reply = await dates(event.data.op, event.data.payload);
       self.postMessage({ id, ...reply });
     } else {
       self.postMessage({ id, ok: false, error: `unknown message type ${type}` });

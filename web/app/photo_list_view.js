@@ -1,7 +1,8 @@
-// The Photo List pane: header (Add Photos, Clear List), the Show filter,
-// the selection bar, the grid of tiles in GPS groups, the status row, and
-// the download bar. It draws what the PhotoStore says and sends clicks back
-// to it; the loading and writing live in main.js.
+// The Photo List pane: header (Add Photos, Clear List), the Show filter
+// (Location) or camera filter (Date & Time), the selection bar, the grid
+// of tiles in groups, the status row, and the download bar. It draws what
+// the PhotoStore says and sends clicks back to it; the loading and writing
+// live in main.js.
 
 import { el, clear, gpsPin, photoIcon, folderIcon } from "./dom.js";
 import { ACCEPT_ATTRIBUTE } from "./file_types.js";
@@ -79,7 +80,7 @@ export function createPhotoListView(container, store, actions, { canOpenFolder }
     else if (store.picking) actions.cancelPick();
   });
 
-  // ----- Show filter -----
+  // ----- Show filter (Location) and camera filter (Date & Time) -----
   const filterButtons = {};
   const seg = el("div", { className: "seg", role: "group", "aria-label": "Show" });
   for (const [key, text, hint] of GRID_FILTERS) {
@@ -91,11 +92,13 @@ export function createPhotoListView(container, store, actions, { canOpenFolder }
     title: "Show only the selected photos (turns off when a view button is clicked)",
     onclick: () => store.setOnlySelected(!store.onlySelected),
   }, "Only Show Selected Photos");
-  const filterRow = el("div", { className: "filter-row" }, [
+  const showRow = el("div", { className: "filter-row" }, [
     el("span", { className: "label", textContent: "Show" }), seg, el("span", { className: "gap" }), onlySelectedButton,
   ]);
+  const cameraSeg = el("div", { className: "seg", role: "group", "aria-label": "Camera" });
+  const cameraRow = el("div", { className: "filter-row", hidden: true }, [el("span", { className: "label", textContent: "Camera" }), cameraSeg]);
 
-  // Banner shown while picking a location source from the grid.
+  // Banner shown while picking a photo from the grid.
   const pickBanner = el("div", { className: "pick-banner", hidden: true });
 
   // ----- selection bar -----
@@ -153,7 +156,7 @@ export function createPhotoListView(container, store, actions, { canOpenFolder }
   const downloadButton = el("button", { className: "btn accent", title: "Download the changed photos (one file, or a zip for several). Replace the originals on your computer with them.", onclick: () => actions.download() }, "Download");
   const downloadBar = el("div", { className: "download-bar", hidden: true }, [downloadText, el("span", { className: "spacer" }), downloadButton]);
 
-  const body = el("div", { className: "pane-body" }, [filterRow, pickBanner, gridBox, statusRow, downloadBar]);
+  const body = el("div", { className: "pane-body" }, [showRow, cameraRow, pickBanner, gridBox, statusRow, downloadBar]);
   const pane = el("section", { className: "panel pane-list" }, [header, body]);
   clear(container);
   container.append(pane);
@@ -178,7 +181,7 @@ export function createPhotoListView(container, store, actions, { canOpenFolder }
     let tile = tiles.get(id);
     if (!tile) {
       tile = el("button", { className: "tile", role: "option", dataset: { id }, title: "Reading…" }, [
-        el("div", { className: "img" }), el("div", { className: "name" }),
+        el("div", { className: "img" }), el("div", { className: "name" }), el("div", { className: "date" }),
       ]);
       tiles.set(id, tile);
     }
@@ -189,10 +192,14 @@ export function createPhotoListView(container, store, actions, { canOpenFolder }
     const photo = store.get(id);
     const tile = tiles.get(id);
     if (!photo || !tile) return;
-    const isSource = store.sourceId === id;
+    const dateMode = store.mode === "date";
+    const isSource = store.markedSourceId() === id;
     const pickLabel = store.pickLabel(id);
-    tile.title = tileTooltip(photo, { isSource, pickLabel });
+    tile.title = tileTooltip(photo, { isSource, pickLabel, dateMode });
     tile.querySelector(".name").textContent = photo.name;
+    const dateLine = tile.querySelector(".date");
+    dateLine.textContent = dateMode ? (photo.status === "ready" ? (photo.dateText || "No date") : "") : "";
+    dateLine.hidden = !dateMode;
     tile.classList.toggle("sel", store.selection.has(id));
     tile.classList.toggle("faded", store.isFaded(id));
     tile.classList.toggle("unread", photo.status === "error");
@@ -220,9 +227,23 @@ export function createPhotoListView(container, store, actions, { canOpenFolder }
   function renderGrid() {
     clear(grid);
     const groups = store.groups();
+    const dateMode = store.mode === "date";
+    grid.classList.toggle("date-mode", dateMode);
     groups.forEach((group, index) => {
       if (index > 0) grid.append(el("div", { className: "divider" }));
-      grid.append(el("div", { className: `grp ${group.key}`, textContent: `● ${group.title}` }));
+      if (dateMode) {
+        // A camera heading, with a checkbox in the All view that selects
+        // (or deselects) every photo from that camera.
+        const heading = el("div", { className: "grp camera" }, [el("span", { textContent: group.title })]);
+        if (store.cameraFilter === "all" && !store.picking) {
+          const box = el("input", { type: "checkbox", checked: store.cameraSelected(group.camera), title: `Select every photo from ${group.camera}` });
+          box.addEventListener("change", () => store.selectCamera(group.camera, box.checked));
+          heading.prepend(box);
+        }
+        grid.append(heading);
+      } else {
+        grid.append(el("div", { className: `grp ${group.key}`, textContent: `● ${group.title}` }));
+      }
       const row = el("div", { className: "tiles" });
       for (const id of group.ids) {
         row.append(tileFor(id));
@@ -236,15 +257,32 @@ export function createPhotoListView(container, store, actions, { canOpenFolder }
     for (const id of [...tiles.keys()]) if (!store.get(id)) tiles.delete(id);
   }
 
+  function renderCameraFilter() {
+    const cameras = store.cameras();
+    clear(cameraSeg);
+    const options = ["all", ...cameras];
+    for (const camera of options) {
+      const on = store.cameraFilter === camera;
+      cameraSeg.append(el("button", {
+        className: on ? "on" : "", "aria-pressed": on ? "true" : "false", disabled: Boolean(store.picking),
+        title: camera === "all" ? "Show photos from every camera" : "Show only this camera's photos",
+        onclick: () => store.setCameraFilter(camera),
+      }, camera === "all" ? "All" : camera));
+    }
+    cameraRow.hidden = store.mode !== "date" || cameras.length < 2;
+  }
+
   function renderControls() {
     const counts = store.counts();
     const selected = store.selection.size;
-    const picking = store.picking;
+    const picking = Boolean(store.picking);
+    const dateMode = store.mode === "date";
+    showRow.hidden = dateMode;
     filterButtons.all.textContent = `All (${counts.total})`;
     filterButtons.needs.textContent = `Needs GPS (${counts.needs})`;
     filterButtons.has.textContent = `Has GPS (${counts.has})`;
     for (const [key, button] of Object.entries(filterButtons)) {
-      const on = picking ? key === "has" : store.view === key && !store.onlySelected;
+      const on = store.picking === "location" ? key === "has" : store.view === key && !store.onlySelected;
       button.classList.toggle("on", on);
       button.classList.toggle(key, on);
       button.setAttribute("aria-pressed", on ? "true" : "false");
@@ -253,6 +291,7 @@ export function createPhotoListView(container, store, actions, { canOpenFolder }
     onlySelectedButton.disabled = picking || (selected === 0 && !store.onlySelected);
     onlySelectedButton.classList.toggle("on", store.onlySelected);
     onlySelectedButton.setAttribute("aria-pressed", store.onlySelected ? "true" : "false");
+    renderCameraFilter();
     selectionCount.textContent = `${selected} selected`;
     selectionBar.classList.toggle("active", selected > 0);
     deselectAllButton.disabled = picking || selected === 0;
@@ -274,6 +313,7 @@ export function createPhotoListView(container, store, actions, { canOpenFolder }
     }
     if (change.type === "selection") {
       for (const id of store.visibleIds()) updateTile(id);
+      if (store.mode === "date") for (const box of grid.querySelectorAll(".grp.camera input")) box.checked = store.cameraSelected(box.title.replace("Select every photo from ", ""));
       renderControls();
       return;
     }

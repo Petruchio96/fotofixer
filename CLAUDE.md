@@ -36,8 +36,11 @@ plans live only in `docs/ROADMAP.md`.
 - `gui/`: main window, widgets, presenters, window mixins, background loading
 - `tests/`: unittest suite, including real mouse/keyboard GUI tests
 - `web/`: the web version (Docker version): static page, ES modules with no
-  build step, ExifTool as WebAssembly in `web/worker/`, vendored files in
-  `web/vendor/` (fetched, not in git), Node tests in `web/tests/`
+  build step, ExifTool as WebAssembly and Pyodide in `web/worker/`, the
+  Python the browser runs behind `web/bridge/fotofixer_bridge.py` (JSON in
+  and out; the modules are zipped by `packaging/fetch_web_vendor.py`),
+  vendored files in `web/vendor/` (fetched, not in git), Node tests in
+  `web/tests/`
 - `docker/`: the container (nginx-unprivileged), compose file, and checks
 
 ## Rules
@@ -79,6 +82,10 @@ plans live only in `docs/ROADMAP.md`.
 - Every PR gets GitHub's auto-merge turned on right after it is opened
   (`gh pr merge --auto --merge <branch>`), so it merges itself once the four
   required checks pass.
+- Right after opening a PR, also turn on the Claude app's Auto-fix for it
+  (`mcp__ccd_pr__set_monitor` with `auto_fix: true` and the PR's URL), so a CI
+  failure, merge conflict, or review comment wakes the session that made the
+  PR to fix it, verify, commit, and push.
 - Never commit or push until the user says to; they review changes in VS Code first.
 - No AI attribution (Co-Authored-By) lines in commits or PRs.
 - New versions only for major UI improvements, significant new features, or

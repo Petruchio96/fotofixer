@@ -83,7 +83,7 @@ class BrowserModulesTests(unittest.TestCase):
             forbidden = {name for name in imports if name.split(".")[0] in FORBIDDEN_IMPORTS or name in FORBIDDEN_IMPORTS}
             self.assertFalse(forbidden, f"{module} imports {sorted(forbidden)}")
             # Imports of the app's own modules must themselves be in the list.
-            own = {name for name in imports if name.startswith(("core.", "services."))}
+            own = {name for name in imports if name.startswith(("core.", "services.", "gui."))}
             listed = {m[:-3].replace("/", ".") for m in fetch_web_vendor.BROWSER_MODULES}
             self.assertTrue(own <= listed, f"{module} imports {sorted(own - listed)}, not in BROWSER_MODULES")
 

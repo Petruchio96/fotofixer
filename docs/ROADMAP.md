@@ -429,6 +429,25 @@ Generic Docker, Caddy, and Traefik examples go in the same document.
    separates clicks from drags itself), the space-bar pan mode, and the
    tile disk cache (the browser's HTTP cache does that).
 4. **Date & Time.** Shift, Set, Change Time Zone, camera groups.
+
+   **Built 2026-10-13 (branch `web-dates`):** the logic stays Python. The
+   desktop's Qt-free presenter `gui/presenters/date_time_state.py` and the
+   date services run in Pyodide behind `web/bridge/fotofixer_bridge.py`
+   (JSON in, JSON out: the tab's state plus the exact tags to write and the
+   tags to write back on undo; `tests/test_web_bridge.py` drives it on the
+   desktop). `web/app/date_view.js` draws the four steps (choice cards, the
+   reference card with ‹ 1 of 3 ›, zone drop-down with date and time
+   inputs, From a Photo in the Photo List / on This Computer with the
+   source card, Keep the clock time with its question, hints, the changes
+   list, the orange button); the Photo List follows the tab (camera groups
+   with select-all checkboxes, dates under the names, the camera filter, no
+   GPS pins). Writes go through the same path as GPS (`exif.write` with a
+   tag dict); undo/redo cover both kinds. Differences from the desktop:
+   `FileModifyDate` isn't written (a browser can't set a file's date);
+   the CR3 QuickTime dates are written as UTC from the photo's zone (the
+   new one if a zone was chosen, else the visitor's); the hour/minute/second
+   drop-downs are the browser's own date and time inputs; the tzdata wheel
+   loads with Pyodide for daylight saving and zone abbreviations.
 5. **Polish and publish.** iPad pass in Safari, `docs/SELF_HOSTING.md`, a
    README section, the GHCR workflow, version **1.10.0** in the same PR, and
    the release.

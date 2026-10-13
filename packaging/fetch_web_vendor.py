@@ -120,6 +120,10 @@ FILES = {
 # The app's own modules the browser runs through Pyodide: pure logic with no
 # file or process I/O (docs/ROADMAP.md, "Logic in the browser").
 BROWSER_MODULES = (
+    "web/bridge/fotofixer_bridge.py",
+    "gui/__init__.py",
+    "gui/presenters/__init__.py",
+    "gui/presenters/date_time_state.py",
     "core/__init__.py",
     "core/coordinates.py",
     "core/models.py",

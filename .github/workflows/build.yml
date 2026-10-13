@@ -71,7 +71,7 @@ jobs:
               # browser runs, zipped from core/ and services/).
               web_pattern='^(web/|docker/|core/|services/|packaging/fetch_web_vendor\.py$|packaging/serve_web\.py$|tests/test_fetch_web_vendor\.py$|\.github/workflows/build\.yml$)'
               # Files that only the web version cares about, plus docs.
-              web_only_pattern='^(web/|docker/|docs/|packaging/fetch_web_vendor\.py$|packaging/serve_web\.py$|tests/test_fetch_web_vendor\.py$)|\.md$'
+              web_only_pattern='^(web/|docker/|docs/|packaging/fetch_web_vendor\.py$|packaging/serve_web\.py$|tests/test_fetch_web_vendor\.py$|\.gitignore$|\.dockerignore$)|\.md$'
               if grep -qE "$web_pattern" <<<"$files"; then web=true; fi
               if grep -vE "$web_only_pattern" <<<"$files" | grep -q .; then desktop=true; fi
             fi

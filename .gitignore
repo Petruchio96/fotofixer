@@ -22,3 +22,4 @@ web/vendor/VERSIONS.txt
 web/vendor/pyodide/
 web/py/
 web/vendor/leaflet/
+web/bridge/__pycache__/

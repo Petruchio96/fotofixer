@@ -3,7 +3,7 @@
 ## Snapshot
 
 Last updated: 2026-10-12
-Web version: Phase 1 (the skeleton) merged 2026-10-13; Phases 2 (Location editing) and 3 (the map) merged/in progress, Phase 3 on branch `web-map` (see "Web version" below); ships as 1.10.0 with the desktop app.
+Web version: Phase 1 (the skeleton) merged 2026-10-13; Phases 2 (Location editing) and 3 (the map) merged; Phase 4 (Date & Time) on branch `web-dates` (see "Web version" below); ships as 1.10.0 with the desktop app.
 Version: 1.9.0 (branch `more-file-types`, unreleased): the app is renamed from Photo GPS Editor to **FotoFixer – When & Where** (window title, About, downloads `fotofixer-…` / `FotoFixer-x86_64.AppImage`, installer folder `…\Programs\FotoFixer`, settings under FotoFixer and copied once from the old name, repository `Petruchio96/fotofixer`); a photo is either the location source or being changed, never both; Undo never makes backups; HEIC/HEIF photos (iPhone `.heic`, `.heif`, Canon `.hif`; thumbnails through pillow-heif) and more RAW formats (Nikon NEF/NRW, Sony ARW, Fujifilm RAF, Olympus ORF, Panasonic RW2, Pentax PEF, Samsung SRW). 1.8.0 is the latest release (2026-10-12): the in-app update check (Help > Check for Updates, a once-a-day check after start-up, the orange "Version X is available" bar, and one-click updates: the installed Windows copy, the Linux AppImage and folder, and the macOS app download the release file, verify it, and replace themselves). 1.7.0 was released 2026-10-12 with everything since 1.6.1. 1.5.0, 1.6.0, and 1.6.2 were merged but never released. 1.4: the app's own Add Photos picker, the map (Pick from a Map, street map and satellite imagery), Edit > Settings, and the same pinned ExifTool on every system. 1.4.1: the blue pin GPS badge, the blue = existing / orange = new color theme, the map's Clear button, and no blocking dialogs. 1.5: the Add Photos picker shows folders with the photos and folders can be chosen to add their photos, plus deselect after Apply, the map's Back button and zoom from a photo's preview, backups named `<name>_original.<ext>` (only for photos that had GPS), tighter window spacing, and a clearer window edge on Windows 11. 1.6: Date & Time editing (shift the selected photos' dates or set one date, time zones; the Photo List groups photos by camera on that tab), laid out as four steps, and the picker's Select All Photos. 1.6.1: release fixes (Apply never writes to the location source photo, single-file CI downloads, updated release checklist). 1.6.2 (unreleased): Change Time Zone, a third Date & Time choice (the same moment in another zone, or keep the clock time), step 2 as three stacked cards that fold up to the one chosen, a progress bar for every change and undo/redo (written in the background), hover hints for cut-short rows in the changes list, and space-bar panning on the map; then Windows fixes (PR #16): the changes list keeps new dates in view, Set keeps the moment when its zone changes, the zone sits above the date and time, and the map opens on New Location with a Select Location / Cancel button; 1.7.0 (Windows polish 2): the Paste button re-checks the clipboard a moment after it changes instead of on every refresh (and waits while another program holds it, which on Windows logged "Retrying to obtain clipboard" every few minutes), the Windows look (a gap between the map icon and its text, darker placeholder and disabled text), `OffsetTimeDigitized` before `OffsetTime` as the zone fallback, and the release job's download keeps the macOS zip as uploaded (`skip-decompress: true`), plus the Windows installer (`photo-gps-editor-windows-x86_64-setup.exe`, which replaces the Windows zip: per-user install with a Start menu shortcut, in-place upgrades, uninstaller)
 Status: Two-pane layout (Photo List and Photos to Change, with Location and Date & Time tabs; Date & Time shifts or sets photo dates or changes their time zone), the app's own photo picker (folder tree; folders and photos, either can be chosen), a pop-out map for picking a location (OpenStreetMap, USGS, or Esri with the user's key), fast thumbnails (shared Linux thumbnail cache, embedded JPEG thumbnails), background loading, failure-tolerant writes, undo/redo that restores the photo list, optional backups, an error log, an in-app update check, and CI builds for Linux, Windows, and macOS.
 
@@ -282,6 +282,24 @@ browser. Phase 1 (the skeleton, branch `web-skeleton`, 2026-10-12):
   banner offers Use US Satellite Instead (Esri serves imagery for any
   non-empty token, so a wrong key isn't caught). Settings has the Esri key
   (this browser only) with Paste and Remove Key
+- Date & Time tab (Phase 4, branch `web-dates`, 2026-10-13): the logic is
+  the desktop's. `web/bridge/fotofixer_bridge.py` (zipped with
+  `gui/presenters/date_time_state.py`, the date services, and
+  `core/time_zones.py` + the tzdata wheel) takes the tab's state as JSON
+  (photos with their date tags, the selection, the mode, the reference,
+  what was typed, the source photo, the zone, keep-clock) and returns what
+  the presenter would show plus `changes` (id → the tags to write, with
+  the CR3 QuickTime dates as UTC) and `before` (the tags to write back on
+  undo); `describe` gives each photo its display date, zone, and camera
+  for the list. `date_view.js` is the four-step tab (choice cards that
+  fold, the reference card and arrows, zone + date + time inputs, Set's
+  value converting when its zone changes, From a Photo in the Photo List
+  (pick mode "time": "No Date" / "Being Changed" tiles) and on This
+  Computer, the source card, Keep the clock time with its question, the
+  changes list, Shift N Photos / Set Date on N Photos / Change Time Zone of
+  N Photos); the Photo List in date mode has camera groups with checkboxes,
+  dates under names, the camera filter when there is more than one camera,
+  and no pins. Not written: `FileModifyDate` (no browser can set it)
 - `window.fotofixerDebug` (`store`, `history`, `addEntries`, `exif`) exists
   only on localhost, for driving checks without the native file pickers;
   the checks must return small values only (a returned byte array froze

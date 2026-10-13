@@ -2,7 +2,7 @@
 // coordinates), the hint, Apply, and Remove GPS. What it shows comes from
 // location_state.js; the writing itself lives in main.js.
 
-import { el, clear, gpsPin, photoIcon } from "./dom.js";
+import { el, clear, gpsPin, photoIcon, mapIcon } from "./dom.js";
 import { ACCEPT_ATTRIBUTE } from "./file_types.js";
 import { formatCoordinates } from "./photo_store.js";
 import { buildLocationState } from "./location_state.js";
@@ -33,6 +33,12 @@ export function createLocationView(container, store, actions) {
   const fileInput = el("input", { type: "file", accept: ACCEPT_ATTRIBUTE, className: "hidden-input" });
   fileInput.addEventListener("change", () => { if (fileInput.files[0]) actions.locationFromFile(fileInput.files[0]); fileInput.value = ""; });
   const fromFileButton = el("button", { className: "btn pick", title: "Choose any photo on this computer and use its GPS coordinates", onclick: () => fileInput.click() }, "From a Photo on This Computer");
+  // Opens the map: click it or drag the pin to fill the fields.
+  const mapButton = el("button", {
+    className: "btn pick",
+    title: "Open a map: click it, or drag the pin, to set the New Location. Photos in the Photo List with GPS show as dots.",
+    onclick: () => actions.openMap(),
+  }, [mapIcon(), "Pick from a Map"]);
 
   // The source card: which photo the location came from.
   const sourceThumb = el("div", { className: "source-thumb" });
@@ -54,6 +60,7 @@ export function createLocationView(container, store, actions) {
     el("h3", { textContent: "New Location" }),
     el("div", { className: "label", textContent: "Copy location" }),
     el("div", { className: "button-row" }, [pickButton, fromFileButton, fileInput]),
+    el("div", { className: "button-row" }, [mapButton]),
     sourceCard,
     el("div", { className: "fields" }, [
       el("div", {}, [el("label", { className: "label", for: "latitude", textContent: "Latitude" }), latitude]),
@@ -190,7 +197,7 @@ export function createLocationView(container, store, actions) {
     pickButton.disabled = !picking && !canPick;
     pickButton.setAttribute("aria-pressed", picking ? "true" : "false");
     pickButton.classList.toggle("on", picking);
-    for (const control of [fromFileButton, latitude, longitude, pasteButton, clearButton, sourceClear]) control.disabled = picking;
+    for (const control of [fromFileButton, mapButton, latitude, longitude, pasteButton, clearButton, sourceClear]) control.disabled = picking;
     renderSourceCard();
   }
 
@@ -202,6 +209,8 @@ export function createLocationView(container, store, actions) {
     clearFields,
     state: () => state,
     newLocation: () => newLocation,
+    /** The fields as typed, and the source photo, for the map's Back. */
+    fields: () => ({ latitude: latitude.value, longitude: longitude.value, sourceId: store.sourceId }),
     setPythonReady(ok, error) {
       pythonReady = ok;
       pythonNote.textContent = ok ? "" : `The coordinate parser could not load: ${error}`;

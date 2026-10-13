@@ -18,6 +18,7 @@ import { EditHistory, EDIT_GPS } from "./edit_history.js";
 import { overwriteQuestion, changeMessage } from "./location_state.js";
 import { askOverwrite, confirmRemoveGps, showFailures, showNotice, showSettings } from "./dialogs.js";
 import { buildStoredZip } from "./zip_store.js";
+import { createMapDialog } from "./map_view.js";
 
 const saveMode = detectSaveMode();
 const modeText = saveModeText(saveMode);
@@ -27,9 +28,9 @@ const modeText = saveModeText(saveMode);
 const SETTINGS_KEY = "fotofixer.settings";
 function loadSettings() {
   try {
-    return { keepBackups: false, ...JSON.parse(localStorage.getItem(SETTINGS_KEY) ?? "{}") };
+    return { keepBackups: false, esriKey: "", ...JSON.parse(localStorage.getItem(SETTINGS_KEY) ?? "{}") };
   } catch {
-    return { keepBackups: false };
+    return { keepBackups: false, esriKey: "" };
   }
 }
 function saveSettings(settings) {
@@ -50,7 +51,7 @@ modeBadge.classList.add(saveMode);
 const undoButton = document.getElementById("undoButton");
 const redoButton = document.getElementById("redoButton");
 document.getElementById("settingsButton").addEventListener("click", async () => {
-  const result = await showSettings({ keepBackups: settings.keepBackups, canSaveInPlace: saveMode === "inplace" });
+  const result = await showSettings({ keepBackups: settings.keepBackups, canSaveInPlace: saveMode === "inplace", esriKey: settings.esriKey });
   if (result) {
     settings = { ...settings, ...result };
     saveSettings(settings);
@@ -523,10 +524,33 @@ const changePane = createChangePane(document.getElementById("photosToChange"), s
     parse: (op, a, b) => exif.parse(op, a, b),
     togglePick,
     locationFromFile: useLocationFromFile,
+    openMap: () => mapDialog.open(),
     apply: applyLocation,
     removeGps,
     message: (text, tone) => setMessage(text, { tone }),
+    // The pin follows New Location while the map is open (typed, pasted,
+    // copied from a photo); the map moves to it only when it is out of view.
+    onLocationChange: (location) => { if (mapDialog.isOpen()) mapDialog.setPin(location, { reveal: true }); },
   },
+});
+
+// Pick from a Map: another source for New Location (web/app/map_view.js).
+const mapDialog = createMapDialog({
+  store,
+  getFields: () => changePane.location.fields(),
+  getLocation: () => changePane.location.newLocation(),
+  getEsriKey: () => settings.esriKey,
+  actions: {
+    // A click or a dropped pin: like typing (any source photo is dropped).
+    pick: (latitude, longitude) => changePane.location.setFields(latitude.toFixed(6), longitude.toFixed(6)),
+    usePhoto: (id) => useLocationFromPhoto(id),
+    clear: () => changePane.location.clearFields(),
+    back: (entry) => changePane.location.setFields(entry.latitude, entry.longitude, { sourceId: entry.sourceId && store.get(entry.sourceId) ? entry.sourceId : null }),
+  },
+});
+store.subscribe((change) => {
+  if (!mapDialog.isOpen()) return;
+  if (["info", "selection", "added", "removed", "thumb"].includes(change.type)) mapDialog.refreshDots();
 });
 
 exif.onPythonReady = (reply) => changePane.location.setPythonReady(reply.ok, reply.error);

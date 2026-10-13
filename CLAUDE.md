@@ -76,6 +76,9 @@ plans live only in `docs/ROADMAP.md`.
   (merge commit). `main` requires the four CI checks (a ruleset; admins can
   bypass for direct docs-only pushes), so GitHub's auto-merge is available:
   the PR merges itself once the checks pass.
+- Every PR gets GitHub's auto-merge turned on right after it is opened
+  (`gh pr merge --auto --merge <branch>`), so it merges itself once the four
+  required checks pass.
 - Never commit or push until the user says to; they review changes in VS Code first.
 - No AI attribution (Co-Authored-By) lines in commits or PRs.
 - New versions only for major UI improvements, significant new features, or

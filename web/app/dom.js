@@ -64,3 +64,13 @@ export function folderIcon() {
   }));
   return svg;
 }
+
+/** The map icon on the Pick from a Map button. */
+export function mapIcon() {
+  const svg = svgElement("svg", { viewBox: "0 0 18 18", width: "18", height: "18", "aria-hidden": "true" });
+  svg.append(
+    svgElement("path", { d: "M1.5 4.5 L6.5 2.5 L11.5 4.5 L16.5 2.5 V13.5 L11.5 15.5 L6.5 13.5 L1.5 15.5 Z", fill: "none", stroke: "currentColor", "stroke-width": "1.5" }),
+    svgElement("path", { d: "M6.5 2.5 V13.5 M11.5 4.5 V15.5", stroke: "currentColor", "stroke-width": "1.5" }),
+  );
+  return svg;
+}

@@ -98,15 +98,48 @@ export function showNotice(title, text, tone = "info") {
   });
 }
 
-/** Settings: the backups option (saved in this browser). Resolves {keepBackups}. */
-export async function showSettings({ keepBackups, canSaveInPlace }) {
+// Where a visitor gets a free ArcGIS key for Esri's satellite imagery.
+const ESRI_SIGN_UP_URL = "https://location.arcgis.com/sign-up/";
+const ESRI_CREATE_KEY_URL = "https://developers.arcgis.com/documentation/security-and-authentication/api-key-authentication/tutorials/create-an-api-key/";
+
+/**
+ * Settings (saved in this browser only): the backups option and the Esri
+ * key. Resolves {keepBackups, esriKey} on Save, null on Cancel.
+ */
+export async function showSettings({ keepBackups, canSaveInPlace, esriKey = "" }) {
   const checkbox = el("input", { type: "checkbox", id: "keepBackups", checked: keepBackups });
+  let key = esriKey;
+  const keyStatus = el("div", { className: "note key-status" });
+  const keyInput = el("input", { className: "field", type: "password", id: "esriKey", placeholder: esriKey ? "Paste a new key to replace it" : "Paste your ArcGIS API key", autocomplete: "off" });
+  keyInput.addEventListener("input", () => { key = keyInput.value.trim() || key; renderKey(); });
+  const pasteButton = el("button", { className: "btn", title: "Paste a key from the clipboard", onclick: async () => {
+    try { keyInput.value = (await navigator.clipboard.readText()).trim(); key = keyInput.value || key; renderKey(); } catch { keyInput.focus(); }
+  } }, "Paste");
+  const removeButton = el("button", { className: "btn remove", title: "Forget the key; the map's Satellite button goes back to USGS imagery", onclick: () => { key = ""; keyInput.value = ""; renderKey(); } }, "Remove Key");
+  function renderKey() {
+    const saved = key ? (key === esriKey ? "A key is saved in this browser." : "A new key will be saved.") : "No key: the map's Satellite button shows USGS imagery (United States only).";
+    keyStatus.textContent = saved;
+    keyStatus.classList.toggle("ok", Boolean(key));
+    removeButton.disabled = !key;
+  }
+  renderKey();
   const body = [
     el("h3", { textContent: "Backups" }),
     el("label", { className: "check-row", for: "keepBackups" }, [checkbox, el("span", { textContent: "Keep Backup Copies of Originals" })]),
     el("p", { className: "note", textContent: canSaveInPlace
       ? "Before a photo's first GPS change, a copy named <name>_original.<ext> is saved next to it in the opened folder, if the photo had GPS (adding GPS to a photo without any loses nothing). Backups are added to the Photo List, not selected. Undo deletes the backups it made."
       : "Only when photos are saved in place (Chrome or Edge with an opened folder). In this browser changed photos download, so the originals stay as they are." }),
+    el("h3", { textContent: "Esri Satellite Map" }),
+    el("p", { className: "note" }, [
+      "Worldwide satellite imagery on the map needs your own free API key from an ",
+      el("a", { href: ESRI_SIGN_UP_URL, target: "_blank", rel: "noopener", textContent: "ArcGIS Location Platform" }),
+      " account (a Public key with only the Static basemap tiles privilege; ",
+      el("a", { href: ESRI_CREATE_KEY_URL, target: "_blank", rel: "noopener", textContent: "Esri's instructions" }),
+      "). The key stays in this browser and goes only to Esri with each map tile. Without a key the Satellite button shows USGS imagery, United States only.",
+    ]),
+    keyStatus,
+    keyInput,
+    el("div", { className: "dialog-row" }, [pasteButton, removeButton]),
     el("p", { className: "note", textContent: "Settings are saved in this browser only." }),
   ];
   const answer = await openDialog({
@@ -118,7 +151,7 @@ export async function showSettings({ keepBackups, canSaveInPlace }) {
     ],
     defaultValue: "cancel",
   });
-  return answer === "save" ? { keepBackups: checkbox.checked } : null;
+  return answer === "save" ? { keepBackups: checkbox.checked, esriKey: key } : null;
 }
 
 export { clear };

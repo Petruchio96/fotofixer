@@ -3,7 +3,7 @@
 ## Snapshot
 
 Last updated: 2026-10-12
-Web version: Phase 1 (the skeleton) merged 2026-10-13; Phase 2 (Location editing) on branch `web-location` (see "Web version" below); ships as 1.10.0 with the desktop app.
+Web version: Phase 1 (the skeleton) merged 2026-10-13; Phases 2 (Location editing) and 3 (the map) merged/in progress, Phase 3 on branch `web-map` (see "Web version" below); ships as 1.10.0 with the desktop app.
 Version: 1.9.0 (branch `more-file-types`, unreleased): the app is renamed from Photo GPS Editor to **FotoFixer – When & Where** (window title, About, downloads `fotofixer-…` / `FotoFixer-x86_64.AppImage`, installer folder `…\Programs\FotoFixer`, settings under FotoFixer and copied once from the old name, repository `Petruchio96/fotofixer`); a photo is either the location source or being changed, never both; Undo never makes backups; HEIC/HEIF photos (iPhone `.heic`, `.heif`, Canon `.hif`; thumbnails through pillow-heif) and more RAW formats (Nikon NEF/NRW, Sony ARW, Fujifilm RAF, Olympus ORF, Panasonic RW2, Pentax PEF, Samsung SRW). 1.8.0 is the latest release (2026-10-12): the in-app update check (Help > Check for Updates, a once-a-day check after start-up, the orange "Version X is available" bar, and one-click updates: the installed Windows copy, the Linux AppImage and folder, and the macOS app download the release file, verify it, and replace themselves). 1.7.0 was released 2026-10-12 with everything since 1.6.1. 1.5.0, 1.6.0, and 1.6.2 were merged but never released. 1.4: the app's own Add Photos picker, the map (Pick from a Map, street map and satellite imagery), Edit > Settings, and the same pinned ExifTool on every system. 1.4.1: the blue pin GPS badge, the blue = existing / orange = new color theme, the map's Clear button, and no blocking dialogs. 1.5: the Add Photos picker shows folders with the photos and folders can be chosen to add their photos, plus deselect after Apply, the map's Back button and zoom from a photo's preview, backups named `<name>_original.<ext>` (only for photos that had GPS), tighter window spacing, and a clearer window edge on Windows 11. 1.6: Date & Time editing (shift the selected photos' dates or set one date, time zones; the Photo List groups photos by camera on that tab), laid out as four steps, and the picker's Select All Photos. 1.6.1: release fixes (Apply never writes to the location source photo, single-file CI downloads, updated release checklist). 1.6.2 (unreleased): Change Time Zone, a third Date & Time choice (the same moment in another zone, or keep the clock time), step 2 as three stacked cards that fold up to the one chosen, a progress bar for every change and undo/redo (written in the background), hover hints for cut-short rows in the changes list, and space-bar panning on the map; then Windows fixes (PR #16): the changes list keeps new dates in view, Set keeps the moment when its zone changes, the zone sits above the date and time, and the map opens on New Location with a Select Location / Cancel button; 1.7.0 (Windows polish 2): the Paste button re-checks the clipboard a moment after it changes instead of on every refresh (and waits while another program holds it, which on Windows logged "Retrying to obtain clipboard" every few minutes), the Windows look (a gap between the map icon and its text, darker placeholder and disabled text), `OffsetTimeDigitized` before `OffsetTime` as the zone fallback, and the release job's download keeps the macOS zip as uploaded (`skip-decompress: true`), plus the Windows installer (`photo-gps-editor-windows-x86_64-setup.exe`, which replaces the Windows zip: per-user install with a Start menu shortcut, in-place upgrades, uninstaller)
 Status: Two-pane layout (Photo List and Photos to Change, with Location and Date & Time tabs; Date & Time shifts or sets photo dates or changes their time zone), the app's own photo picker (folder tree; folders and photos, either can be chosen), a pop-out map for picking a location (OpenStreetMap, USGS, or Esri with the user's key), fast thumbnails (shared Linux thumbnail cache, embedded JPEG thumbnails), background loading, failure-tolerant writes, undo/redo that restores the photo list, optional backups, an error log, an in-app update check, and CI builds for Linux, Windows, and macOS.
 
@@ -262,6 +262,26 @@ browser. Phase 1 (the skeleton, branch `web-skeleton`, 2026-10-12):
   the Download bar. Header Undo/Redo buttons and Ctrl+Z / Ctrl+Y; the
   status row's Undo link. Settings (header): the backups option, in
   `localStorage`
+- Pick from a Map (Phase 3, branch `web-map`, 2026-10-13): `map_view.js`
+  is a `<dialog>` with Leaflet (`web/vendor/leaflet/`, loaded on first
+  open) laid out like the desktop's map window: Street / Satellite, Show
+  All Photo Locations, Go to Selected Location, + / −; the orange
+  draggable pin (a click or a drop fills the fields like typing, so a
+  source photo is dropped); blue photo dots, orange when selected, with
+  name hints and a preview popup (thumbnail zooms to the photo at zoom 15
+  or closer, ‹ 1 of 2 › for dots within 2 px, Use This Location, which is
+  off for a photo selected to change); the readout under the map; Back
+  (the New Locations set on the map, newest first, emptied when it opens),
+  Clear, Cancel / Select Location, Esc. Opens on the street map at the pin
+  (zoom 15), else fitted to the photos with GPS (12% margin, zoom 15 at
+  most), else the lower 48. `map_tiles.js` holds the three sources
+  (OpenStreetMap; USGS, United States only, with a note; Esri World
+  Imagery with the visitor's key, `?token=` in the tile address), checked
+  against `core/map_tiles.py` by a test; `map_state.js` has the Back
+  history and the same-spot grouping. If Esri's tiles fail, an amber
+  banner offers Use US Satellite Instead (Esri serves imagery for any
+  non-empty token, so a wrong key isn't caught). Settings has the Esri key
+  (this browser only) with Paste and Remove Key
 - `window.fotofixerDebug` (`store`, `history`, `addEntries`, `exif`) exists
   only on localhost, for driving checks without the native file pickers;
   the checks must return small values only (a returned byte array froze

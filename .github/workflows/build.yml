@@ -7,6 +7,7 @@
 # - Pushing a tag like v1.2.0: also attach the builds to that GitHub release
 #   (a draft release is created if one does not exist yet).
 # - "Run workflow" on the Actions tab runs it manually.
+# - The web version has its own workflow, web.yml.
 
 name: Build
 
@@ -14,6 +15,11 @@ on:
   push:
     branches: ["**"]
     tags: ["v*"]
+    # Pushes that only touch the web version run web.yml instead. (Path
+    # filters don't apply to tags, so a release still builds everything.)
+    paths-ignore:
+      - "web/**"
+      - "docker/**"
   workflow_dispatch:
 
 permissions:

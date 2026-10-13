@@ -3,6 +3,7 @@
 ## Snapshot
 
 Last updated: 2026-10-12
+Web version: Phase 1 skeleton on branch `web-skeleton` (see "Web version" below); ships as 1.10.0 with the desktop app.
 Version: 1.9.0 (branch `more-file-types`, unreleased): the app is renamed from Photo GPS Editor to **FotoFixer – When & Where** (window title, About, downloads `fotofixer-…` / `FotoFixer-x86_64.AppImage`, installer folder `…\Programs\FotoFixer`, settings under FotoFixer and copied once from the old name, repository `Petruchio96/fotofixer`); a photo is either the location source or being changed, never both; Undo never makes backups; HEIC/HEIF photos (iPhone `.heic`, `.heif`, Canon `.hif`; thumbnails through pillow-heif) and more RAW formats (Nikon NEF/NRW, Sony ARW, Fujifilm RAF, Olympus ORF, Panasonic RW2, Pentax PEF, Samsung SRW). 1.8.0 is the latest release (2026-10-12): the in-app update check (Help > Check for Updates, a once-a-day check after start-up, the orange "Version X is available" bar, and one-click updates: the installed Windows copy, the Linux AppImage and folder, and the macOS app download the release file, verify it, and replace themselves). 1.7.0 was released 2026-10-12 with everything since 1.6.1. 1.5.0, 1.6.0, and 1.6.2 were merged but never released. 1.4: the app's own Add Photos picker, the map (Pick from a Map, street map and satellite imagery), Edit > Settings, and the same pinned ExifTool on every system. 1.4.1: the blue pin GPS badge, the blue = existing / orange = new color theme, the map's Clear button, and no blocking dialogs. 1.5: the Add Photos picker shows folders with the photos and folders can be chosen to add their photos, plus deselect after Apply, the map's Back button and zoom from a photo's preview, backups named `<name>_original.<ext>` (only for photos that had GPS), tighter window spacing, and a clearer window edge on Windows 11. 1.6: Date & Time editing (shift the selected photos' dates or set one date, time zones; the Photo List groups photos by camera on that tab), laid out as four steps, and the picker's Select All Photos. 1.6.1: release fixes (Apply never writes to the location source photo, single-file CI downloads, updated release checklist). 1.6.2 (unreleased): Change Time Zone, a third Date & Time choice (the same moment in another zone, or keep the clock time), step 2 as three stacked cards that fold up to the one chosen, a progress bar for every change and undo/redo (written in the background), hover hints for cut-short rows in the changes list, and space-bar panning on the map; then Windows fixes (PR #16): the changes list keeps new dates in view, Set keeps the moment when its zone changes, the zone sits above the date and time, and the map opens on New Location with a Select Location / Cancel button; 1.7.0 (Windows polish 2): the Paste button re-checks the clipboard a moment after it changes instead of on every refresh (and waits while another program holds it, which on Windows logged "Retrying to obtain clipboard" every few minutes), the Windows look (a gap between the map icon and its text, darker placeholder and disabled text), `OffsetTimeDigitized` before `OffsetTime` as the zone fallback, and the release job's download keeps the macOS zip as uploaded (`skip-decompress: true`), plus the Windows installer (`photo-gps-editor-windows-x86_64-setup.exe`, which replaces the Windows zip: per-user install with a Start menu shortcut, in-place upgrades, uninstaller)
 Status: Two-pane layout (Photo List and Photos to Change, with Location and Date & Time tabs; Date & Time shifts or sets photo dates or changes their time zone), the app's own photo picker (folder tree; folders and photos, either can be chosen), a pop-out map for picking a location (OpenStreetMap, USGS, or Esri with the user's key), fast thumbnails (shared Linux thumbnail cache, embedded JPEG thumbnails), background loading, failure-tolerant writes, undo/redo that restores the photo list, optional backups, an error log, an in-app update check, and CI builds for Linux, Windows, and macOS.
 
@@ -192,6 +193,57 @@ callback) and the right-click menu uses `popup()`; the blocking `QMessageBox.war
 - One-photo mode: a click selects one photo, double-click chooses it, button `Use This Photo's Location`; folders can be opened but not chosen
 - Opens in the last folder used (also after cancelling)
 - Windows: unmapped network shares don't appear in the tree (File Explorer's Network lists discovered computers); mapped drives appear under Drives. macOS: no Bookmarks section. Neither has a shared thumbnail cache, so only embedded previews speed things up there
+
+## Web version (the Docker version, in progress)
+
+The same app in the browser, hosted as one container that friends and
+family open by its address; the plan and its phases are in
+`docs/ROADMAP.md`, Part 3. Nothing runs on the server and photos never leave
+the visitor's computer: ExifTool runs as WebAssembly in a Web Worker in the
+browser. Phase 1 (the skeleton, branch `web-skeleton`, 2026-10-12):
+
+- `web/index.html` + `web/app/` ES modules, no build step and no framework.
+  `main.js` wires it and runs the loading pipeline (file → bytes → the
+  worker → the list; the thumbnail is made on the page thread);
+  `photo_store.js` is the Photo List's state (photos, GPS, selection, the
+  Show filter, the summary text; pure JS, unit-tested); `photo_list_view.js`
+  and `summary_view.js` draw the two panes from it; `file_sources.js` turns
+  an opened folder (`showDirectoryPicker`, read-write), file and folder
+  inputs, and drag and drop into entries; `save_mode.js` says whether this
+  browser saves in place (Chrome/Edge) or downloads (the header shows
+  which); `thumbnails.js` crops and rotates embedded previews like
+  `gui/thumbnail_loader.py` does; `dom.js` makes elements (`el()` refuses a
+  button without a hover hint); `file_types.js` mirrors `core/file_types.py`
+  (a test checks they match)
+- `web/worker/exif_worker.js`: ExifTool WebAssembly (`@uswriting/exiftool`
+  on zeroperl, Apache-2.0, ExifTool 13.42 inside), one call at a time; reads
+  GPS, the date tags, camera, orientation, and the small ThumbnailImage, and
+  the larger PreviewImage only for files without one. HEICs have neither,
+  and only Safari decodes HEIC, so their tiles show the photo icon elsewhere
+- `web/vendor/`: fetched by `packaging/fetch_web_vendor.py` (pinned versions,
+  SHA-256 checked, not in git), which also patches zeroperl's in-memory file
+  system (quadratic growth on write; RAW writes 0.6 s instead of 15 s)
+- Photo List as on the desktop: `+ Add Photos` menu (Open a Folder with
+  subfolders, Choose Photos, Choose a Folder) and drag and drop; `Show`
+  filter with counts; `Only Show Selected Photos`; the selection bar
+  (Select All / Deselect All / Remove from List, Ctrl+A, Delete); groups
+  "Photos without GPS Coordinates" then "with"; GPS badge pins; click to
+  toggle, Shift-click for a range; a fresh list opens on Needs GPS; the
+  reading progress row with Cancel. The Photos to Change pane has the
+  summary and inert tabs until Phases 2 to 4
+- `docker/`: `nginx-unprivileged` serving `web/`, security headers (CSP
+  without inline styles or scripts, `wasm-unsafe-eval`, tile hosts),
+  pre-compressed WebAssembly, `/healthz`, optional basic auth from
+  `APP_USERNAME`/`APP_PASSWORD`/`APP_PASSWORD_FILE` (bcrypt via htpasswd,
+  written to tmpfs at start), `ACCESS_LOG=off`, `compose.yaml` with the
+  hardened defaults, `check_container.sh` (what CI runs)
+- Tests: `node --test web/tests/*.test.mjs` (the store, file types vs the Python list,
+  save mode, hover hints), `tests/test_fetch_web_vendor.py` (the patches),
+  and `.github/workflows/web.yml` (tests, image build, container checks;
+  it runs only for pushes that touch the web version, and `build.yml`
+  skips those)
+- Run it: `python packaging/fetch_web_vendor.py`, `python3 -m http.server
+  8765` in the repository root, open `http://127.0.0.1:8765/web/`
 
 ## Known Issue
 

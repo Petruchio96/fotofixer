@@ -1,0 +1,13 @@
+# Only web/, packaging/fetch_web_vendor.py, and docker/ go into the image.
+*
+!web/
+!packaging/fetch_web_vendor.py
+!docker/
+# Not in the image: the tests, and vendor files fetched locally (the build
+# fetches its own).
+web/tests/
+web/vendor/*.js
+web/vendor/*.wasm
+web/vendor/*.gz
+web/vendor/VERSIONS.txt
+web/package.json

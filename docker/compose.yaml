@@ -1,0 +1,49 @@
+# FotoFixer – When & Where in a container. The container only serves the
+# app's files; photos are edited in each visitor's browser and never leave
+# their computer. See docs/SELF_HOSTING.md (Synology, Caddy, Traefik).
+#
+#   docker compose -f docker/compose.yaml up -d
+#
+# Then open http://127.0.0.1:8080 (put a reverse proxy with HTTPS in front
+# to share it: the folder picker and saving in place need HTTPS or localhost).
+
+services:
+  fotofixer:
+    # Until the image is published on GHCR (planned: ghcr.io/petruchio96/fotofixer),
+    # build it from this repository:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    image: fotofixer:local
+    container_name: fotofixer
+    restart: unless-stopped
+    ports:
+      # Only this computer; the reverse proxy reaches it here.
+      - "127.0.0.1:8080:8080"
+    environment:
+      # Optional: one shared password keeps strangers out. Leave both unset
+      # for an open page. Or use APP_PASSWORD_FILE with a Docker secret.
+      # APP_USERNAME: fotofixer
+      # APP_PASSWORD: change-me
+      # Set to "off" to keep no access log.
+      ACCESS_LOG: "on"
+    # Nothing is stored and nothing needs privileges.
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 128m
+    labels:
+      - com.centurylinklabs.watchtower.enable=true
+
+  # Uncomment to pull new versions automatically once the image is on GHCR
+  # (checks once a day; updates only containers with the label above).
+  # watchtower:
+  #   image: containrrr/watchtower
+  #   volumes:
+  #     - /var/run/docker.sock:/var/run/docker.sock
+  #   command: --label-enable --cleanup --interval 86400
+  #   restart: unless-stopped

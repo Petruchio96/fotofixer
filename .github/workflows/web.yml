@@ -2,10 +2,10 @@
 # container. Runs only when the web version changes; the desktop builds in
 # build.yml skip those pushes in turn.
 #
-# - Every push that touches web/, docker/, or the vendor fetch script: the
-#   JavaScript unit tests, then the image is built and checked the way
-#   docker/check_container.sh does locally (page, headers, WebAssembly type,
-#   the optional password).
+# - Every push that touches web/, docker/, or the web version's scripts:
+#   the JavaScript unit tests and the vendor script's Python test, then the
+#   image is built and checked the way docker/check_container.sh does
+#   locally (page, headers, WebAssembly type, the optional password).
 # - "Run workflow" on the Actions tab runs it manually.
 
 name: Web
@@ -17,6 +17,8 @@ on:
       - "web/**"
       - "docker/**"
       - "packaging/fetch_web_vendor.py"
+      - "packaging/serve_web.py"
+      - "tests/test_fetch_web_vendor.py"
       - ".github/workflows/web.yml"
   workflow_dispatch:
 
@@ -40,6 +42,11 @@ jobs:
 
       - name: Run the web tests
         run: node --test web/tests/*.test.mjs
+
+      # The vendor script's patches and the I/O-free check of the Python
+      # modules the browser runs (needs no dependencies).
+      - name: Run the vendor script's Python test
+        run: python3 -m unittest tests.test_fetch_web_vendor -v
 
       - name: Build the container
         run: docker build -f docker/Dockerfile -t fotofixer:ci .

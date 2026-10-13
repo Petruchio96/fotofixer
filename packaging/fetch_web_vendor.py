@@ -29,7 +29,7 @@ Why this file exists:
                                         checks they do no I/O)
 
     Two small changes are made to the ExifTool files as they are unpacked
-    (the Phase 0 trial found both; see docs/ROADMAP.md):
+    (the Phase 0 trial found both; see PROJECT_CONTEXT.md, "Web version"):
       - exiftool.js imports zeroperl by its npm name; the page has no bundler,
         so the import becomes the relative file name.
       - zeroperl's in-memory file system grew a file by reallocating and
@@ -118,7 +118,7 @@ FILES = {
 }
 
 # The app's own modules the browser runs through Pyodide: pure logic with no
-# file or process I/O (docs/ROADMAP.md, "Logic in the browser").
+# file or process I/O (PROJECT_CONTEXT.md, "Web version").
 BROWSER_MODULES = (
     "web/bridge/fotofixer_bridge.py",
     "gui/__init__.py",

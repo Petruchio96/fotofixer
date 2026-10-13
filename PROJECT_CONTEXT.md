@@ -3,8 +3,8 @@
 ## Snapshot
 
 Last updated: 2026-10-13
-Web version: Phases 1 to 4 (the skeleton, Location editing, the map, Date & Time) merged 2026-10-13; Phase 5 (publishing: the GHCR image, `docs/SELF_HOSTING.md`, the version under Settings) on branch `web-publish` (see "Web version" below); ships as 1.10.0 with the desktop app.
-Version: 1.10.0 (branch `web-publish`, unreleased): the Docker version (the web app in `web/`, the container in `docker/`, the image `ghcr.io/petruchio96/fotofixer` published from each release by `.github/workflows/docker.yml`); the desktop app is unchanged since 1.9.0. 1.9.0 (2026-10-12): the app is renamed from Photo GPS Editor to **FotoFixer – When & Where** (window title, About, downloads `fotofixer-…` / `FotoFixer-x86_64.AppImage`, installer folder `…\Programs\FotoFixer`, settings under FotoFixer and copied once from the old name, repository `Petruchio96/fotofixer`); a photo is either the location source or being changed, never both; Undo never makes backups; HEIC/HEIF photos (iPhone `.heic`, `.heif`, Canon `.hif`; thumbnails through pillow-heif) and more RAW formats (Nikon NEF/NRW, Sony ARW, Fujifilm RAF, Olympus ORF, Panasonic RW2, Pentax PEF, Samsung SRW). 1.8.0 is the latest release (2026-10-12): the in-app update check (Help > Check for Updates, a once-a-day check after start-up, the orange "Version X is available" bar, and one-click updates: the installed Windows copy, the Linux AppImage and folder, and the macOS app download the release file, verify it, and replace themselves). 1.7.0 was released 2026-10-12 with everything since 1.6.1. 1.5.0, 1.6.0, and 1.6.2 were merged but never released. 1.4: the app's own Add Photos picker, the map (Pick from a Map, street map and satellite imagery), Edit > Settings, and the same pinned ExifTool on every system. 1.4.1: the blue pin GPS badge, the blue = existing / orange = new color theme, the map's Clear button, and no blocking dialogs. 1.5: the Add Photos picker shows folders with the photos and folders can be chosen to add their photos, plus deselect after Apply, the map's Back button and zoom from a photo's preview, backups named `<name>_original.<ext>` (only for photos that had GPS), tighter window spacing, and a clearer window edge on Windows 11. 1.6: Date & Time editing (shift the selected photos' dates or set one date, time zones; the Photo List groups photos by camera on that tab), laid out as four steps, and the picker's Select All Photos. 1.6.1: release fixes (Apply never writes to the location source photo, single-file CI downloads, updated release checklist). 1.6.2 (unreleased): Change Time Zone, a third Date & Time choice (the same moment in another zone, or keep the clock time), step 2 as three stacked cards that fold up to the one chosen, a progress bar for every change and undo/redo (written in the background), hover hints for cut-short rows in the changes list, and space-bar panning on the map; then Windows fixes (PR #16): the changes list keeps new dates in view, Set keeps the moment when its zone changes, the zone sits above the date and time, and the map opens on New Location with a Select Location / Cancel button; 1.7.0 (Windows polish 2): the Paste button re-checks the clipboard a moment after it changes instead of on every refresh (and waits while another program holds it, which on Windows logged "Retrying to obtain clipboard" every few minutes), the Windows look (a gap between the map icon and its text, darker placeholder and disabled text), `OffsetTimeDigitized` before `OffsetTime` as the zone fallback, and the release job's download keeps the macOS zip as uploaded (`skip-decompress: true`), plus the Windows installer (`photo-gps-editor-windows-x86_64-setup.exe`, which replaces the Windows zip: per-user install with a Start menu shortcut, in-place upgrades, uninstaller)
+Web version: released in 1.10.0 (2026-10-13) after five phases (the skeleton, Location editing, the map, Date & Time, publishing); see "Web version" below. What's left of it is in `docs/ROADMAP.md`, Part 3.
+Version: 1.10.0 (released 2026-10-13, "Version 1.10"): the Docker version (the web app in `web/`, the container in `docker/`, the image `ghcr.io/petruchio96/fotofixer` published from each release by `.github/workflows/docker.yml`); the desktop app is unchanged since 1.9.0. 1.9.0 (2026-10-12): the app is renamed from Photo GPS Editor to **FotoFixer – When & Where** (window title, About, downloads `fotofixer-…` / `FotoFixer-x86_64.AppImage`, installer folder `…\Programs\FotoFixer`, settings under FotoFixer and copied once from the old name, repository `Petruchio96/fotofixer`); a photo is either the location source or being changed, never both; Undo never makes backups; HEIC/HEIF photos (iPhone `.heic`, `.heif`, Canon `.hif`; thumbnails through pillow-heif) and more RAW formats (Nikon NEF/NRW, Sony ARW, Fujifilm RAF, Olympus ORF, Panasonic RW2, Pentax PEF, Samsung SRW). 1.8.0 is the latest release (2026-10-12): the in-app update check (Help > Check for Updates, a once-a-day check after start-up, the orange "Version X is available" bar, and one-click updates: the installed Windows copy, the Linux AppImage and folder, and the macOS app download the release file, verify it, and replace themselves). 1.7.0 was released 2026-10-12 with everything since 1.6.1. 1.5.0, 1.6.0, and 1.6.2 were merged but never released. 1.4: the app's own Add Photos picker, the map (Pick from a Map, street map and satellite imagery), Edit > Settings, and the same pinned ExifTool on every system. 1.4.1: the blue pin GPS badge, the blue = existing / orange = new color theme, the map's Clear button, and no blocking dialogs. 1.5: the Add Photos picker shows folders with the photos and folders can be chosen to add their photos, plus deselect after Apply, the map's Back button and zoom from a photo's preview, backups named `<name>_original.<ext>` (only for photos that had GPS), tighter window spacing, and a clearer window edge on Windows 11. 1.6: Date & Time editing (shift the selected photos' dates or set one date, time zones; the Photo List groups photos by camera on that tab), laid out as four steps, and the picker's Select All Photos. 1.6.1: release fixes (Apply never writes to the location source photo, single-file CI downloads, updated release checklist). 1.6.2 (unreleased): Change Time Zone, a third Date & Time choice (the same moment in another zone, or keep the clock time), step 2 as three stacked cards that fold up to the one chosen, a progress bar for every change and undo/redo (written in the background), hover hints for cut-short rows in the changes list, and space-bar panning on the map; then Windows fixes (PR #16): the changes list keeps new dates in view, Set keeps the moment when its zone changes, the zone sits above the date and time, and the map opens on New Location with a Select Location / Cancel button; 1.7.0 (Windows polish 2): the Paste button re-checks the clipboard a moment after it changes instead of on every refresh (and waits while another program holds it, which on Windows logged "Retrying to obtain clipboard" every few minutes), the Windows look (a gap between the map icon and its text, darker placeholder and disabled text), `OffsetTimeDigitized` before `OffsetTime` as the zone fallback, and the release job's download keeps the macOS zip as uploaded (`skip-decompress: true`), plus the Windows installer (`photo-gps-editor-windows-x86_64-setup.exe`, which replaces the Windows zip: per-user install with a Start menu shortcut, in-place upgrades, uninstaller)
 Status: Two-pane layout (Photo List and Photos to Change, with Location and Date & Time tabs; Date & Time shifts or sets photo dates or changes their time zone), the app's own photo picker (folder tree; folders and photos, either can be chosen), a pop-out map for picking a location (OpenStreetMap, USGS, or Esri with the user's key), fast thumbnails (shared Linux thumbnail cache, embedded JPEG thumbnails), background loading, failure-tolerant writes, undo/redo that restores the photo list, optional backups, an error log, an in-app update check, and CI builds for Linux, Windows, and macOS.
 
 Repository: https://github.com/Petruchio96/fotofixer
@@ -197,8 +197,9 @@ callback) and the right-click menu uses `popup()`; the blocking `QMessageBox.war
 ## Web version (the Docker version)
 
 The same app in the browser, hosted as one container that friends and
-family open by its address; the plan and its phases are in
-`docs/ROADMAP.md`, Part 3. Nothing runs on the server and photos never leave
+family open by its address; built in five phases (2026-10-12/13) and
+released in 1.10.0; what's left of it is in `docs/ROADMAP.md`, Part 3, and
+hosting it is in `docs/SELF_HOSTING.md`. Nothing runs on the server and photos never leave
 the visitor's computer: ExifTool runs as WebAssembly in a Web Worker in the
 browser. Phase 1 (the skeleton, branch `web-skeleton`, 2026-10-12):
 
@@ -316,6 +317,19 @@ browser. Phase 1 (the skeleton, branch `web-skeleton`, 2026-10-12):
   and the publishing triggers; the web job runs it too). The app never
   contacts GitHub (the in-page update notice is an open question in the
   roadmap)
+- Phase 0 trial findings (2026-10-12, branch `web-trial`, deleted; the
+  report was never committed, so this is the record): the WebAssembly
+  build's writes were byte-identical to ExifTool 13.59's for JPG, two
+  HEICs, and a CR2; the DNG and CR3 differed only in the XMPToolkit version
+  string, and the CR3's QuickTime dates (the wasm process is in UTC, hence
+  the explicit UTC values the bridge computes). No cross-origin isolation
+  is needed (no shared memory), so no COOP/COEP headers. The worker sets
+  `globalThis.window`/`document` before importing zeroperl (its browser
+  detection) and passes a `fetch` option for the wasm's URL. Two ExifTool
+  calls at once crash the instance (hence the queue); `Uint8Array` reads
+  are twice as fast as `File` objects. Pyodide 314.0.7 (Python 3.14) with
+  the tzdata wheel is 12 MB and loads in about 2 s on a PC; the iPad is
+  unmeasured. Written test files are in `~/Pictures/FotoFixer web trial/`
 - `window.fotofixerDebug` (`store`, `history`, `addEntries`, `exif`) exists
   only on localhost, for driving checks without the native file pickers;
   the checks must return small values only (a returned byte array froze
@@ -345,7 +359,7 @@ browser. Phase 1 (the skeleton, branch `web-skeleton`, 2026-10-12):
 
 ## Future Ideas
 
-Upcoming work, its order, and the plans for it (the rename, the update checker, the Docker/web version on the NAS) live in `docs/ROADMAP.md`, not here.
+Upcoming work, its order, and the plans for it (what's left of the web version, geotagging from a GPS track) live in `docs/ROADMAP.md`, not here.
 
 ## Development Notes
 
@@ -395,4 +409,4 @@ Phase outcomes:
 Current verification:
 - Full test suite passes with `.venv/bin/python -m unittest discover -s tests`.
 - Desktop launch flow remains `.venv/bin/python app.py`.
-- Future Docker/API work can reuse the shared backend layer but has not been implemented yet (plan: `docs/ROADMAP.md`).
+- The web version (1.10.0) reuses that shared backend layer through Pyodide, as intended (see "Web version").

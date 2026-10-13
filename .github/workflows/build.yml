@@ -292,7 +292,7 @@ jobs:
           test "$(wc -l < digests.txt)" -eq 4
 
 
-  # The web version (docs/ROADMAP.md, Part 3): the JavaScript unit tests,
+  # The web version (PROJECT_CONTEXT.md, "Web version"): the JavaScript unit tests,
   # the vendor script's Python test (the patches, and the I/O-free check of
   # the Python modules the browser runs), then the container is built and
   # checked the way docker/check_container.sh does locally (page, headers,

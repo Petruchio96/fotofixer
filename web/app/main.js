@@ -706,7 +706,7 @@ window.addEventListener("beforeunload", (event) => {
 });
 
 // For automated checks against a local server only: the pieces a test
-// drives without the native file pickers (see docs/ROADMAP.md, Tests).
+// drives without the native file pickers (see PROJECT_CONTEXT.md, "Web version").
 if (["127.0.0.1", "localhost"].includes(location.hostname)) {
   window.fotofixerDebug = { store, history, addEntries, exif, changePane };
 }

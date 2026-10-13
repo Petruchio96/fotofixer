@@ -1,7 +1,7 @@
 # FotoFixer – When & Where, the web version: a static site served by nginx.
 # Nothing runs on the server; ExifTool and the app's Python logic run as
 # WebAssembly in each visitor's browser and photos never leave their
-# computer. See docs/ROADMAP.md, Part 3.
+# computer. See PROJECT_CONTEXT.md, "Web version", and docs/SELF_HOSTING.md.
 #
 # Build (from the repository root):
 #   docker build -f docker/Dockerfile -t fotofixer .

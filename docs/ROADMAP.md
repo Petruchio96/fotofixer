@@ -7,11 +7,14 @@ and remove finished items.
 
 ## Order
 
-1. **Docker/web version** (Part 3), 6 branches counting the Phase 0
-   trial. It goes first (the user's call, 2026-10-12). The design is
-   browser-only: a static container, editing in each visitor's own browser,
-   photos never leave their computer. When it's done, the app is feature
-   complete: **version 2.0.0**.
+1. **Docker version** (the user's name for the web version; Part 3), 6
+   branches counting the Phase 0 trial. It goes first (the user's call,
+   2026-10-12). The design is browser-only: a static container, editing in
+   each visitor's own browser, photos never leave their computer. It ships
+   as **version 1.10.0** (desktop and Docker versions released together).
+2. **Then whatever else is wanted before the app is feature complete**
+   (for example the not-scheduled items below), as 1.x releases. Feature
+   complete is **2.0.0**.
    - **The name: FotoFixer – When & Where** (chosen 2026-10-12; the desktop
      app has it since 1.9.0). The web version uses it from its first image:
      the GHCR image (`fotofixer`), the page title, the self-hosting docs, and
@@ -30,15 +33,19 @@ Not scheduled:
 
 ## Versions
 
-- 1.8.0 (2026-10-12, the in-app update checker) is the latest release.
-- **1.9.0** (branch `more-file-types`, unreleased): the rename to FotoFixer –
-  When & Where, HEIC/HEIF, and more
-  RAW formats. While the web version is built, desktop fixes and small
-  improvements after it are **1.9.x**.
-  The usual rules in `CLAUDE.md` still decide whether a branch gets a bump
+Decided 2026-10-12 (the user's plan):
+
+- **1.9.0** (2026-10-12) is the latest release: the rename to FotoFixer –
+  When & Where, HEIC/HEIF, and more RAW formats. Desktop fixes while the
+  Docker version is built are **1.9.x**.
+- **1.10.0** is the next version: the **Docker version** (the web app),
+  released together with the desktop app of the same version.
+- Further features before the app is feature complete: **1.11.0**, and so
+  on.
+- **2.0.0** marks **feature complete**. After it, every release is a fix or
+  a small enhancement: **2.0.x** (2.0.1, 2.0.2, …).
+- The usual rules in `CLAUDE.md` still decide whether a branch gets a bump
   at all.
-- **2.0.0** marks the web version: the desktop app plus the browser version,
-  feature complete.
 - A release is never its own branch or PR. The branch that bumps the version
   is the release: merge its PR, tag, notes, publish (`RELEASE_CHECKLIST.md`).
 
@@ -333,7 +340,7 @@ Generic Docker, Caddy, and Traefik examples go in the same document.
    photo dots and previews, Use This Location, Back/Clear.
 4. **Date & Time.** Shift, Set, Change Time Zone, camera groups.
 5. **Polish and publish.** iPad pass in Safari, `docs/SELF_HOSTING.md`, a
-   README section, the GHCR workflow, version **2.0.0** in the same PR, and
+   README section, the GHCR workflow, version **1.10.0** in the same PR, and
    the release.
 
 ### Tests

@@ -1,13 +1,20 @@
-# Test and package FotoFixer on Linux, Windows, and macOS.
+# Test and package FotoFixer on Linux, Windows, and macOS, and test and
+# build the web version's container.
 #
-# - Every push to any branch: run the tests and build all three apps (the
-#   Windows one as an installer). Download the builds from the workflow run's
-#   "Artifacts" section; each download is the release file itself (no extra
-#   zip around it).
-# - Pushing a tag like v1.2.0: also attach the builds to that GitHub release
-#   (a draft release is created if one does not exist yet).
-# - "Run workflow" on the Actions tab runs it manually.
-# - The web version has its own workflow, web.yml.
+# - Every push to any branch: the "changes" job looks at what the push
+#   touched, then the desktop builds (tests + the three apps, the Windows
+#   one as an installer) run when desktop files changed, and the web job
+#   (JavaScript tests, the vendor script's Python test, the container
+#   build and checks) runs when web files changed. Docs-only pushes run
+#   neither. Download the builds from the workflow run's "Artifacts"
+#   section; each download is the release file itself (no extra zip).
+# - Jobs that are not needed are skipped, not left out: a skipped job still
+#   reports its check, which is what lets main require all four checks
+#   (and auto-merge wait for them) without blocking web-only or desktop-only
+#   pull requests. That's why everything lives in this one workflow.
+# - Pushing a tag like v1.2.0: builds everything and attaches the desktop
+#   builds to that GitHub release (a draft is created if none exists yet).
+# - "Run workflow" on the Actions tab runs everything manually.
 
 name: Build
 
@@ -15,18 +22,6 @@ on:
   push:
     branches: ["**"]
     tags: ["v*"]
-    # Pushes that only touch the web version run web.yml instead, and
-    # docs-only pushes build nothing. (Path filters don't apply to tags, so
-    # a release still builds everything.)
-    paths-ignore:
-      - "web/**"
-      - "docker/**"
-      - "docs/**"
-      - "**.md"
-      # The web version's own scripts and their test (web.yml runs that test).
-      - "packaging/fetch_web_vendor.py"
-      - "packaging/serve_web.py"
-      - "tests/test_fetch_web_vendor.py"
   workflow_dispatch:
 
 permissions:
@@ -38,8 +33,57 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # What did this push touch? Tags and manual runs build everything.
+  changes:
+    name: What changed
+    runs-on: ubuntu-latest
+    outputs:
+      desktop: ${{ steps.detect.outputs.desktop }}
+      web: ${{ steps.detect.outputs.web }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - id: detect
+        shell: bash
+        run: |
+          set -euo pipefail
+          desktop=false
+          web=false
+          if [[ "$GITHUB_REF" == refs/tags/* || "$GITHUB_EVENT_NAME" == workflow_dispatch ]]; then
+            desktop=true
+            web=true
+          else
+            # The commits of this push; for a new branch, everything since main.
+            base="${{ github.event.before }}"
+            if [[ -z "$base" || "$base" =~ ^0+$ ]] || ! git cat-file -e "$base" 2>/dev/null; then
+              base="$(git merge-base origin/main HEAD 2>/dev/null || true)"
+            fi
+            if [[ -z "$base" ]]; then
+              desktop=true
+              web=true
+            else
+              files="$(git diff --name-only "$base" HEAD)"
+              echo "Changed files:"
+              echo "$files" | sed 's/^/  /'
+              # Files that belong to the web version (and the Python the
+              # browser runs, zipped from core/ and services/).
+              web_pattern='^(web/|docker/|core/|services/|packaging/fetch_web_vendor\.py$|packaging/serve_web\.py$|tests/test_fetch_web_vendor\.py$|\.github/workflows/build\.yml$)'
+              # Files that only the web version cares about, plus docs.
+              web_only_pattern='^(web/|docker/|docs/|packaging/fetch_web_vendor\.py$|packaging/serve_web\.py$|tests/test_fetch_web_vendor\.py$)|\.md$'
+              if grep -qE "$web_pattern" <<<"$files"; then web=true; fi
+              if grep -vE "$web_only_pattern" <<<"$files" | grep -q .; then desktop=true; fi
+            fi
+          fi
+          echo "desktop=$desktop" >> "$GITHUB_OUTPUT"
+          echo "web=$web" >> "$GITHUB_OUTPUT"
+          echo "desktop builds: $desktop, web job: $web"
+
   build:
     name: Build (${{ matrix.name }})
+    needs: changes
+    if: needs.changes.outputs.desktop == 'true'
     runs-on: ${{ matrix.os }}
     strategy:
       # Let the other platforms finish even if one fails.
@@ -246,3 +290,33 @@ jobs:
           done
           ! grep -q MISSING digests.txt
           test "$(wc -l < digests.txt)" -eq 4
+
+
+  # The web version (docs/ROADMAP.md, Part 3): the JavaScript unit tests,
+  # the vendor script's Python test (the patches, and the I/O-free check of
+  # the Python modules the browser runs), then the container is built and
+  # checked the way docker/check_container.sh does locally (page, headers,
+  # WebAssembly type, the optional password).
+  web:
+    name: Web app and container
+    needs: changes
+    if: needs.changes.outputs.web == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+
+      - name: Run the web tests
+        run: node --test web/tests/*.test.mjs
+
+      - name: Run the vendor script's Python test
+        run: python3 -m unittest tests.test_fetch_web_vendor -v
+
+      - name: Build the container
+        run: docker build -f docker/Dockerfile -t fotofixer:ci .
+
+      - name: Check the container
+        run: IMAGE=fotofixer:ci docker/check_container.sh

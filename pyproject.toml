@@ -1,6 +1,6 @@
 [project]
 name = "fotofixer"
-version = "1.10.0"
+version = "1.10.1"
 description = "Desktop app for changing GPS metadata in image files"
 requires-python = ">=3.12"
 

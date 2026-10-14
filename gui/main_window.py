@@ -43,7 +43,7 @@ from services.gps_edit_history import EDIT_DATE, EDIT_GPS, GpsEditHistory, Photo
 from services.models import OverwriteEntry, WorkflowSession
 from services.workflow_facade import PhotoWorkflowFacade
 
-APP_VERSION = "1.10.0"
+APP_VERSION = "1.10.1"
 # The app's name, and the subtitle shown with it where people first meet it
 # (window title, About). Called Photo GPS Editor until 1.9.0.
 APP_NAME = "FotoFixer"
@@ -131,6 +131,9 @@ class MainWindow(
         self._date_choices_open = False
         # Date & Time mode's camera filter: "all" or one camera's name.
         self._camera_filter = "all"
+        # The camera filter before picking a time (it shows every camera while
+        # picking); put back when picking ends. None when not picking a time.
+        self._camera_filter_before_pick = None
         # Set while _run_writes writes to the photos (input is blocked).
         self._input_blocker = None
         # Message boxes open right now (see show_message).

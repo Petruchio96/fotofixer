@@ -247,13 +247,14 @@ export function createMapDialog({ store, getFields, getLocation, getEsriKey, act
     const thumb = el("button", { className: "preview-thumb", title: "Zoom the map to this photo's location", onclick: () => zoomToPhoto(id) });
     if (photo.thumb) thumb.append(el("img", { src: photo.thumb, alt: "" }));
     else thumb.append(photoIcon());
-    const name = el("span", { className: "preview-name", textContent: photo.name });
-    const nameRow = el("div", { className: "preview-row" }, [name]);
+    const name = el("div", { className: "preview-name", textContent: photo.name });
+    // Like the desktop app: thumbnail, name, "‹ 1 of 2 ›" (several photos at one spot), then the button.
+    const parts = [thumb, name];
     if (popupIds.length > 1) {
-      const previous = el("button", { className: "step", title: "Previous photo at this spot", onclick: () => stepPreview(-1) }, "‹");
-      const next = el("button", { className: "step", title: "Next photo at this spot", onclick: () => stepPreview(1) }, "›");
-      nameRow.prepend(previous);
-      nameRow.append(el("span", { className: "preview-count", textContent: `${popupIndex + 1} of ${popupIds.length}` }), next);
+      const previous = el("button", { className: "preview-step", title: "Previous photo at this spot", onclick: (event) => stepPreview(event, -1) }, "‹");
+      const next = el("button", { className: "preview-step", title: "Next photo at this spot", onclick: (event) => stepPreview(event, 1) }, "›");
+      const count = el("span", { className: "preview-count", textContent: `${popupIndex + 1} of ${popupIds.length}` });
+      parts.push(el("div", { className: "preview-row" }, [previous, count, next]));
     }
     const selected = store.selection.has(id);
     const use = el("button", {
@@ -261,10 +262,15 @@ export function createMapDialog({ store, getFields, getLocation, getEsriKey, act
       title: selected ? "This photo is selected to change, so it can't be the source of the location too" : "Copy this photo's location into New Location",
       onclick: () => { remember(); actions.usePhoto(id); },
     }, "Use This Location");
-    return el("div", { className: "preview" }, [thumb, el("div", { className: "preview-text" }, [nameRow, use])]);
+    parts.push(use);
+    return el("div", { className: "preview" }, parts);
   }
 
-  function stepPreview(offset) {
+  function stepPreview(event, offset) {
+    // setContent below detaches the clicked button, so Leaflet could no
+    // longer tell the click came from the popup: it would close the popup
+    // and move the New Location pin. Keep the click from reaching the map.
+    event.stopPropagation();
     popupIndex = (popupIndex + offset + popupIds.length) % popupIds.length;
     popup?.setContent(previewContent());
   }

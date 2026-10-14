@@ -322,6 +322,12 @@ class DateTimeEditorMixin:
         if reference is None or not self._time_pickable_paths():
             self.pick_time_button.setChecked(False)
             return
+        # The time usually comes from another camera's photo (a phone's, to
+        # fix a camera's clock), so show every camera while picking, and put
+        # the camera filter back when picking ends.
+        self._camera_filter_before_pick = self._camera_filter
+        if self._camera_filter != "all":
+            self.set_camera_filter("all")
         self._pick_kind = "time"
         self._picking_location = True
         self.pick_time_button.setChecked(True)

@@ -506,8 +506,11 @@ export class PhotoStore {
   setPicking(kind) {
     if (kind === this.picking) return;
     if (kind) {
-      this._beforePick = { view: this.view, onlySelectedIds: this.onlySelectedIds };
+      this._beforePick = { view: this.view, onlySelectedIds: this.onlySelectedIds, cameraFilter: this.cameraFilter };
       this.onlySelectedIds = null;
+      // The time usually comes from another camera's photo (a phone's, to fix
+      // a camera's clock), so every camera shows while picking a time.
+      if (kind === "time") this.cameraFilter = "all";
       this.picking = kind;
     } else {
       this.picking = null;
@@ -515,6 +518,9 @@ export class PhotoStore {
         this.view = this._beforePick.view;
         // Only Show Selected Photos comes back if there is still a selection.
         this.onlySelectedIds = this._beforePick.onlySelectedIds && this.selection.size ? new Set(this.selection) : null;
+        // The camera shown before, unless its photos were removed meanwhile.
+        const camera = this._beforePick.cameraFilter;
+        this.cameraFilter = camera === "all" || this.cameras().includes(camera) ? camera : "all";
       }
       this._beforePick = null;
     }

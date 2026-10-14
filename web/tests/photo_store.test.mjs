@@ -185,6 +185,30 @@ test("Date & Time mode: camera groups, date order, the camera filter, and camera
   assert.equal(store.groups()[0].key, "needs");
 });
 
+test("time picking shows every camera, then puts the camera filter back", () => {
+  const { store, ids } = storeWith("canon.cr3", "phone.jpg", "phone2.jpg");
+  store.setDescription(ids[0], { dateTaken: "2026-10-03T10:00:00", dateText: "x", offsetText: "", camera: "Canon EOS R8" });
+  store.setDescription(ids[1], { dateTaken: "2026-10-03T12:00:00", dateText: "y", offsetText: "", camera: "Apple iPhone 13" });
+  store.setDescription(ids[2], { dateTaken: "2026-10-03T12:05:00", dateText: "z", offsetText: "", camera: "Apple iPhone 13" });
+  store.setMode("date");
+  store.setCameraFilter("Canon EOS R8");
+  store.toggle(ids[0]);
+  assert.deepEqual(store.visibleIds(), [ids[0]]);
+  store.setPicking("time");
+  assert.equal(store.cameraFilter, "all");
+  assert.deepEqual(new Set(store.visibleIds()), new Set(ids), "the other camera's photos can be picked");
+  assert.equal(store.pickLabel(ids[0]), "Being Changed");
+  store.setPicking(null);
+  assert.equal(store.cameraFilter, "Canon EOS R8", "the filter comes back after a pick or a cancel");
+  assert.deepEqual(store.visibleIds(), [ids[0]]);
+  // A camera whose photos were removed while picking falls back to All.
+  store.setCameraFilter("Apple iPhone 13");
+  store.setPicking("time");
+  store.remove([ids[1], ids[2]]);
+  store.setPicking(null);
+  assert.equal(store.cameraFilter, "all");
+});
+
 test("pick mode kinds: time picking keeps the view and labels photos without a date", () => {
   const { store, ids } = storeWith("a.jpg", "b.jpg", "c.jpg");
   store.setInfo(ids[0], { gps: { latitude: 1, longitude: 2 } });

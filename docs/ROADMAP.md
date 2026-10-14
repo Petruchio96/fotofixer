@@ -28,7 +28,9 @@ Not scheduled:
 
 Decided 2026-10-12 (the user's plan):
 
-- **1.10.0** (2026-10-13) is the latest release: the **Docker version**
+- **1.10.1** (2026-10-13) is the latest release: web fixes (the inactive
+  tab page is hidden again, the map preview is laid out like the desktop's,
+  and its ‹ › arrows work). 1.10.0 (2026-10-13) was the **Docker version**
   (the web app and its image), released together with the desktop app of
   the same version. 1.9.0 (2026-10-12) was the rename to FotoFixer – When &
   Where, HEIC/HEIF, and more RAW formats. Fixes are **1.10.x**.

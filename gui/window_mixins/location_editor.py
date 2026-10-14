@@ -251,6 +251,16 @@ class LocationEditorMixin:
             self._only_selected_before_pick = False
             if self.get_selected_paths():
                 self.set_only_selected(True)
+        # Picking a time showed every camera: back to the camera shown before
+        # (unless its photos were removed meanwhile).
+        previous_camera = self._camera_filter_before_pick
+        self._camera_filter_before_pick = None
+        if (
+            previous_camera is not None
+            and previous_camera != self._camera_filter
+            and previous_camera in self.camera_filter_buttons
+        ):
+            self.set_camera_filter(previous_camera)
         self.update_details_panel()
 
     def pick_location_from_item(self, item: QListWidgetItem | None) -> None:

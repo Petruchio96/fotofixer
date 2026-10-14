@@ -584,6 +584,37 @@ class DateTimeTabTests(unittest.TestCase):
         self.assertTrue(all(box.isEnabled() for box in self.window.findChildren(QCheckBox, "cameraCheck")))
         self.assertIsNone(self.window._grid_items_by_path[str(self.canon1)].data(PICK_DISABLED_ROLE))
 
+    def test_picking_a_time_shows_every_camera_then_restores_the_filter(self) -> None:
+        self._open_date_tab()
+        QTest.mouseClick(self.window.camera_filter_buttons["Canon EOS R6"], Qt.LeftButton)
+        self._select(self.canon1, self.canon2)
+        self._choose_shift()
+        self.assertTrue(self.window._grid_items_by_path[str(self.phone)].isHidden())
+
+        QTest.mouseClick(self.window.pick_time_button, Qt.LeftButton)
+        # Every camera shows (the camera buttons stay locked), so the
+        # phone's photo can be picked.
+        self.assertTrue(self.window.camera_filter_buttons["all"].isChecked())
+        self.assertFalse(self.window.camera_filter_buttons["all"].isEnabled())
+        self.assertFalse(self.window._grid_items_by_path[str(self.phone)].isHidden())
+        self.assertEqual(set(self.window.get_selected_paths()), {self.canon1, self.canon2})
+
+        self._click_item(self.phone)
+
+        self.assertFalse(self.window.is_picking_location)
+        self.assertEqual(self.window.time_source_title.text(), "Time from IMG_8801.jpg")
+        # Back to the camera shown before.
+        self.assertTrue(self.window.camera_filter_buttons["Canon EOS R6"].isChecked())
+        self.assertTrue(self.window._grid_items_by_path[str(self.phone)].isHidden())
+        self.assertEqual(set(self.window.get_selected_paths()), {self.canon1, self.canon2})
+
+        # Cancelling with Esc puts it back too.
+        QTest.mouseClick(self.window.pick_time_button, Qt.LeftButton)
+        self.assertFalse(self.window._grid_items_by_path[str(self.phone)].isHidden())
+        QTest.keyClick(self.window.list_widget, Qt.Key_Escape)
+        self.assertTrue(self.window.camera_filter_buttons["Canon EOS R6"].isChecked())
+        self.assertTrue(self.window._grid_items_by_path[str(self.phone)].isHidden())
+
     def test_typing_a_time_drops_the_source(self) -> None:
         self._open_date_tab()
         self._select(self.canon1)

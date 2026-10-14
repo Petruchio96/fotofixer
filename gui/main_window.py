@@ -131,6 +131,9 @@ class MainWindow(
         self._date_choices_open = False
         # Date & Time mode's camera filter: "all" or one camera's name.
         self._camera_filter = "all"
+        # The camera filter before picking a time (it shows every camera while
+        # picking); put back when picking ends. None when not picking a time.
+        self._camera_filter_before_pick = None
         # Set while _run_writes writes to the photos (input is blocked).
         self._input_blocker = None
         # Message boxes open right now (see show_message).

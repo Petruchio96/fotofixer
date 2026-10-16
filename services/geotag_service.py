@@ -41,6 +41,10 @@ CHIP_TEXTS = {
     READING: "Reading…",
 }
 
+# A track point this close in time makes the track's position a suggestion
+# for a photo that already has GPS (an orange ring on its blue dot).
+NEAR_TRACK = timedelta(minutes=1)
+
 DATE_TIP = (
     "If the camera's clock or time zone was wrong, fix it first on the Date & Time tab "
     "(Shift Date and Time, or Change Time Zone)."
@@ -65,6 +69,9 @@ class GeotagRow:
     # The photo's own coordinates when it already has some.
     has_gps: bool = False
     current: tuple[float, float] | None = None
+    # The track has a point within NEAR_TRACK of the moment the photo was
+    # taken: a good position to suggest for a photo that has GPS already.
+    near_track: bool = False
     # Why there is no position, or where it will be placed (the hover hint).
     hint: str = ""
     # Checked in the list: will be written. Only rows on the track.
@@ -163,6 +170,7 @@ def build_geotag_plan(
         if isinstance(result, Match):
             row.status = ON_TRACK
             row.latitude, row.longitude, row.altitude = result.latitude, result.longitude, result.elevation
+            row.near_track = min(abs(row.instant - result.before.time), abs(result.after.time - row.instant)) <= NEAR_TRACK
             row.included = checks.get(path, not row.has_gps)
             row.hint = _match_hint(row, computer_offset, result, offset, feet=feet)
         else:
@@ -253,8 +261,13 @@ def _match_hint(
         current = format_coordinates(*row.current)
         if row.included:
             return (
-                f"This photo already has GPS coordinates ({current}), the blue dot on the map. "
+                f"This photo already has GPS coordinates ({current}). "
                 f"Geotag will ask before replacing them with {where}."
+            )
+        if row.near_track:
+            return (
+                f"This photo already has GPS coordinates ({current}), the blue dot on the map. The track "
+                f"has a position within a minute of when it was taken, {where}: check the box to use it."
             )
         return (
             f"This photo already has GPS coordinates ({current}), the blue dot on the map. "

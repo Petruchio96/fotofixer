@@ -501,9 +501,12 @@ class MapView(QWidget):
             self.update()
 
     def set_photo_pins(self, pins: list[PhotoPin]) -> None:
-        # Selected photos are drawn after the others, and ringed dots (a
-        # geotag that replaces GPS) last of all, so they always show.
-        self._photo_pins = sorted(pins, key=lambda pin: (pin.selected, pin.ring is not None))
+        # Selected photos are drawn after the others, ringed dots after
+        # those, and red-ringed dots (a geotag that replaces GPS) last of
+        # all, so they always show.
+        self._photo_pins = sorted(
+            pins, key=lambda pin: (pin.selected, pin.ring is not None, pin.ring == REPLACE_RING_COLOR)
+        )
         self.update()
 
     def set_track(self, points: list[tuple[float, float]]) -> None:

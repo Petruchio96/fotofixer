@@ -752,6 +752,24 @@ QPushButton#stepAddButton {
     padding: 7px 14px;
     font-weight: 600;
 }
+/* A grey outline button: the geotag preview's Leave Off Track. */
+QPushButton#outlineButton {
+    background: #ffffff;
+    color: #556579;
+    border: 1px solid #b7c3cf;
+    border-radius: 10px;
+    padding: 8px 14px;
+    font-weight: 600;
+}
+QPushButton#outlineButton:hover {
+    background: #f3f6f9;
+    border-color: #8c9aa8;
+    color: #31445a;
+}
+QPushButton#outlineButton:disabled {
+    color: #b7c3cf;
+    border-color: #e1e8ef;
+}
 QPushButton#stepAddButton:hover {
     background: #1a5fd0;
 }

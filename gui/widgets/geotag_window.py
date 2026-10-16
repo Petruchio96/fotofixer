@@ -12,7 +12,9 @@ is clicked.
 Clicking a dot, or a photo's name in the list, zooms the map all the way
 in on that photo and opens its preview beside the dot (the thumbnail, the
 name and time, "‹ 1 of n ›" for several photos at one spot, and Leave Off
-Track / Put On Track). One preview is open at a time: clicking another dot
+Track / Put On Track, or Suggested Track Location for a photo with GPS when
+the track has a point within a minute of its time: its blue dot wears an
+orange ring). One preview is open at a time: clicking another dot
 or name moves it. The checkbox (and a little around it) is what checks a
 photo; the master Check All box checks every photo on the track that has
 no GPS yet, or unchecks everything.
@@ -160,15 +162,35 @@ class GeotagPreview(PhotoPreviewPopup):
         self.time_label.setText(row.time_text if row is not None else "")
         included = row is not None and row.included
         self.use_button.setEnabled(row is not None and row.on_track)
-        self.use_button.setText("Leave Off Track" if included else "Put On Track")
+        suggested = row is not None and row.has_gps and row.near_track and not included
+        if included:
+            self.use_button.setText("Leave Off Track")
+        elif suggested:
+            self.use_button.setText("Suggested Track Location")
+        else:
+            self.use_button.setText("Put On Track")
+        # Orange = about to change (putting the photo on the track); a grey
+        # outline for taking it off.
+        self._style_button("outlineButton" if included else "accentButton")
         if row is not None and not row.on_track:
             self.use_button.setToolTip("The track has no position for this photo")
         elif included:
             self.use_button.setToolTip("Don't geotag this photo (the same as clearing its checkbox in the list)")
+        elif suggested:
+            self.use_button.setToolTip(
+                "The track has a position within a minute of when this photo was taken: use it instead of "
+                "the photo's own GPS (Apply will ask first)"
+            )
         elif row is not None and row.has_gps:
             self.use_button.setToolTip("Replace this photo's own GPS with the track's position (Apply will ask first)")
         else:
             self.use_button.setToolTip("Geotag this photo after all (the same as checking its box in the list)")
+
+    def _style_button(self, name: str) -> None:
+        if self.use_button.objectName() != name:
+            self.use_button.setObjectName(name)
+            self.use_button.style().unpolish(self.use_button)
+            self.use_button.style().polish(self.use_button)
 
 
 class GeotagRowDelegate(QStyledItemDelegate):
@@ -608,7 +630,9 @@ class GeotagWindow(QWidget):
             if location is None:
                 continue
             if row.has_gps and not row.included:
-                color, ring = PHOTO_COLOR, None
+                # Blue where it is now; an orange ring when the track has a
+                # position within a minute of the photo's time to suggest.
+                color, ring = PHOTO_COLOR, (SELECTED_PHOTO_COLOR if row.near_track else None)
             elif row.included:
                 color, ring = SELECTED_PHOTO_COLOR, (REPLACE_RING_COLOR if row.has_gps else None)
             else:

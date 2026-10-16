@@ -245,6 +245,12 @@ class GeotagWindowTests(unittest.TestCase):
         self.assertEqual((tagged.color, tagged.ring), (SELECTED_PHOTO_COLOR, REPLACE_RING_COLOR))
         self.assertAlmostEqual(tagged.latitude, 40.625)
         self.assertIs(geotag.map_view._photo_pins[-1], tagged, "ringed dots are drawn on top")
+        # A red ring stays above an orange (suggested) ring.
+        from gui.widgets.map_view import PhotoPin
+        geotag.map_view.set_photo_pins([
+            PhotoPin("a", 1, 1, ring=REPLACE_RING_COLOR), PhotoPin("b", 1, 1, ring=SELECTED_PHOTO_COLOR), PhotoPin("c", 1, 1),
+        ])
+        self.assertEqual([pin.path for pin in geotag.map_view._photo_pins], ["c", "b", "a"])
         self._click_row(self.tagged)
         tagged = next(pin for pin in geotag.map_view._photo_pins if pin.path == str(self.tagged))
         self.assertEqual((tagged.color, tagged.latitude), (PHOTO_COLOR, 40.5))
@@ -262,7 +268,8 @@ class GeotagWindowTests(unittest.TestCase):
         self.assertEqual(geotag.map_view.zoom, PHOTO_ZOOM)
         self.assertTrue(geotag.preview.isVisible())
         self.assertEqual(geotag.preview.current_path, str(self.tagged))
-        self.assertEqual(geotag.preview.use_button.text(), "Put On Track")
+        self.assertEqual(geotag.preview.use_button.text(), "Put On Track", "9:37 is 5 min from the track's points")
+        self.assertEqual(geotag.preview.use_button.objectName(), "accentButton")
         self.assertEqual(geotag.preview.time_label.text(), "10/03/2026 9:37:00am MDT")
         self.assertEqual(geotag.photo_list.active_path, self.tagged)
         self.assertFalse(geotag.preview.stepper.isVisible(), "one photo at this spot")
@@ -273,6 +280,7 @@ class GeotagWindowTests(unittest.TestCase):
         self.assertAlmostEqual(geotag.map_view.center[0], 40.605, places=3)
         self.assertEqual(geotag.preview.current_path, str(self.phone))
         self.assertEqual(geotag.preview.use_button.text(), "Leave Off Track")
+        self.assertEqual(geotag.preview.use_button.objectName(), "outlineButton")
 
         # Its button toggles the photo; the preview stays and re-reads.
         QTest.mouseClick(geotag.preview.use_button, Qt.LeftButton)
@@ -304,6 +312,23 @@ class GeotagWindowTests(unittest.TestCase):
         self._click_row(self.early, on_checkbox=False)
         self.assertFalse(geotag.preview.isVisible())
         self.assertIsNone(geotag.photo_list.active_path)
+
+    def test_a_gps_photo_near_a_track_point_is_suggested(self) -> None:
+        # Taken 20 s after the 9:22 track point: a blue dot with an orange ring.
+        self.dates[self.tagged] = (datetime(2026, 10, 3, 9, 22, 20), MDT)
+        self._load()
+        geotag = self._open()
+        tagged = next(pin for pin in geotag.map_view._photo_pins if pin.path == str(self.tagged))
+        self.assertEqual((tagged.color, tagged.ring), (PHOTO_COLOR, SELECTED_PHOTO_COLOR))
+        self.assertIn("within a minute", geotag.photo_list._items_by_path[str(self.tagged)].toolTip())
+        self._click_row(self.tagged, on_checkbox=False)
+        self.assertEqual(geotag.preview.use_button.text(), "Suggested Track Location")
+        self.assertEqual(geotag.preview.use_button.objectName(), "accentButton")
+        QTest.mouseClick(geotag.preview.use_button, Qt.LeftButton)
+        self.assertTrue(self._rows()["geo-tagged.jpg"].included)
+        tagged = next(pin for pin in geotag.map_view._photo_pins if pin.path == str(self.tagged))
+        self.assertEqual((tagged.color, tagged.ring), (SELECTED_PHOTO_COLOR, REPLACE_RING_COLOR))
+        self.assertEqual(geotag.preview.use_button.text(), "Leave Off Track")
 
     def test_clicking_a_dot_opens_its_preview(self) -> None:
         self._load()

@@ -112,6 +112,25 @@ class GeotagPlanTests(unittest.TestCase):
         self.assertEqual(no_zone.status, AFTER)
         self.assertIn("taken as this computer's zone (HST)", no_zone.hint)
 
+    def test_near_track_within_a_minute_of_a_track_point(self) -> None:
+        # Track points every 10 minutes from 9:12 MDT: 9:17 is 5 min from both.
+        rows = {row.name: row for row in self.plan().rows}
+        self.assertFalse(rows["phone.jpg"].near_track)
+        close = build_geotag_plan(
+            [Path("/photos/a.jpg"), Path("/photos/b.jpg")],
+            {
+                Path("/photos/a.jpg"): info("a.jpg", datetime(2026, 10, 3, 9, 12, 59), MDT, gps=(40.5, -111.5)),
+                Path("/photos/b.jpg"): info("b.jpg", datetime(2026, 10, 3, 9, 13, 1), MDT, gps=(40.5, -111.5)),
+            },
+            TRACK, MDT,
+        )
+        a, b = close.rows
+        self.assertTrue(a.near_track, "59 s after a track point")
+        self.assertFalse(b.near_track, "61 s after a track point")
+        self.assertIn("within a minute of when it was taken", a.hint)
+        self.assertIn("check the box to use it", a.hint)
+        self.assertIn("Check the box to replace", b.hint)
+
     def test_has_gps_rows(self) -> None:
         rows = {row.name: row for row in self.plan().rows}
         tagged = rows["tagged.jpg"]

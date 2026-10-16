@@ -10,6 +10,7 @@ from core.gpx_track import (
     Match,
     NoMatch,
     TrackPoint,
+    distance_metres,
     locate,
     merge_tracks,
     parse_gpx,
@@ -64,6 +65,14 @@ class ParseGpxTests(unittest.TestCase):
         merged = merge_tracks([day_2, day_1])
         self.assertEqual([point.time for point in merged], [utc(10, 0), utc(11, 0), utc(20, 0)])
         self.assertEqual(track_span(merged), (utc(10, 0), utc(20, 0)))
+
+
+class DistanceTests(unittest.TestCase):
+    def test_distance_over_the_ground(self) -> None:
+        self.assertAlmostEqual(distance_metres(40.6, -111.6, 40.6, -111.6), 0.0)
+        # One degree of latitude is about 111.2 km; 0.001 degrees about 111 m.
+        self.assertAlmostEqual(distance_metres(40.6, -111.6, 40.601, -111.6), 111.2, delta=0.5)
+        self.assertAlmostEqual(distance_metres(40.6, -111.6, 40.6, -111.601), 84.4, delta=0.5)
 
 
 class LocateTests(unittest.TestCase):

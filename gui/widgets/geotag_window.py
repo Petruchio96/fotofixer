@@ -162,7 +162,7 @@ class GeotagPreview(PhotoPreviewPopup):
         self.time_label.setText(row.time_text if row is not None else "")
         included = row is not None and row.included
         self.use_button.setEnabled(row is not None and row.on_track)
-        suggested = row is not None and row.has_gps and row.near_track and not included
+        suggested = row is not None and row.suggested and not included
         if included:
             self.use_button.setText("Leave Off Track")
         elif suggested:
@@ -208,6 +208,11 @@ class GeotagRowDelegate(QStyledItemDelegate):
         # Width 0: the row is as wide as the list, never wider (no sideways scrolling).
         return QSize(0, ROW_HEIGHT)
 
+    @staticmethod
+    def row_border(row: GeotagRow, active: bool) -> QColor:
+        """Orange around the open preview's row, and always around a suggested one."""
+        return ROW_ACTIVE_BORDER if active or row.suggested else ROW_PLAIN_BORDER
+
     def paint(self, painter: QPainter, option, index) -> None:
         row: GeotagRow = index.data(ROW_ROLE)
         if row is None:
@@ -216,7 +221,7 @@ class GeotagRowDelegate(QStyledItemDelegate):
         painter.setRenderHint(QPainter.Antialiasing)
         rect = option.rect.adjusted(3, 2, -3, -2)
         active = self._list.active_path == row.path
-        painter.setPen(QPen(ROW_ACTIVE_BORDER if active else ROW_PLAIN_BORDER, 2))
+        painter.setPen(QPen(self.row_border(row, active), 2))
         painter.setBrush(ROW_ACTIVE_BG if active else ROW_PLAIN_BG)
         painter.drawRoundedRect(rect.adjusted(1, 1, -1, -1), 10, 10)
         if not row.on_track:
@@ -457,8 +462,8 @@ class GeotagWindow(QWidget):
         self.check_all_box = QCheckBox("Check All")
         self.check_all_box.setObjectName("geotagCheckAll")
         self.check_all_box.setToolTip(
-            "Check every photo on the track that has no GPS yet, or uncheck every photo. Photos that "
-            "already have GPS are never checked here: check them one by one to replace their coordinates."
+            "Check every photo on the track that has no GPS yet, and every photo with a suggested track "
+            "location (orange border); or uncheck every photo. Other photos with GPS are checked one by one."
         )
         self.check_all_box.clicked.connect(self._check_all_clicked)
         left_layout.addWidget(self.check_all_box)
@@ -632,7 +637,7 @@ class GeotagWindow(QWidget):
             if row.has_gps and not row.included:
                 # Blue where it is now; an orange ring when the track has a
                 # position within a minute of the photo's time to suggest.
-                color, ring = PHOTO_COLOR, (SELECTED_PHOTO_COLOR if row.near_track else None)
+                color, ring = PHOTO_COLOR, (SELECTED_PHOTO_COLOR if row.suggested else None)
             elif row.included:
                 color, ring = SELECTED_PHOTO_COLOR, (REPLACE_RING_COLOR if row.has_gps else None)
             else:
@@ -668,7 +673,7 @@ class GeotagWindow(QWidget):
         self.apply_button.setEnabled(included > 0)
         # The master box: full when every photo without GPS on the track is
         # checked, part when some are, empty when none.
-        checkable = [row for row in self._plan.matched if not row.has_gps]
+        checkable = [row for row in self._plan.matched if row.checkable]
         checked = [row for row in checkable if row.included]
         self.check_all_box.blockSignals(True)
         if checkable and len(checked) == len(checkable):
@@ -698,7 +703,7 @@ class GeotagWindow(QWidget):
         """Clicked: check everything checkable, unless it all is already, then uncheck all."""
         if self._plan is None:
             return
-        checkable = [row for row in self._plan.matched if not row.has_gps]
+        checkable = [row for row in self._plan.matched if row.checkable]
         if checkable and all(row.included for row in checkable):
             self.uncheck_all_requested.emit()
         elif not checkable and self._plan.included:

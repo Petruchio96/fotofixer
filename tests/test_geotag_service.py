@@ -112,24 +112,31 @@ class GeotagPlanTests(unittest.TestCase):
         self.assertEqual(no_zone.status, AFTER)
         self.assertIn("taken as this computer's zone (HST)", no_zone.hint)
 
-    def test_near_track_within_a_minute_of_a_track_point(self) -> None:
-        # Track points every 10 minutes from 9:12 MDT: 9:17 is 5 min from both.
+    def test_suggested_track_location_needs_a_point_within_5_minutes_and_a_real_difference(self) -> None:
+        # Track points every 10 minutes from 9:12 MDT: 9:17 is 5 min from both (within).
         rows = {row.name: row for row in self.plan().rows}
-        self.assertFalse(rows["phone.jpg"].near_track)
-        close = build_geotag_plan(
-            [Path("/photos/a.jpg"), Path("/photos/b.jpg")],
-            {
-                Path("/photos/a.jpg"): info("a.jpg", datetime(2026, 10, 3, 9, 12, 59), MDT, gps=(40.5, -111.5)),
-                Path("/photos/b.jpg"): info("b.jpg", datetime(2026, 10, 3, 9, 13, 1), MDT, gps=(40.5, -111.5)),
-            },
-            TRACK, MDT,
-        )
-        a, b = close.rows
-        self.assertTrue(a.near_track, "59 s after a track point")
-        self.assertFalse(b.near_track, "61 s after a track point")
-        self.assertIn("within a minute of when it was taken", a.hint)
-        self.assertIn("check the box to use it", a.hint)
-        self.assertIn("Check the box to replace", b.hint)
+        self.assertTrue(rows["phone.jpg"].near_track)
+        self.assertTrue(rows["tagged.jpg"].suggested, "9:37, far from its own (40.5, -111.5)")
+        # Past the last point (11:42 MDT) but still matched to it: 4 min 59 s and 5 min 1 s after.
+        far = info("far.jpg", datetime(2026, 10, 3, 11, 46, 59), MDT, gps=(40.5, -111.5))
+        late = info("late.jpg", datetime(2026, 10, 3, 11, 47, 1), MDT, gps=(40.5, -111.5))
+        # 9:12 is the first point (40.60, -111.60): 24 m and 26 m north of it.
+        close = info("close.jpg", datetime(2026, 10, 3, 9, 12), MDT, gps=(40.60 + 24 / 111_195, -111.60))
+        apart = info("apart.jpg", datetime(2026, 10, 3, 9, 12), MDT, gps=(40.60 + 26 / 111_195, -111.60))
+        plan = build_geotag_plan([p.path for p in (far, late, close, apart)], {p.path: p for p in (far, late, close, apart)}, TRACK, MDT)
+        by_name = {row.name: row for row in plan.rows}
+        self.assertTrue(by_name["far.jpg"].suggested, "4 min 59 s from a point")
+        self.assertFalse(by_name["late.jpg"].suggested, "5 min 1 s from a point")
+        self.assertFalse(by_name["close.jpg"].suggested, "the track agrees within 25 m")
+        self.assertAlmostEqual(by_name["close.jpg"].distance, 24, delta=0.5)
+        self.assertTrue(by_name["apart.jpg"].suggested)
+        self.assertIn("within 5 min of when it was taken", by_name["far.jpg"].hint)
+        self.assertIn("check the box to use it", by_name["far.jpg"].hint)
+        self.assertIn("Check the box to replace", by_name["late.jpg"].hint)
+        self.assertIn("agrees within 79 ft, so its own coordinates are kept", by_name["close.jpg"].hint)
+        # Check All takes photos without GPS and suggested ones, not the close one.
+        self.assertEqual(sorted(row.name for row in plan.rows if row.checkable), ["apart.jpg", "far.jpg"])
+        self.assertTrue(rows["phone.jpg"].checkable)
 
     def test_has_gps_rows(self) -> None:
         rows = {row.name: row for row in self.plan().rows}
@@ -138,7 +145,8 @@ class GeotagPlanTests(unittest.TestCase):
         self.assertEqual(tagged.chip, "Has GPS")
         self.assertIn("already has GPS coordinates (40.500000, -111.500000)", tagged.hint)
         self.assertFalse(tagged.included, "a photo with GPS starts unchecked")
-        self.assertIn("Check the box to replace them with 40.625000, -111.575000 · 7,382 ft", tagged.hint)
+        self.assertIn("check the box to use it", tagged.hint, "kilometres from its own GPS: suggested")
+        self.assertIn("(40.625000, -111.575000 · 7,382 ft)", tagged.hint)
         self.assertFalse(rows["phone.jpg"].has_gps)
 
     def test_included_defaults_and_values(self) -> None:

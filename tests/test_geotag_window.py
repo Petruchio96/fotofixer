@@ -16,7 +16,7 @@ from core.models import PhotoInfo
 from gui.main_window import MainWindow
 from gui.presenters.date_time_state import MODE_SHIFT
 from gui.widgets.editor_panel import DATE_TIME_TAB
-from gui.widgets.geotag_window import PHOTO_ZOOM, READOUT_IDLE
+from gui.widgets.geotag_window import PHOTO_ZOOM, READOUT_IDLE, ROW_ACTIVE_BORDER, ROW_PLAIN_BORDER
 from gui.widgets.map_view import LEFT_OUT_PHOTO_COLOR, PHOTO_COLOR, REPLACE_RING_COLOR, SELECTED_PHOTO_COLOR
 from services.geotag_service import AFTER, BEFORE, GAP, NO_DATE, ON_TRACK
 from services.workflow_facade import PhotoWorkflowFacade
@@ -209,7 +209,7 @@ class GeotagWindowTests(unittest.TestCase):
         self.assertEqual((dots[str(self.tagged)].latitude, dots[str(self.tagged)].longitude), (40.5, -111.5))
         self.assertEqual(dots[str(self.tagged)].color, PHOTO_COLOR)
         self.assertEqual(geotag.apply_button.text(), "Geotag 2 Photos")
-        self.assertEqual(geotag.check_all_box.checkState(), Qt.Checked)
+        self.assertEqual(geotag.check_all_box.checkState(), Qt.PartiallyChecked, "the suggested photo is unchecked")
         self.assertEqual(geotag.list_heading.text(), "Photos · ☑ will be geotagged")
         self.assertTrue(geotag.apply_button.isEnabled())
         self.assertIn("3 of 7 photos on the track", geotag.summary_label.text())
@@ -268,7 +268,7 @@ class GeotagWindowTests(unittest.TestCase):
         self.assertEqual(geotag.map_view.zoom, PHOTO_ZOOM)
         self.assertTrue(geotag.preview.isVisible())
         self.assertEqual(geotag.preview.current_path, str(self.tagged))
-        self.assertEqual(geotag.preview.use_button.text(), "Put On Track", "9:37 is 5 min from the track's points")
+        self.assertEqual(geotag.preview.use_button.text(), "Suggested Track Location", "5 min from a point, kilometres from its own GPS")
         self.assertEqual(geotag.preview.use_button.objectName(), "accentButton")
         self.assertEqual(geotag.preview.time_label.text(), "10/03/2026 9:37:00am MDT")
         self.assertEqual(geotag.photo_list.active_path, self.tagged)
@@ -313,14 +313,26 @@ class GeotagWindowTests(unittest.TestCase):
         self.assertFalse(geotag.preview.isVisible())
         self.assertIsNone(geotag.photo_list.active_path)
 
-    def test_a_gps_photo_near_a_track_point_is_suggested(self) -> None:
-        # Taken 20 s after the 9:22 track point: a blue dot with an orange ring.
-        self.dates[self.tagged] = (datetime(2026, 10, 3, 9, 22, 20), MDT)
+    def test_a_gps_photo_the_track_places_elsewhere_is_suggested(self) -> None:
+        # 9:37 is 5 min from the track's points and its own GPS is kilometres off:
+        # a blue dot with an orange ring, an orange row border, Check All takes it.
         self._load()
         geotag = self._open()
         tagged = next(pin for pin in geotag.map_view._photo_pins if pin.path == str(self.tagged))
         self.assertEqual((tagged.color, tagged.ring), (PHOTO_COLOR, SELECTED_PHOTO_COLOR))
-        self.assertIn("within a minute", geotag.photo_list._items_by_path[str(self.tagged)].toolTip())
+        self.assertIn("within 5 min", geotag.photo_list._items_by_path[str(self.tagged)].toolTip())
+        row = self._rows()["geo-tagged.jpg"]
+        delegate = geotag.photo_list.itemDelegate()
+        self.assertEqual(delegate.row_border(row, False), ROW_ACTIVE_BORDER, "orange border even when unchecked")
+        self.assertEqual(delegate.row_border(self._rows()["geo-phone.jpg"], False), ROW_PLAIN_BORDER)
+        self.assertEqual(geotag.check_all_box.checkState(), Qt.PartiallyChecked, "the suggested photo is unchecked")
+        QTest.mouseClick(geotag.check_all_box, Qt.LeftButton, Qt.NoModifier, QPoint(8, geotag.check_all_box.height() // 2))
+        self.assertTrue(self._rows()["geo-tagged.jpg"].included, "Check All checks a suggested photo")
+        self.assertEqual(geotag.check_all_box.checkState(), Qt.Checked)
+        QTest.mouseClick(geotag.check_all_box, Qt.LeftButton, Qt.NoModifier, QPoint(8, geotag.check_all_box.height() // 2))
+        self.assertEqual(self.window._geotag_plan.included, [])
+        QTest.mouseClick(geotag.check_all_box, Qt.LeftButton, Qt.NoModifier, QPoint(8, geotag.check_all_box.height() // 2))
+        self._click_row(self.tagged)
         self._click_row(self.tagged, on_checkbox=False)
         self.assertEqual(geotag.preview.use_button.text(), "Suggested Track Location")
         self.assertEqual(geotag.preview.use_button.objectName(), "accentButton")
@@ -342,20 +354,29 @@ class GeotagWindowTests(unittest.TestCase):
     def test_the_master_box_checks_photos_without_gps_and_unchecks_everything(self) -> None:
         self._load()
         geotag = self._open()
-        self.assertEqual(geotag.check_all_box.checkState(), Qt.Checked, "everything checkable is checked already")
+        # The tagged photo is a suggestion (kilometres from its own GPS), so it
+        # counts as checkable: part until Check All takes it.
+        self.assertEqual(geotag.check_all_box.checkState(), Qt.PartiallyChecked)
+        QTest.mouseClick(geotag.check_all_box, Qt.LeftButton, Qt.NoModifier, QPoint(8, geotag.check_all_box.height() // 2))
+        self.assertEqual([row.name for row in self.window._geotag_plan.included], ["geo-phone.jpg", "geo-canon.cr3", "geo-tagged.jpg"])
+        self.assertEqual(geotag.check_all_box.checkState(), Qt.Checked)
 
         QTest.mouseClick(geotag.check_all_box, Qt.LeftButton, Qt.NoModifier, QPoint(8, geotag.check_all_box.height() // 2))
         self.assertEqual([row.name for row in self.window._geotag_plan.included], [])
         self.assertEqual(geotag.apply_button.text(), "No Photos on the Track")
         self.assertEqual(geotag.check_all_box.checkState(), Qt.Unchecked)
 
+        # A photo with GPS the track agrees with (its own fix 10 m from the track's
+        # position) is not a suggestion: Check All leaves it alone, by hand it works.
+        self.gps_by_path[self.tagged] = (40.625 + 10 / 111_195, -111.575)
+        self.window.load_photos(list(self.dates))
+        self.assertFalse(self._rows()["geo-tagged.jpg"].suggested)
+        self.assertIn("agrees within", geotag.photo_list._items_by_path[str(self.tagged)].toolTip())
         QTest.mouseClick(geotag.check_all_box, Qt.LeftButton, Qt.NoModifier, QPoint(8, geotag.check_all_box.height() // 2))
         self.assertEqual([row.name for row in self.window._geotag_plan.included], ["geo-phone.jpg", "geo-canon.cr3"])
-        self.assertFalse(self._rows()["geo-tagged.jpg"].included, "a photo with GPS is checked by hand only")
         self.assertEqual(geotag.check_all_box.checkState(), Qt.Checked)
-        # A photo with GPS checked by hand: still "all checked"; unchecking all clears it too.
         self._click_row(self.tagged)
-        self.assertEqual(geotag.check_all_box.checkState(), Qt.Checked)
+        self.assertTrue(self._rows()["geo-tagged.jpg"].included)
         self._click_row(self.canon)
         self.assertEqual(geotag.check_all_box.checkState(), Qt.PartiallyChecked)
         QTest.mouseClick(geotag.check_all_box, Qt.LeftButton, Qt.NoModifier, QPoint(8, geotag.check_all_box.height() // 2))

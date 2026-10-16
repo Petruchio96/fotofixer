@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from core.gpx_track import AFTER_TRACK, BEFORE_TRACK, IN_GAP, MAX_GAP, Match, NoMatch, TrackPoint, locate, track_span
+from core.gpx_track import AFTER_TRACK, BEFORE_TRACK, IN_GAP, MAX_GAP, Match, NoMatch, TrackPoint, distance_metres, locate, track_span
 from core.models import PhotoInfo
 from core.photo_dates import format_display_datetime
 from core.time_zones import describe_offset
@@ -42,8 +42,13 @@ CHIP_TEXTS = {
 }
 
 # A track point this close in time makes the track's position a suggestion
-# for a photo that already has GPS (an orange ring on its blue dot).
-NEAR_TRACK = timedelta(minutes=1)
+# for a photo that already has GPS (an orange ring on its blue dot), unless
+# the two positions agree within CLOSE_ENOUGH: a phone's fix and a track
+# logger's are each off by 5 to 25 m, so closer than that they are the same
+# place and the photo's own fix (taken there, then, with no interpolation)
+# is the better one.
+NEAR_TRACK = timedelta(minutes=5)
+CLOSE_ENOUGH = 25.0
 
 DATE_TIP = (
     "If the camera's clock or time zone was wrong, fix it first on the Date & Time tab "
@@ -70,8 +75,9 @@ class GeotagRow:
     has_gps: bool = False
     current: tuple[float, float] | None = None
     # The track has a point within NEAR_TRACK of the moment the photo was
-    # taken: a good position to suggest for a photo that has GPS already.
+    # taken, and how far its position is from the photo's own coordinates.
     near_track: bool = False
+    distance: float | None = None
     # Why there is no position, or where it will be placed (the hover hint).
     hint: str = ""
     # Checked in the list: will be written. Only rows on the track.
@@ -80,6 +86,16 @@ class GeotagRow:
     @property
     def on_track(self) -> bool:
         return self.status == ON_TRACK
+
+    @property
+    def suggested(self) -> bool:
+        """A photo with GPS the track has a better position for (see NEAR_TRACK)."""
+        return self.has_gps and self.near_track and self.distance is not None and self.distance > CLOSE_ENOUGH
+
+    @property
+    def checkable(self) -> bool:
+        """What Check All checks: on the track, and either without GPS or suggested."""
+        return self.on_track and (not self.has_gps or self.suggested)
 
     @property
     def chip(self) -> str:
@@ -171,6 +187,8 @@ def build_geotag_plan(
             row.status = ON_TRACK
             row.latitude, row.longitude, row.altitude = result.latitude, result.longitude, result.elevation
             row.near_track = min(abs(row.instant - result.before.time), abs(result.after.time - row.instant)) <= NEAR_TRACK
+            if row.current is not None:
+                row.distance = distance_metres(row.current[0], row.current[1], row.latitude, row.longitude)
             row.included = checks.get(path, not row.has_gps)
             row.hint = _match_hint(row, computer_offset, result, offset, feet=feet)
         else:
@@ -243,6 +261,13 @@ def format_altitude(metres: float, feet: bool = True) -> str:
     return f"{metres:,.0f} m"
 
 
+def format_distance(metres: float, feet: bool = True) -> str:
+    """A distance over the ground: '1,120 ft' (the default) or '340 m'."""
+    if feet:
+        return f"{metres * FEET_PER_METRE:,.0f} ft"
+    return f"{metres:,.0f} m"
+
+
 def format_coordinates(latitude: float, longitude: float, altitude: float | None = None, feet: bool = True) -> str:
     """'40.605000, -111.595000' plus ' · 6,726 ft' (or ' · 2,050 m') when there is an altitude."""
     text = f"{latitude:.6f}, {longitude:.6f}"
@@ -264,10 +289,17 @@ def _match_hint(
                 f"This photo already has GPS coordinates ({current}). "
                 f"Geotag will ask before replacing them with {where}."
             )
-        if row.near_track:
+        if row.suggested:
             return (
                 f"This photo already has GPS coordinates ({current}), the blue dot on the map. The track "
-                f"has a position within a minute of when it was taken, {where}: check the box to use it."
+                f"has a position within {describe_duration(NEAR_TRACK)} of when it was taken, "
+                f"{format_distance(row.distance, feet)} away ({where}): check the box to use it."
+            )
+        if row.near_track and row.distance is not None:
+            return (
+                f"This photo already has GPS coordinates ({current}), the blue dot on the map. The track "
+                f"agrees within {format_distance(row.distance, feet)}, so its own coordinates are kept. "
+                f"Check the box to use the track's position ({where}) anyway."
             )
         return (
             f"This photo already has GPS coordinates ({current}), the blue dot on the map. "

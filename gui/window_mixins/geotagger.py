@@ -170,14 +170,15 @@ class GeotaggerMixin:
 
     def _check_geotag_rows(self, checked: bool) -> None:
         """
-        Check All (the photos on the track without GPS; photos with GPS are
+        Check All (the photos on the track without GPS, and those with GPS
+        the track has a better position for; other photos with GPS are
         checked one by one on purpose) or Uncheck All (every photo).
         """
         if self._geotag_plan is None or self._geotag_window is None:
             return
         changed = []
         for row in self._geotag_plan.rows:
-            if not row.on_track or row.included == checked or (checked and row.has_gps):
+            if not row.on_track or row.included == checked or (checked and not row.checkable):
                 continue
             self._geotag_plan.set_included(row.path, checked)
             changed.append(row)

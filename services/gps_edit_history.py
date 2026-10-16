@@ -8,7 +8,9 @@ from dataclasses import dataclass
 from pathlib import Path
 
 # GPS state of one file: (latitude, longitude), or (None, None) for no GPS.
-type GpsState = tuple[float | None, float | None]
+# (latitude, longitude), or (latitude, longitude, altitude) after a geotag
+# from a GPS track, so redo writes the altitude back too.
+type GpsState = tuple[float | None, float | None] | tuple[float, float, float | None]
 # Date state of one file: its date tags (tag -> ExifTool text, or None).
 type DateState = dict[str, str | None]
 

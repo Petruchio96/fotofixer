@@ -974,6 +974,38 @@ QLabel#updateError {
 QLabel#mapHint {
     color: #556579;
 }
+/* The Geotag from GPS Track window. */
+QLabel#geotagSummary {
+    color: #31445a;
+    font-size: 13px;
+}
+QLabel#geotagListHeading {
+    color: #b45f06;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 2px 4px;
+}
+QCheckBox#geotagCheckAll {
+    color: #b45f06;
+    font-weight: 600;
+    padding: 0px 4px;
+}
+QListWidget#geotagList {
+    background: #fbfdff;
+    border: 1px solid #d6dfe8;
+    border-radius: 10px;
+    padding: 3px;
+    outline: none;
+}
+QLabel#geotagWarning {
+    font-size: 12px;
+}
+QLabel#geotagWarning[tone="warning"] {
+    color: #8a5300;
+}
+QLabel#geotagWarning[tone="error"] {
+    color: #9b2c2c;
+}
 QLabel#mapReadout {
     color: #31445a;
     font-weight: 600;

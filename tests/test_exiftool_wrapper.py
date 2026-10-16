@@ -204,7 +204,27 @@ class ExifToolWrapperTests(unittest.TestCase):
         self.assertIn("-overwrite_original", arguments)
         self.assertIn("-GPSLatitude=", arguments)
         self.assertIn("-GPSLongitudeRef=", arguments)
+        # The altitude a geotag may have written goes too.
+        self.assertIn("-GPSAltitude=", arguments)
+        self.assertIn("-GPSAltitudeRef=", arguments)
         self.assertEqual(arguments[-1], str(Path("/tmp/photo.jpg")))
+
+    def test_write_gps_with_altitude(self) -> None:
+        wrapper, execute_mock = self._wrapper_with_reply()
+
+        wrapper.write_gps(Path("/tmp/photo.jpg"), 40.5, -111.8, 2050.25)
+        arguments = execute_mock.call_args.args[0]
+        self.assertIn("-GPSAltitude=2050.25", arguments)
+        self.assertIn("-GPSAltitudeRef=0", arguments)
+
+        wrapper.write_gps(Path("/tmp/photo.jpg"), 40.5, -111.8, -3.5)
+        arguments = execute_mock.call_args.args[0]
+        self.assertIn("-GPSAltitude=3.5", arguments)
+        self.assertIn("-GPSAltitudeRef=1", arguments)
+
+        # Without an altitude the command is unchanged (Apply Location).
+        wrapper.write_gps(Path("/tmp/photo.jpg"), 40.5, -111.8)
+        self.assertFalse(any(argument.startswith("-GPSAltitude") for argument in execute_mock.call_args.args[0]))
 
     def test_read_embedded_previews_tries_small_previews_first(self) -> None:
         small = Path("/tmp/small.cr2")

@@ -31,7 +31,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from PySide6.QtCore import QEvent, QObject, QPointF, QRectF, Qt, QTimer, QUrl, Signal
-from PySide6.QtGui import QColor, QCursor, QGuiApplication, QImage, QPainter, QPen, QPixmap
+from PySide6.QtGui import QColor, QCursor, QGuiApplication, QImage, QPainter, QPainterPath, QPen, QPixmap
 from PySide6.QtNetwork import (
     QNetworkAccessManager,
     QNetworkDiskCache,
@@ -114,6 +114,16 @@ PIN_HEIGHT = 36
 
 # Names listed in a dot's hover hint before "and N more".
 TOOLTIP_NAME_LIMIT = 6
+
+# A GPS track (Geotag from GPS Track): a green line, a color nothing else
+# in the app uses.
+TRACK_COLOR = QColor("#1e9e4a")
+TRACK_LINE_WIDTH = 3
+
+# The geotag window's dots: grey = on the track but left out (nothing is
+# written); a red ring = checked, and will replace the photo's own GPS.
+LEFT_OUT_PHOTO_COLOR = QColor("#8c9aa8")
+REPLACE_RING_COLOR = QColor("#b42f2f")
 
 OFFLINE_NOTE = "Some map tiles could not be downloaded. Places viewed before still show offline."
 
@@ -273,11 +283,19 @@ class PhotoPin:
     latitude: float
     longitude: float
     selected: bool = False
+    # The geotag window's dots: a color of its own (None: blue, orange when
+    # selected), a ring around it, drawn bigger while its row or the dot is
+    # hovered, and its own hover hint (the file name without one).
+    color: QColor | None = None
+    ring: QColor | None = None
+    hovered: bool = False
+    hint: str = ""
 
 
 class MapView(QWidget):
     """
-    The map. The owner sets the pin and photo dots, and listens for:
+    The map. The owner sets the pin and photo dots (and, in the geotag
+    window, a GPS track), and listens for:
 
     location_picked(latitude, longitude):
         The user clicked the map or dropped the pin.
@@ -289,6 +307,11 @@ class MapView(QWidget):
     photo_pins_clicked(paths, global x, global y):
         The user clicked a photo dot; paths lists every photo under the
         mouse, nearest first (photos taken at one spot overlap).
+    photos_hovered(paths):
+        The mouse moved onto a photo dot (the photos at it) or off it (an
+        empty list).
+    background_clicked():
+        A click on the map itself (no dot, no pin) while picking is off.
     view_changed():
         The map was panned, zoomed, or switched to another style.
     """
@@ -298,6 +321,8 @@ class MapView(QWidget):
     pointer_left = Signal()
     tiles_changed = Signal()
     photo_pins_clicked = Signal(list, int, int)
+    photos_hovered = Signal(list)
+    background_clicked = Signal()
     view_changed = Signal()
 
     def __init__(self, fetcher: TileFetcher, parent: QWidget | None = None) -> None:
@@ -318,6 +343,13 @@ class MapView(QWidget):
 
         self._pin: tuple[float, float] | None = None
         self._photo_pins: list[PhotoPin] = []
+        # A GPS track (latitude, longitude per point, in time order), and
+        # the photos under the mouse last reported by photos_hovered.
+        self._track: list[tuple[float, float]] = []
+        self._hovered_paths: list[str] = []
+        # False: clicking the map doesn't place the New Location pin and the
+        # cursor is the plain arrow (the geotag window has no pin to place).
+        self.pick_enabled = True
 
         # Loaded tiles (most recently used last), and tiles the server
         # doesn't have or that failed to download (key -> when).
@@ -469,9 +501,19 @@ class MapView(QWidget):
             self.update()
 
     def set_photo_pins(self, pins: list[PhotoPin]) -> None:
-        # Selected photos are drawn last, on top of the others.
-        self._photo_pins = sorted(pins, key=lambda pin: pin.selected)
+        # Selected photos are drawn after the others, and ringed dots (a
+        # geotag that replaces GPS) last of all, so they always show.
+        self._photo_pins = sorted(pins, key=lambda pin: (pin.selected, pin.ring is not None))
         self.update()
+
+    def set_track(self, points: list[tuple[float, float]]) -> None:
+        """The GPS track to draw (empty for none)."""
+        self._track = list(points)
+        self.update()
+
+    @property
+    def track_points(self) -> list[tuple[float, float]]:
+        return list(self._track)
 
     def screen_point_for(self, latitude: float, longitude: float) -> QPointF:
         return self._world_to_screen(*lat_lon_to_world(latitude, longitude))
@@ -513,6 +555,11 @@ class MapView(QWidget):
         paths = self.photo_paths_at(point)
         if not paths:
             return ""
+        # One photo with a hint of its own (the geotag window's dots).
+        if len(paths) == 1:
+            for pin in self._photo_pins:
+                if pin.path == paths[0] and pin.hint:
+                    return pin.hint
         names = [Path(path).name for path in paths[:TOOLTIP_NAME_LIMIT]]
         if len(paths) > TOOLTIP_NAME_LIMIT:
             names.append(f"and {len(paths) - TOOLTIP_NAME_LIMIT} more")
@@ -718,6 +765,8 @@ class MapView(QWidget):
             painter.drawPixmap(target, part[0], part[1])
 
         painter.setRenderHint(QPainter.Antialiasing)
+        if self._track:
+            self._draw_track(painter)
         for pin in self._photo_pins:
             self._draw_photo_dot(painter, pin)
         if self._pin is not None:
@@ -725,11 +774,31 @@ class MapView(QWidget):
         self._draw_notes(painter)
         painter.end()
 
+    def _draw_track(self, painter: QPainter) -> None:
+        # A path, not drawPolyline: PySide's drawPolyline needs a QPolygonF
+        # and drew nothing for a plain list of points.
+        path = QPainterPath()
+        for index, (latitude, longitude) in enumerate(self._track):
+            point = self.screen_point_for(latitude, longitude)
+            if index == 0:
+                path.moveTo(point)
+            else:
+                path.lineTo(point)
+        painter.setPen(QPen(TRACK_COLOR, TRACK_LINE_WIDTH, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
+        painter.setBrush(Qt.NoBrush)
+        painter.drawPath(path)
+
     def _draw_photo_dot(self, painter: QPainter, pin: PhotoPin) -> None:
         center = self.screen_point_for(pin.latitude, pin.longitude)
-        painter.setPen(QPen(QColor("#ffffff"), PHOTO_DOT_OUTLINE))
-        painter.setBrush(SELECTED_PHOTO_COLOR if pin.selected else PHOTO_COLOR)
-        painter.drawEllipse(center, PHOTO_DOT_RADIUS, PHOTO_DOT_RADIUS)
+        radius = PHOTO_DOT_RADIUS + (3 if pin.hovered else 0)
+        if pin.ring is not None:
+            painter.setPen(QPen(pin.ring, PHOTO_DOT_OUTLINE + 1.5))
+            painter.setBrush(Qt.NoBrush)
+            painter.drawEllipse(center, radius + 3, radius + 3)
+        painter.setPen(QPen(QColor("#ffffff"), PHOTO_DOT_OUTLINE + (1 if pin.hovered else 0)))
+        color = pin.color if pin.color is not None else (SELECTED_PHOTO_COLOR if pin.selected else PHOTO_COLOR)
+        painter.setBrush(color)
+        painter.drawEllipse(center, radius, radius)
 
     def _draw_location_pin(self, painter: QPainter, tip: QPointF) -> None:
         draw_location_pin(painter, tip, width=PIN_WIDTH, height=PIN_HEIGHT, fill=PIN_COLOR)
@@ -797,6 +866,9 @@ class MapView(QWidget):
     def mouseMoveEvent(self, event) -> None:
         position = event.position()
         self.pointer_moved.emit(*self.lat_lon_at(position))
+        # Dots report hovering (the geotag window grows the dot and fills
+        # its readout); the map window ignores it.
+        self._update_hovered(self.photo_paths_at(position) if self._photo_pins else [])
         if self._press_pos is None or not event.buttons() & Qt.LeftButton:
             self._update_hover_cursor(position)
             return
@@ -848,6 +920,9 @@ class MapView(QWidget):
         held = time.perf_counter() - self._press_time
         if held > QUICK_CLICK_SECONDS:
             # Held, not clicked: grabbing the map, not choosing a place.
+            return
+        if not self.pick_enabled:
+            self.background_clicked.emit()
             return
         if (
             not self._press_window_active
@@ -903,6 +978,11 @@ class MapView(QWidget):
             self.setFocus(Qt.MouseFocusReason)
         super().enterEvent(event)
 
+    def _update_hovered(self, paths: list[str]) -> None:
+        if paths != self._hovered_paths:
+            self._hovered_paths = paths
+            self.photos_hovered.emit(list(paths))
+
     def _set_space_held(self, held: bool) -> None:
         if held == self._space_held:
             return
@@ -947,6 +1027,7 @@ class MapView(QWidget):
 
     def leaveEvent(self, event) -> None:
         self.pointer_left.emit()
+        self._update_hovered([])
         super().leaveEvent(event)
 
     def _update_hover_cursor(self, position: QPointF) -> None:
@@ -960,4 +1041,6 @@ class MapView(QWidget):
         elif self.photo_paths_at(position):
             self.setCursor(Qt.PointingHandCursor)
         else:
-            self.setCursor(self._crosshair)
+            # The crosshair marks the spot a click would pick; with nothing
+            # to pick (the geotag window) the plain arrow.
+            self.setCursor(self._crosshair if self.pick_enabled else Qt.ArrowCursor)

@@ -303,7 +303,9 @@ class ExifToolWrapper:
 
         return previews
 
-    def write_gps(self, path: Path, latitude: float, longitude: float) -> None:
+    def write_gps(
+        self, path: Path, latitude: float, longitude: float, altitude: float | None = None
+    ) -> None:
         """
         Write GPS metadata to a file using ExifTool.
 
@@ -322,6 +324,10 @@ class ExifToolWrapper:
                 Decimal latitude value.
             longitude:
                 Decimal longitude value.
+            altitude:
+                Metres above sea level (negative below), written with the
+                coordinates when given: geotagging from a GPS track has it.
+                None leaves the photo's altitude as it is (Apply Location).
 
         Raises:
             RuntimeError:
@@ -329,6 +335,13 @@ class ExifToolWrapper:
         """
         latitude_ref = "N" if latitude >= 0 else "S"
         longitude_ref = "E" if longitude >= 0 else "W"
+        altitude_options = []
+        if altitude is not None:
+            # GPSAltitudeRef 0 = above sea level, 1 = below.
+            altitude_options = [
+                f"-GPSAltitude={abs(altitude)}",
+                f"-GPSAltitudeRef={1 if altitude < 0 else 0}",
+            ]
 
         self._back_up_original(path)
         self._run(
@@ -338,6 +351,7 @@ class ExifToolWrapper:
                 f"-GPSLatitudeRef={latitude_ref}",
                 f"-GPSLongitude={abs(longitude)}",
                 f"-GPSLongitudeRef={longitude_ref}",
+                *altitude_options,
             ],
             [path],
             "Failed to write metadata.",
@@ -345,7 +359,8 @@ class ExifToolWrapper:
 
     def clear_gps(self, path: Path) -> None:
         """
-        Remove GPS metadata from a file using ExifTool.
+        Remove GPS metadata from a file using ExifTool: the coordinates,
+        and the altitude a geotag from a GPS track may have written.
         """
         self._back_up_original(path)
         self._run(
@@ -355,6 +370,8 @@ class ExifToolWrapper:
                 "-GPSLatitudeRef=",
                 "-GPSLongitude=",
                 "-GPSLongitudeRef=",
+                "-GPSAltitude=",
+                "-GPSAltitudeRef=",
             ],
             [path],
             "Failed to clear metadata.",

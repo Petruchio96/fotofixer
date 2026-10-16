@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
     QDialog,
     QGroupBox,
     QHBoxLayout,
+    QRadioButton,
     QLabel,
     QLineEdit,
     QPushButton,
@@ -62,6 +63,10 @@ ESRI_STEPS_HTML = (
     "4. Create it, generate the key, and paste it below. "
     f'(<a href="{CREATE_KEY_URL}">Esri\'s instructions</a>)'
 )
+UNITS_HELP = (
+    "Altitudes from a GPS track (File > Geotag from GPS Track) are shown in feet or metres. "
+    "Photos always store them in metres."
+)
 UPDATES_HELP = (
     "About five seconds after the app opens, at most once a day, it asks GitHub "
     "whether a newer version exists and shows a notice if one does. "
@@ -82,13 +87,13 @@ class SettingsDialog(QDialog):
     """
 
     def __init__(
-        self, parent: QWidget, *, keep_backups: bool, esri_key: str, check_updates: bool = True
+        self, parent: QWidget, *, keep_backups: bool, esri_key: str, check_updates: bool = True, use_feet: bool = True
     ) -> None:
         super().__init__(parent)
         self.setWindowTitle("Settings")
         self.setFixedWidth(600)
         # The values the window opened with: Save is off until one changes.
-        self._initial = (keep_backups, esri_key.strip(), check_updates)
+        self._initial = (keep_backups, esri_key.strip(), check_updates, use_feet)
 
         # --- Backups ---
         backups_group = QGroupBox("Backups")
@@ -102,6 +107,25 @@ class SettingsDialog(QDialog):
         backups_help.setWordWrap(True)
         backups_layout.addWidget(self.keep_backups_check)
         backups_layout.addWidget(backups_help)
+
+        # --- Units ---
+        units_group = QGroupBox("Units")
+        units_layout = QVBoxLayout(units_group)
+        self.feet_radio = QRadioButton("Feet")
+        self.feet_radio.setToolTip("Show altitudes (from a GPS track) in feet")
+        self.metres_radio = QRadioButton("Metres")
+        self.metres_radio.setToolTip("Show altitudes (from a GPS track) in metres")
+        (self.feet_radio if use_feet else self.metres_radio).setChecked(True)
+        self.feet_radio.toggled.connect(self._update_buttons)
+        units_row = QHBoxLayout()
+        units_row.addWidget(self.feet_radio)
+        units_row.addWidget(self.metres_radio)
+        units_row.addStretch(1)
+        units_help = QLabel(UNITS_HELP)
+        units_help.setObjectName("settingsHelp")
+        units_help.setWordWrap(True)
+        units_layout.addLayout(units_row)
+        units_layout.addWidget(units_help)
 
         # --- Updates ---
         updates_group = QGroupBox("Updates")
@@ -172,6 +196,7 @@ class SettingsDialog(QDialog):
         layout = QVBoxLayout(self)
         layout.setSpacing(12)
         layout.addWidget(backups_group)
+        layout.addWidget(units_group)
         layout.addWidget(updates_group)
         layout.addWidget(esri_group)
         layout.addLayout(buttons)
@@ -189,10 +214,13 @@ class SettingsDialog(QDialog):
     def check_updates(self) -> bool:
         return self.check_updates_check.isChecked()
 
+    def use_feet(self) -> bool:
+        return self.feet_radio.isChecked()
+
     def _update_buttons(self) -> None:
         self.remove_key_button.setEnabled(bool(self.esri_key_input.text().strip()))
         if hasattr(self, "save_button"):
-            changed = (self.keep_backups(), self.esri_key(), self.check_updates()) != self._initial
+            changed = (self.keep_backups(), self.esri_key(), self.check_updates(), self.use_feet()) != self._initial
             self.save_button.setEnabled(changed)
             self.save_button.setToolTip(
                 "Save these settings" if changed else "Nothing has changed yet"

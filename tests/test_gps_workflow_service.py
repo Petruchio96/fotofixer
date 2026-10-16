@@ -2,22 +2,50 @@ import unittest
 from pathlib import Path
 
 from core.models import GpsCoordinates, PhotoInfo
-from services.gps_workflow_service import apply_gps_to_paths, prepare_apply_gps
+from services.gps_workflow_service import apply_gps_to_paths, prepare_apply_gps, write_gps_values
 from services.models import SourceResolution
 
 
 class StubWriter:
     def __init__(self, failing_paths: set[Path] | None = None) -> None:
-        self.calls: list[tuple[Path, float, float]] = []
+        self.calls: list[tuple] = []
         self.failing_paths = failing_paths or set()
+        self.clears: list[Path] = []
 
-    def write_gps(self, path: Path, latitude: float, longitude: float) -> None:
-        self.calls.append((path, latitude, longitude))
+    def clear_gps(self, path: Path) -> None:
+        self.clears.append(path)
+
+    def write_gps(self, path: Path, latitude: float, longitude: float, altitude: float | None = None) -> None:
+        self.calls.append((path, latitude, longitude) if altitude is None else (path, latitude, longitude, altitude))
         if path in self.failing_paths:
             raise RuntimeError("boom")
 
 
 class GpsWorkflowServiceTests(unittest.TestCase):
+    def test_restore_gps_states_writes_an_altitude_when_the_state_has_one(self) -> None:
+        from services.gps_workflow_service import restore_gps_states
+        a, b, c = Path("/p/a.jpg"), Path("/p/b.jpg"), Path("/p/c.jpg")
+        writer = StubWriter()
+        restore_gps_states({a: (40.5, -111.8), b: (None, None), c: (40.7, -111.6, 2050.0)}, writer=writer)
+        self.assertEqual(writer.calls, [(a, 40.5, -111.8), (c, 40.7, -111.6, 2050.0)])
+
+    def test_write_gps_values_gives_each_photo_its_own_position(self) -> None:
+        a, b, c = Path("/p/a.jpg"), Path("/p/b.jpg"), Path("/p/c.jpg")
+        writer = StubWriter(failing_paths={b})
+        progress = []
+
+        result = write_gps_values(
+            {a: (40.5, -111.8, 2050.0), b: (40.6, -111.7, None), c: (40.7, -111.6, -3.0)},
+            writer=writer,
+            on_progress=lambda done, total: progress.append((done, total)),
+        )
+
+        # No altitude: the plain call, so writers without the parameter keep working.
+        self.assertEqual(writer.calls, [(a, 40.5, -111.8, 2050.0), (b, 40.6, -111.7), (c, 40.7, -111.6, -3.0)])
+        self.assertEqual(result.successful_paths, [a, c])
+        self.assertEqual(result.failed_paths, ["b.jpg: boom"])
+        self.assertEqual(progress, [(1, 3), (2, 3), (3, 3)])
+
     def test_prepare_apply_gps_rejects_empty_photo_selection(self) -> None:
         preparation = prepare_apply_gps(
             selected_paths=[],

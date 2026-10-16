@@ -34,6 +34,7 @@ from gui.widgets.photo_picker import PhotoPickerDialog
 from gui.widgets.settings_dialog import SettingsDialog
 from gui.window_mixins.apply_workflow import ApplyWorkflowMixin
 from gui.window_mixins.date_time_editor import DateTimeEditorMixin
+from gui.window_mixins.geotagger import GeotaggerMixin
 from gui.window_mixins.inspector import InspectorMixin
 from gui.window_mixins.location_editor import LocationEditorMixin
 from gui.window_mixins.map_picker import ESRI_KEY_SETTING, MapPickerMixin
@@ -51,6 +52,8 @@ APP_SUBTITLE = "When & Where"
 
 # QSettings key for the "Keep Backup Copies of Originals" option.
 KEEP_BACKUPS_SETTING = "keep_backup_copies"
+# QSettings key: altitudes in feet (True, the default) or metres.
+USE_FEET_SETTING = "units/feet"
 
 # QSettings key: the folder photos were last chosen from, so the file
 # pickers open there next time.
@@ -66,6 +69,7 @@ class MainWindow(
     LocationEditorMixin,
     DateTimeEditorMixin,
     MapPickerMixin,
+    GeotaggerMixin,
     UpdateCheckMixin,
     PhotoListMixin,
     ApplyWorkflowMixin,
@@ -225,6 +229,15 @@ class MainWindow(
         self.open_action.triggered.connect(self.add_photos)
         file_menu.addAction(self.open_action)
 
+        # Geotagging from a GPS track lives only here (see GeotaggerMixin).
+        self.geotag_action = QAction("Geotag from GPS Track...", self)
+        self.geotag_action.setShortcut(QKeySequence("Ctrl+G"))
+        self.geotag_action.triggered.connect(self.geotag_from_track)
+        file_menu.addAction(self.geotag_action)
+        self._update_geotag_action(0)
+        # Menu items show their hover hints (the greyed-out Geotag item says why).
+        file_menu.setToolTipsVisible(True)
+
         self.clear_list_action = QAction("Clear List", self)
         self.clear_list_action.setEnabled(False)
         self.clear_list_action.triggered.connect(self.clear_photo_list)
@@ -310,6 +323,7 @@ class MainWindow(
             settings_dialog.reject()
         self._cancel_update_download()
         self._close_map_window()
+        self._close_geotag_window()
         self.stop_background_work()
         super().closeEvent(event)
 
@@ -427,6 +441,7 @@ class MainWindow(
             self.select_all_action.setEnabled(loaded_count > 0)
         if hasattr(self, "clear_list_action"):
             self.clear_list_action.setEnabled(loaded_count > 0)
+            self._update_geotag_action(loaded_count)
         if hasattr(self, "copy_action"):
             self.copy_action.setEnabled(self._selected_browser_gps_coordinates() is not None)
         self._update_undo_redo_actions()
@@ -760,6 +775,7 @@ class MainWindow(
             keep_backups=self.keep_backups,
             esri_key=self.settings.value(ESRI_KEY_SETTING, "", type=str),
             check_updates=self.check_updates_on_start,
+            use_feet=self.use_feet,
         )
         # Kept so tests (and late signals) find a live object.
         self._settings_dialog = dialog
@@ -770,10 +786,21 @@ class MainWindow(
             self.set_keep_backups(dialog.keep_backups())
             self.set_esri_key(dialog.esri_key())
             self.set_check_updates_on_start(dialog.check_updates())
+            self.set_use_feet(dialog.use_feet())
 
         dialog.finished.connect(closed)
         dialog.setWindowModality(Qt.ApplicationModal)
         dialog.show()
+
+    @property
+    def use_feet(self) -> bool:
+        """Altitudes in feet (the default) or metres (Edit > Settings)."""
+        return self.settings.value(USE_FEET_SETTING, True, type=bool)
+
+    def set_use_feet(self, use_feet: bool) -> None:
+        self.settings.setValue(USE_FEET_SETTING, use_feet)
+        # The geotag window's hints and readout show altitudes.
+        self._geotag_photos_changed()
 
     @property
     def keep_backups(self) -> bool:

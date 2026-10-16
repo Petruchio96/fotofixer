@@ -2100,6 +2100,21 @@ class MainWindowSmokeTests(unittest.TestCase):
         self.assertTrue(reopened.keep_backups)
         self.assertTrue(reopened.workflow.writer.keep_backups)
 
+    def test_units_option_defaults_to_feet_and_is_saved(self) -> None:
+        dialog = self._open_settings()
+        self.assertTrue(dialog.feet_radio.isChecked())
+        self.assertTrue(self.window.use_feet)
+
+        self._click_checkbox(dialog.metres_radio)
+        self.assertTrue(dialog.save_button.isEnabled())
+        QTest.mouseClick(dialog.save_button, Qt.LeftButton)
+
+        self.assertFalse(self.window.use_feet)
+        self.assertFalse(self.settings.value("units/feet", type=bool))
+        reopened = MainWindow(settings=QSettings(str(self.settings_path), QSettings.IniFormat))
+        self.addCleanup(reopened.close)
+        self.assertFalse(reopened.use_feet)
+
     def test_save_is_off_until_a_setting_changes(self) -> None:
         dialog = self._open_settings()
         self.assertFalse(dialog.save_button.isEnabled())

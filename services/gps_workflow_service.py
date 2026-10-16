@@ -90,16 +90,41 @@ def restore_gps_states(
     """
     Write each file back to a remembered GPS state (used by undo and redo).
 
-    (None, None) means the file had no GPS, so its GPS is cleared.
+    (None, None) means the file had no GPS, so its GPS is cleared. A third
+    value is an altitude (a geotag from a GPS track), written with the rest.
     """
     def restore(path: Path) -> None:
-        latitude, longitude = states[path]
+        latitude, longitude, *rest = states[path]
+        altitude = rest[0] if rest else None
         if latitude is None or longitude is None:
             writer.clear_gps(path)
-        else:
+        elif altitude is None:
             writer.write_gps(path, latitude, longitude)
+        else:
+            writer.write_gps(path, latitude, longitude, altitude)
 
     return _write_each(list(states), restore, on_progress)
+
+
+def write_gps_values(
+    values: Mapping[Path, tuple[float, float, float | None]],
+    *,
+    writer,
+    on_progress: Progress | None = None,
+) -> ApplyExecutionResult:
+    """
+    Write each file its own position (geotagging from a GPS track):
+    {path: (latitude, longitude, altitude or None)}. Every file is
+    attempted; failures are in the result.
+    """
+    def write(path: Path) -> None:
+        latitude, longitude, altitude = values[path]
+        if altitude is None:
+            writer.write_gps(path, latitude, longitude)
+        else:
+            writer.write_gps(path, latitude, longitude, altitude)
+
+    return _write_each(list(values), write, on_progress)
 
 
 def write_date_tags_to_paths(

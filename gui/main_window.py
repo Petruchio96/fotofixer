@@ -560,7 +560,7 @@ class MainWindow(
         Write remembered states back to files in the background (write does
         it; see _run_writes), and put the photo list back the way it was
         when the edit was made. Then on_done(failure messages, the backups
-        the writes made, which are added to the list).
+        the writes made).
 
         make_backups False (undo): no backup copies even with Keep Backup
         Copies of Originals on. Otherwise undoing a location added to a photo
@@ -587,9 +587,7 @@ class MainWindow(
             else:
                 self.list_widget.clearSelection()
                 self.update_details_panel()
-            backups = self._take_new_backups()
-            self._add_backups_to_list(backups)
-            on_done(list(result.execution_result.failed_paths), backups)
+            on_done(list(result.execution_result.failed_paths), self._take_new_backups())
 
         self._run_writes(text, total, write, done)
 
@@ -675,21 +673,13 @@ class MainWindow(
         take = getattr(self.workflow.writer, "take_created_backups", None)
         return take() if take is not None else []
 
-    def _add_backups_to_list(self, backups: list[Path]) -> None:
-        """
-        Add new backups to the Photo List, not selected.
-        """
-        in_list = set(self.session.selected_paths)
-        new_backups = [path for path in backups if path not in in_list]
-        if new_backups:
-            # Loads in the background like Add Photos; the selection stays.
-            self.load_photos(self.session.selected_paths + new_backups)
-
     def _delete_backups(self, backups: tuple[Path, ...]) -> list[str]:
         """
         Undo: delete the backups the undone change made (the photos have
-        their earlier GPS back, so the copies aren't needed), and take them
-        out of the Photo List. Returns failure messages.
+        their earlier GPS back, so the copies aren't needed). Backups never
+        join the Photo List (a copy at the old location next to the moved
+        photo looked like the photo hadn't moved); they stay in the folder
+        for whoever needs them. Returns failure messages.
         """
         failed = []
         for backup in backups:
@@ -697,14 +687,6 @@ class MainWindow(
                 backup.unlink(missing_ok=True)
             except OSError as exc:
                 failed.append(f"{backup.name}: could not delete the backup ({exc})")
-        gone = set(backups)
-        if any(path in gone for path in self.session.selected_paths):
-            selected = self.get_selected_paths()
-            self.session.selected_paths = [
-                path for path in self.session.selected_paths if path not in gone
-            ]
-            self._render_current_photo_session()
-            self.select_browser_paths([path for path in selected if path not in gone])
         return failed
 
     def _report_write_failures(self, action: str, failed_paths: list[str]) -> None:

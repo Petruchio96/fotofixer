@@ -282,14 +282,13 @@ class GeotaggerMixin:
             # Like Apply Location: the changed photos are deselected, the
             # ones that failed stay selected to retry.
             self._rerender_selecting([path for path in targets if path not in set(result.successful_paths)])
-            self._add_backups_to_list(backups)
             if result.successful_paths:
                 message = f"Geotagged {_photos(len(result.successful_paths))} from the GPS track."
                 if skipped:
                     message += f" Skipped {skipped} that already {'has' if skipped == 1 else 'had'} GPS."
                 if backups:
                     copies = "a backup of the original" if len(backups) == 1 else f"{len(backups)} backups of the originals"
-                    message += f" Saved {copies} and added {'it' if len(backups) == 1 else 'them'} to the list."
+                    message += f" Saved {copies} next to {'it' if len(backups) == 1 else 'them'}."
                 self._set_status_message(message, "success", undo=True)
             self._report_write_failures("geotag", list(result.failed_paths))
 

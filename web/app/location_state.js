@@ -77,7 +77,7 @@ export function changeMessage({ action, count, skipped = 0, backups = 0 }) {
   if (skipped) message += ` Skipped ${skipped} that already ${skipped === 1 ? "has" : "had"} GPS.`;
   if (backups) {
     const copies = backups === 1 ? "a backup of the original" : `${backups} backups of the originals`;
-    message += ` Saved ${copies} and added ${backups === 1 ? "it" : "them"} to the list.`;
+    message += ` Saved ${copies} next to ${backups === 1 ? "it" : "them"}.`;
   }
   return message;
 }

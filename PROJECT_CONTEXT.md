@@ -251,7 +251,7 @@ browser. Phase 1 (the skeleton, branch `web-skeleton`, 2026-10-12):
   a file handle (opened or dropped folder) is written in place, after a
   `<name>_original.<ext>` backup when Settings > Keep Backup Copies of
   Originals is on and the photo had GPS (never a backup of a backup, an
-  existing backup is left alone; backups join the list unselected). A
+  existing backup is left alone; backups stay out of the list, as on the desktop). A
   photo without a handle keeps its changed bytes in memory and waits in the
   Download bar: one file downloads directly, several as a stored zip
   (`zip_store.js`, no compression, under 4 GB) with their folder paths;

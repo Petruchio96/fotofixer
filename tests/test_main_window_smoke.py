@@ -1589,7 +1589,9 @@ class MainWindowSmokeTests(unittest.TestCase):
         # include them again by accident.
         self.assertEqual(self.window.get_selected_paths(), [])
 
-    def test_backups_made_by_apply_join_the_list_unselected(self) -> None:
+    def test_backups_made_by_apply_stay_out_of_the_list(self) -> None:
+        # A backup at the old location next to the moved photo looked like the
+        # photo hadn't moved, so backups are never added to the Photo List.
         backup = Path("/tmp/photo-one_original.jpg")
         self.gps_by_path[self.paths[0]] = (41.0, -112.0)
         self.gps_by_path[backup] = (41.0, -112.0)
@@ -1602,9 +1604,8 @@ class MainWindowSmokeTests(unittest.TestCase):
         with dialog_patch:
             self.window.apply_coordinates_to_selected()
 
-        self.assertIn(backup, self.window.session.selected_paths)
-        self.assertNotIn(backup, self.window.get_selected_paths())
-        self.assertIn("Saved a backup of the original", self.window.browser_hint.text())
+        self.assertNotIn(backup, self.window.session.selected_paths)
+        self.assertIn("Saved a backup of the original next to it.", self.window.browser_hint.text())
 
     def test_undo_deletes_the_backups_the_change_made_and_redo_makes_them_again(self) -> None:
         temp_dir = tempfile.TemporaryDirectory()
@@ -1625,19 +1626,18 @@ class MainWindowSmokeTests(unittest.TestCase):
         with dialog_patch:
             self.window.apply_coordinates_to_selected()
         self.assertTrue(backup.exists())
-        self.assertIn(backup, self.window.session.selected_paths)
+        self.assertNotIn(backup, self.window.session.selected_paths)
 
         with patch.object(Path, "exists", return_value=True):
             self.window.undo_gps_edit()
 
         self.assertFalse(backup.is_file())
-        self.assertNotIn(backup, self.window.session.selected_paths)
 
         # Redo makes the backup again; the next undo deletes it again.
         with patch.object(Path, "exists", return_value=True):
             self.window.redo_gps_edit()
         self.assertTrue(backup.is_file())
-        self.assertIn(backup, self.window.session.selected_paths)
+        self.assertNotIn(backup, self.window.session.selected_paths)
         self.window.exiftool.take_created_backups = lambda: []
         with patch.object(Path, "exists", return_value=True):
             self.window.undo_gps_edit()

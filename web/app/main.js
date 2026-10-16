@@ -300,20 +300,20 @@ async function makeBackup(photo, originalBytes) {
   return { name, parent: photo.parent, entry };
 }
 
-/** Undo: delete the backups the undone change made, and take them out of the list. */
+/**
+ * Undo: delete the backups the undone change made. Backups never join the
+ * list (a copy at the old location next to the moved photo looked like the
+ * photo hadn't moved); they stay in the folder for whoever needs them.
+ */
 async function deleteBackups(backups) {
   const failed = [];
-  const ids = [];
   for (const backup of backups) {
     try {
       await backup.parent.removeEntry(backup.name);
     } catch (error) {
       failed.push(`${backup.name}: could not delete the backup (${error.message ?? error})`);
     }
-    const id = `${backup.entry.relPath}|${backup.entry.size}|${backup.entry.lastModified}`;
-    if (store.get(id)) ids.push(id);
   }
-  if (ids.length) store.remove(ids);
   return failed;
 }
 
@@ -343,7 +343,6 @@ async function finishChange({ kind, selected, targetIds, before, after, snapshot
   }
   updateUndoRedo();
   store.select(failedTargets(selected, targetIds, result.done));
-  if (result.backups.length) addEntries(result.backups.map((backup) => backup.entry));
   if (result.done.length) setMessage(message(result.done.length), { tone: "success", undo: true });
   if (result.failed.length) reportFailures(failAction, result.failed);
 }
@@ -451,7 +450,6 @@ async function redo() {
   history.setBackups(result.backups);
   history.markRedone();
   updateUndoRedo();
-  if (result.backups.length) addEntries(result.backups.map((backup) => backup.entry));
   setMessage(`${what} change redone.`, { undo: true });
   if (result.failed.length) reportFailures(`redo the ${what} change for`, result.failed);
 }

@@ -44,7 +44,7 @@ from services.gps_edit_history import EDIT_DATE, EDIT_GPS, GpsEditHistory, Photo
 from services.models import OverwriteEntry, WorkflowSession
 from services.workflow_facade import PhotoWorkflowFacade
 
-APP_VERSION = "1.10.1"
+APP_VERSION = "1.11.0"
 # The app's name, and the subtitle shown with it where people first meet it
 # (window title, About). Called Photo GPS Editor until 1.9.0.
 APP_NAME = "FotoFixer"

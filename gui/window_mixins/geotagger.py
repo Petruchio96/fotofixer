@@ -97,6 +97,13 @@ class GeotaggerMixin:
         self._geotag_track = track
         self._geotag_files = list(files)
         self._geotag_plan = None
+        # The window works on every photo and ignores the selection, and it
+        # closes with nothing selected either way. Clearing it now also means
+        # the edit's undo snapshot holds no selection: undoing a geotag used
+        # to reselect the photos selected at the time (every dated photo,
+        # after the Shift link), which marked them "being changed" on the
+        # map (orange dots, Use This Location disabled).
+        self.clear_photo_selection()
         if self._geotag_window is None:
             self._geotag_window = self._build_geotag_window()
             geometry = self.settings.value(GEOTAG_GEOMETRY_SETTING)

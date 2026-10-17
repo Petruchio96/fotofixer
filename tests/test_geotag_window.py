@@ -472,6 +472,24 @@ class GeotagWindowTests(unittest.TestCase):
         self.assertEqual({write[0] for write in self.writer.writes}, {self.phone, self.canon})
         self.assertEqual(self.window._last_status_message, "Geotagged 2 photos from the GPS track.")
 
+    def test_a_selection_is_dropped_on_opening_so_undo_restores_none(self) -> None:
+        self._load()
+        self.window.select_browser_paths([self.phone, self.canon, self.early])
+        geotag = self._open()
+        self.assertEqual(self.window.get_selected_paths(), [], "the window ignores the selection")
+
+        QTest.mouseClick(geotag.apply_button, Qt.LeftButton)
+        self.window.undo_gps_edit()
+
+        self.assertEqual(self.window.get_selected_paths(), [], "undo brings no selection back")
+        # So the map shows the photos as plain dots with Use This Location available.
+        self.window.load_photos(list(self.dates))
+        self.window.show_map()
+        map_window = self.window._map_window
+        self.assertFalse(any(pin.selected for pin in map_window.map_view._photo_pins))
+        self.assertEqual(map_window.preview.unavailable, set())
+        map_window.close()
+
     def test_escape_cancels_and_deselects(self) -> None:
         self._load()
         self.window.select_browser_paths([self.phone, self.early])

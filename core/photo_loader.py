@@ -120,6 +120,7 @@ def _apply_metadata(info: PhotoInfo, metadata: dict) -> None:
     """Copy one file's metadata (GPS, dates, camera) into its PhotoInfo."""
     info.current_latitude = metadata.get("latitude")
     info.current_longitude = metadata.get("longitude")
+    info.current_altitude = metadata.get("altitude")
     info.date_tags = dict(metadata.get("date_tags") or {})
     info.date_taken = date_taken_from_tags(info.date_tags)
     info.time_offset = time_offset_from_tags(info.date_tags)

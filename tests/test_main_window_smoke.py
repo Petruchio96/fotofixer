@@ -30,10 +30,10 @@ class FakeExifTool:
         self.failures: dict[Path, Exception] = {}
         self.gps_by_path = gps_by_path if gps_by_path is not None else {}
 
-    def write_gps(self, path: Path, latitude: float, longitude: float) -> None:
+    def write_gps(self, path: Path, latitude: float, longitude: float, altitude="keep") -> None:
         if path in self.failures:
             raise self.failures[path]
-        self.writes.append((path, latitude, longitude))
+        self.writes.append((path, latitude, longitude) if altitude == "keep" else (path, latitude, longitude, altitude))
         self.gps_by_path[path] = (latitude, longitude)
 
     def clear_gps(self, path: Path) -> None:
@@ -50,12 +50,13 @@ class FakePhotoLoader:
 
     def load_photo_info(self, path: Path) -> PhotoInfo:
         self.calls.append(path)
-        latitude, longitude = self.gps_by_path[path]
+        latitude, longitude, *rest = self.gps_by_path[path]
         return PhotoInfo(
             path=path,
             file_type=path.suffix.upper().lstrip("."),
             current_latitude=latitude,
             current_longitude=longitude,
+            current_altitude=rest[0] if rest else None,
         )
 
 
@@ -886,26 +887,64 @@ class MainWindowSmokeTests(unittest.TestCase):
                 release()
                 self.assertNotIn(self.paths[0], self.window.get_selected_paths())
 
-    def test_a_selected_photo_cannot_be_picked_as_the_source(self) -> None:
+    def test_a_selected_photo_can_be_picked_as_the_source_and_is_deselected(self) -> None:
         self._two_with_gps()
-        self._select_paths([self.paths[0]])
+        self._select_paths([self.paths[0], self.paths[1]])
 
         self.window.start_picking_location()
-        self.assertEqual(self._item_for(self.paths[0]).data(PICK_DISABLED_ROLE), "Being Changed")
+        self.assertIsNone(self._item_for(self.paths[0]).data(PICK_DISABLED_ROLE), "selected photos can be picked")
         self.window.pick_location_from_item(self._item_for(self.paths[0]))
-        self.assertTrue(self.window.is_picking_location)
-        self.assertIsNone(self.window._location_source)
 
-        self.window.pick_location_from_item(self._item_for(self.paths[1]))
-        self.assertEqual(self.window._location_source, self.paths[1])
+        self.assertFalse(self.window.is_picking_location)
+        self.assertEqual(self.window._location_source, self.paths[0])
+        self.assertEqual(self.window.get_selected_paths(), [self.paths[1]], "the source is deselected, the rest stay")
 
-    def test_pick_button_is_off_when_every_photo_with_gps_is_selected(self) -> None:
+    def test_pick_button_stays_on_when_every_photo_with_gps_is_selected(self) -> None:
+        # A selected photo can be picked as the source (it is deselected then).
         self.gps_by_path[self.paths[0]] = (41.0, -112.0)
         self.window.populate_list()
         self._select_paths([self.paths[0]])
-        self.assertFalse(self.window.pick_location_button.isEnabled())
+        self.assertTrue(self.window.pick_location_button.isEnabled())
 
-    def test_the_file_picker_offers_no_selected_photo(self) -> None:
+    def test_the_coordinate_fields_keep_their_hint_after_edits(self) -> None:
+        from gui.widgets.editor_panel import COORDINATE_FIELD_TIP
+        self.assertEqual(self.window.latitude_input.toolTip(), COORDINATE_FIELD_TIP)
+        self.window.latitude_input.setText("40.5")
+        self.window.validate_latitude_field()
+        self.assertEqual(self.window.latitude_input.toolTip(), COORDINATE_FIELD_TIP, "a valid value keeps the hint")
+        self.window.latitude_input.setText("not a latitude")
+        self.window.validate_latitude_field()
+        self.assertIn("Invalid latitude", self.window.latitude_input.toolTip())
+        self.window.clear_location_button.click()
+        self.assertEqual(self.window.latitude_input.toolTip(), COORDINATE_FIELD_TIP, "Clear brings the hint back")
+        self.assertEqual(self.window.longitude_input.toolTip(), COORDINATE_FIELD_TIP)
+
+    def test_a_source_photos_altitude_is_copied_with_its_location(self) -> None:
+        self.gps_by_path[self.source_path] = (40.486325, -111.813415, 1500.0)
+        self.window.load_photos([self.source_path, *self.paths])
+        self.window.use_location_from_path(self.source_path)
+        self._select_paths(self.paths)
+
+        self.window.apply_coordinates_to_selected()
+
+        self.assertEqual(
+            self.window.exiftool.writes,
+            [(self.paths[0], 40.486325, -111.813415, 1500.0), (self.paths[1], 40.486325, -111.813415, 1500.0)],
+        )
+        # Undo clears it again (the targets had no GPS); redo writes it back.
+        self.window.undo_gps_edit()
+        self.assertEqual(self.window.exiftool.clears, self.paths)
+        self.window.exiftool.writes.clear()
+        self.window.redo_gps_edit()
+        self.assertEqual(self.window.exiftool.writes[0][3], 1500.0)
+
+    def test_a_typed_location_leaves_the_targets_altitude_alone(self) -> None:
+        self._select_paths(self.paths)
+        self._set_location(*self.location)
+        self.window.apply_coordinates_to_selected()
+        self.assertEqual(self.window.exiftool.writes, [(self.paths[0], *self.location), (self.paths[1], *self.location)])
+
+    def test_the_file_picker_offers_selected_photos_too(self) -> None:
         self._two_with_gps()
         self._select_paths([self.paths[0]])
         options = {}
@@ -916,7 +955,7 @@ class MainWindowSmokeTests(unittest.TestCase):
         with patch.object(self.window, "_pick_photo_file", side_effect=picker):
             self.window.location_from_photo_button.click()
 
-        self.assertEqual(options["blocked"], {self.paths[0]})
+        self.assertNotIn("blocked", options)
 
     def test_date_tab_time_source_stays_selectable(self) -> None:
         # The Date & Time tab keeps its own rules: the location source is
@@ -2042,7 +2081,8 @@ class MainWindowSmokeTests(unittest.TestCase):
         self.assertEqual(self.window.exiftool.clears, [self.paths[1]])
         self.assertEqual(self.gps_by_path[self.paths[0]], (41.0, -112.0))
         report_mock.assert_called_once_with("remove GPS from", ["photo-one.jpg: locked"])
-        self.assertEqual(self.window.gps_history.undo_states(), {self.paths[1]: (42.0, -113.0)})
+        # The state carries the altitude too (None: the photo had none).
+        self.assertEqual(self.window.gps_history.undo_states(), {self.paths[1]: (42.0, -113.0, None)})
 
     def _group_headings(self, *, visible_only: bool = False) -> list[str]:
         list_widget = self.window.list_widget

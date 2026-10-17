@@ -80,8 +80,6 @@ class PhotoPreviewPopup(QFrame):
         self._icon_for = icon_for
         self._paths: list[str] = []
         self._index = 0
-        # Photos selected to change: they can't be the location source.
-        self.unavailable: set[str] = set()
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(10, 10, 10, 10)
@@ -157,14 +155,9 @@ class PhotoPreviewPopup(QFrame):
         several = len(self._paths) > 1
         self.stepper.setVisible(several)
         self.count_label.setText(f"{self._index + 1} of {len(self._paths)}")
-        being_changed = str(path) in self.unavailable
-        self.use_button.setEnabled(not being_changed)
-        self.use_button.setToolTip(
-            "This photo is selected to change, so it can't be the location source too. "
-            "Deselect it in the Photo List to use its location."
-            if being_changed
-            else "Copy this photo's location into New Location"
-        )
+        # A selected photo can be the source too: it is deselected when used.
+        self.use_button.setEnabled(True)
+        self.use_button.setToolTip("Copy this photo's location into New Location")
 
     def _use_location(self) -> None:
         path = self.current_path
@@ -335,7 +328,6 @@ class MapWindow(QWidget):
         self._photo_locations = [(pin.latitude, pin.longitude) for pin in pins]
         self._photo_location_by_path = {pin.path: (pin.latitude, pin.longitude) for pin in pins}
         self.map_view.set_photo_pins(pins)
-        self.preview.unavailable = {pin.path for pin in pins if pin.selected}
         if self.preview.isVisible() and self.preview.current_path not in {pin.path for pin in pins}:
             # The photo left the list or lost its GPS.
             self.preview.hide()

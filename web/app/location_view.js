@@ -8,8 +8,8 @@ import { formatCoordinates } from "./photo_store.js";
 import { buildLocationState } from "./location_state.js";
 
 export const PICK_BUTTON_TEXT = "From a Photo in the Photo List";
-const PICK_BUTTON_TIP = "Click this, then click a photo with GPS in the Photo List to copy its location. The photos selected to change stay selected.";
-const PICK_DISABLED_TIP = "No photo in the Photo List has GPS coordinates to copy, other than the photos selected to change (a photo can't be both).";
+const PICK_BUTTON_TIP = "Click this, then click a photo with GPS in the Photo List to copy its location. A selected photo becomes the source and is deselected.";
+const PICK_DISABLED_TIP = "No photo in the Photo List has GPS coordinates to copy.";
 export const PICK_PROMPT = "Click a photo on the left to copy its location. Only photos with GPS can be picked. Press Esc or Cancel to stop.";
 
 // Typing pauses this long before the text is parsed (through Python).

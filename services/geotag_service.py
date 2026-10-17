@@ -50,10 +50,7 @@ CHIP_TEXTS = {
 NEAR_TRACK = timedelta(minutes=5)
 CLOSE_ENOUGH = 25.0
 
-DATE_TIP = (
-    "If the camera's clock or time zone was wrong, fix it first on the Date & Time tab "
-    "(Shift Date and Time, or Change Time Zone)."
-)
+DATE_TIP = "If the camera's clock or zone was wrong, fix it on the Date & Time tab first."
 
 # (latitude, longitude, altitude in metres or None): what a geotag writes.
 type GpsValue = tuple[float, float, float | None]
@@ -285,26 +282,20 @@ def _match_hint(
     if row.has_gps and row.current is not None:
         current = format_coordinates(*row.current)
         if row.included:
-            return (
-                f"This photo already has GPS coordinates ({current}). "
-                f"Geotag will ask before replacing them with {where}."
-            )
+            return f"Already has GPS coordinates ({current}). Geotag will ask before replacing them with {where}."
         if row.suggested:
             return (
-                f"This photo already has GPS coordinates ({current}), the blue dot on the map. The track "
-                f"has a position within {describe_duration(NEAR_TRACK)} of when it was taken, "
+                f"Already has GPS coordinates ({current}), the blue dot. The track has a position "
+                f"within {describe_duration(NEAR_TRACK)} of when it was taken, "
                 f"{format_distance(row.distance, feet)} away ({where}): check the box to use it."
             )
         if row.near_track and row.distance is not None:
             return (
-                f"This photo already has GPS coordinates ({current}), the blue dot on the map. The track "
-                f"agrees within {format_distance(row.distance, feet)}, so its own coordinates are kept. "
+                f"Already has GPS coordinates ({current}), the blue dot. The track agrees within "
+                f"{format_distance(row.distance, feet)}, so its own coordinates are kept. "
                 f"Check the box to use the track's position ({where}) anyway."
             )
-        return (
-            f"This photo already has GPS coordinates ({current}), the blue dot on the map. "
-            f"Check the box to replace them with {where}."
-        )
+        return f"Already has GPS coordinates ({current}), the blue dot. Check the box to replace them with {where}."
     if result is not None and result.before is not result.after:
         between = (
             f", between the track's points at {_clock_text(result.before.time, offset)} "
@@ -333,7 +324,7 @@ def _no_match_hint(result: NoMatch, plan: GeotagPlan, info: PhotoInfo, offset: t
     text += " " + DATE_TIP
     if info.time_offset is None:
         zone = describe_offset(computer_offset, info.date_taken) or "UTC"
-        text += f" This photo has no time zone, so its clock time is taken as this computer's zone ({zone})."
+        text += f" It has no time zone, so its clock time is taken as this computer's zone ({zone})."
     return text
 
 

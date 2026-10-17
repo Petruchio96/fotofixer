@@ -32,6 +32,9 @@ class ThumbnailItemServiceTests(unittest.TestCase):
         )
 
     def test_build_tooltip_text_without_gps(self) -> None:
+        self.assertEqual(build_tooltip_text("photo.jpg", 40.5, -111.8, 2050.0), "photo.jpg\nGPS: 40.500000, -111.800000\nAltitude: 6,726 ft")
+        self.assertEqual(build_tooltip_text("photo.jpg", 40.5, -111.8, 2050.0, feet=False), "photo.jpg\nGPS: 40.500000, -111.800000\nAltitude: 2,050 m")
+        self.assertEqual(build_tooltip_text("photo.jpg", None, None, 2050.0), "photo.jpg\nNo GPS", "no altitude line without GPS")
         self.assertEqual(build_tooltip_text("photo.jpg", None, None), "photo.jpg\nNo GPS")
 
     def test_build_thumbnail_item_data_maps_photo_info_to_display_fields(self) -> None:

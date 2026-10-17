@@ -134,6 +134,7 @@ def execute_apply_workflow(
         preparation.target_paths,
         latitude=coordinates.latitude,
         longitude=coordinates.longitude,
+        altitude=coordinates.altitude,
         writer=writer,
         on_progress=on_progress,
     )

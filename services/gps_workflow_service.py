@@ -56,17 +56,22 @@ def apply_gps_to_paths(
     *,
     latitude: float,
     longitude: float,
+    altitude: float | None = None,
     writer,
     on_progress: Progress | None = None,
 ) -> ApplyExecutionResult:
     """
-    Write GPS metadata to each target path and collect failures.
+    Write GPS metadata to each target path and collect failures. With an
+    altitude (the source photo's), it is written too; without, the targets'
+    altitude is left as it is.
     """
-    return _write_each(
-        target_paths,
-        lambda path: writer.write_gps(path, latitude, longitude),
-        on_progress,
-    )
+    def write(path: Path) -> None:
+        if altitude is None:
+            writer.write_gps(path, latitude, longitude)
+        else:
+            writer.write_gps(path, latitude, longitude, altitude)
+
+    return _write_each(target_paths, write, on_progress)
 
 
 def clear_gps_from_paths(
@@ -90,18 +95,18 @@ def restore_gps_states(
     """
     Write each file back to a remembered GPS state (used by undo and redo).
 
-    (None, None) means the file had no GPS, so its GPS is cleared. A third
-    value is an altitude (a geotag from a GPS track), written with the rest.
+    (None, None) means the file had no GPS, so its GPS is cleared. A state
+    with a third value restores the altitude too: a number is written, None
+    clears it (the photo had none); a two-value state leaves it alone.
     """
     def restore(path: Path) -> None:
         latitude, longitude, *rest = states[path]
-        altitude = rest[0] if rest else None
         if latitude is None or longitude is None:
             writer.clear_gps(path)
-        elif altitude is None:
-            writer.write_gps(path, latitude, longitude)
+        elif rest:
+            writer.write_gps(path, latitude, longitude, rest[0])
         else:
-            writer.write_gps(path, latitude, longitude, altitude)
+            writer.write_gps(path, latitude, longitude)
 
     return _write_each(list(states), restore, on_progress)
 

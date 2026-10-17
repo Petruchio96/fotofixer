@@ -47,11 +47,13 @@ class FakeGeotagWriter:
         self.clears: list[Path] = []
         self.failures: dict[Path, Exception] = {}
 
-    def write_gps(self, path: Path, latitude: float, longitude: float, altitude: float | None = None) -> None:
+    def write_gps(self, path: Path, latitude: float, longitude: float, altitude="keep") -> None:
         if path in self.failures:
             raise self.failures[path]
         self.writes.append((path, latitude, longitude, altitude))
-        self.gps_by_path[path] = (latitude, longitude)
+        old = self.gps_by_path.get(path, (None, None))
+        kept = old[2] if len(old) > 2 else None
+        self.gps_by_path[path] = (latitude, longitude, kept if altitude == "keep" else altitude)
 
     def clear_gps(self, path: Path) -> None:
         self.clears.append(path)
@@ -64,10 +66,11 @@ class FakeGeotagLoader:
         self.dates = dates
 
     def load_photo_info(self, path: Path) -> PhotoInfo:
-        latitude, longitude = self.gps_by_path.get(path, (None, None))
+        latitude, longitude, *rest = self.gps_by_path.get(path, (None, None))
         taken, offset = self.dates.get(path, (None, None))
         return PhotoInfo(
             path=path, file_type="JPG", current_latitude=latitude, current_longitude=longitude,
+            current_altitude=rest[0] if rest else None,
             date_taken=taken, time_offset=offset, camera="Canon EOS R6",
         )
 
@@ -451,9 +454,26 @@ class GeotagWindowTests(unittest.TestCase):
         with dialog_patch:
             QTest.mouseClick(geotag.apply_button, Qt.LeftButton)
         self.assertEqual({write[0] for write in self.writer.writes}, {self.phone, self.canon, self.tagged})
-        # Undo puts the old coordinates back on the photo that had them.
+        # Undo puts the old coordinates back on the photo that had them, and
+        # clears the track's altitude because it had none.
         self.window.undo_gps_edit()
         self.assertIn((self.tagged, 40.5, -111.5, None), self.writer.writes)
+
+    def test_undo_restores_the_original_altitude(self) -> None:
+        self.gps_by_path[self.tagged] = (40.5, -111.5, 1500.0)
+        self._load()
+        geotag = self._open()
+        self._click_row(self.tagged)
+        dialog_patch, _buttons = self._answer_overwrite_dialog("Replace")
+        with dialog_patch:
+            QTest.mouseClick(geotag.apply_button, Qt.LeftButton)
+        tagged_write = next(w for w in self.writer.writes if w[0] == self.tagged)
+        self.assertAlmostEqual(tagged_write[3], 2250.0, msg="the track's altitude replaced the photo's")
+
+        self.window.undo_gps_edit()
+        self.assertEqual(self.gps_by_path[self.tagged], (40.5, -111.5, 1500.0), "its own altitude is back")
+        self.window.redo_gps_edit()
+        self.assertAlmostEqual(self.gps_by_path[self.tagged][2], 2250.0)
 
     def test_cancelling_the_question_keeps_the_window_open(self) -> None:
         self._load()
@@ -471,6 +491,26 @@ class GeotagWindowTests(unittest.TestCase):
         QTest.mouseClick(geotag.apply_button, Qt.LeftButton)
         self.assertEqual({write[0] for write in self.writer.writes}, {self.phone, self.canon})
         self.assertEqual(self.window._last_status_message, "Geotagged 2 photos from the GPS track.")
+
+    def test_a_selection_is_dropped_on_opening_so_undo_restores_none(self) -> None:
+        self._load()
+        self.window.select_browser_paths([self.phone, self.canon, self.early])
+        geotag = self._open()
+        self.assertEqual(self.window.get_selected_paths(), [], "the window ignores the selection")
+
+        QTest.mouseClick(geotag.apply_button, Qt.LeftButton)
+        self.window.undo_gps_edit()
+
+        self.assertEqual(self.window.get_selected_paths(), [], "undo brings no selection back")
+        # So the map shows the photos as plain dots with Use This Location available.
+        self.window.load_photos(list(self.dates))
+        self.window.show_map()
+        map_window = self.window._map_window
+        self.assertFalse(any(pin.selected for pin in map_window.map_view._photo_pins))
+        map_window.preview.show_photos([str(self.tagged)], QPoint(0, 0))
+        self.assertTrue(map_window.preview.use_button.isEnabled())
+        map_window.preview.hide()
+        map_window.close()
 
     def test_escape_cancels_and_deselects(self) -> None:
         self._load()

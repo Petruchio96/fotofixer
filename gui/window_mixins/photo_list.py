@@ -227,7 +227,7 @@ class PhotoListMixin:
 
     def _render_current_photo_session(self) -> None:
         self.session.thumbnail_items = build_thumbnail_item_data_list(
-            self.session.loaded_photos
+            self.session.loaded_photos, feet=self.use_feet
         )
         self._render_photo_list()
         # The Geotag from GPS Track window, when open, shows the same photos.

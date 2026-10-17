@@ -53,6 +53,8 @@ class ExifToolWrapperTests(unittest.TestCase):
                 "-n",
                 "-GPSLatitude",
                 "-GPSLongitude",
+                "-GPSAltitude",
+                "-GPSAltitudeRef",
                 *METADATA_READ_OPTIONS,
                 str(Path("/tmp/photo.jpg")),
             ],
@@ -208,6 +210,20 @@ class ExifToolWrapperTests(unittest.TestCase):
         self.assertIn("-GPSAltitude=", arguments)
         self.assertIn("-GPSAltitudeRef=", arguments)
         self.assertEqual(arguments[-1], str(Path("/tmp/photo.jpg")))
+
+    def test_metadata_reads_the_altitude_with_its_sign(self) -> None:
+        from core.exiftool_wrapper import _metadata_from_record
+        self.assertEqual(_metadata_from_record({"GPSAltitude": 2050.5, "GPSAltitudeRef": 0})["altitude"], 2050.5)
+        self.assertEqual(_metadata_from_record({"GPSAltitude": 3.5, "GPSAltitudeRef": 1})["altitude"], -3.5)
+        self.assertEqual(_metadata_from_record({"GPSAltitude": 12})["altitude"], 12.0)
+        self.assertIsNone(_metadata_from_record({"GPSLatitude": 1.0})["altitude"])
+
+    def test_write_gps_with_none_clears_the_altitude(self) -> None:
+        wrapper, execute_mock = self._wrapper_with_reply()
+        wrapper.write_gps(Path("/tmp/photo.jpg"), 40.5, -111.8, None)
+        arguments = execute_mock.call_args.args[0]
+        self.assertIn("-GPSAltitude=", arguments)
+        self.assertIn("-GPSAltitudeRef=", arguments)
 
     def test_write_gps_with_altitude(self) -> None:
         wrapper, execute_mock = self._wrapper_with_reply()

@@ -253,15 +253,19 @@ class MapWindowTests(unittest.TestCase):
         self.assertEqual(self._fields(), ("40.586500", "-111.655800"))
         self.assertFalse(map_window.preview.isVisible())
 
-    def test_use_this_location_is_off_for_a_photo_selected_to_change(self) -> None:
-        self.window.select_browser_paths([self.with_gps])
+    def test_use_this_location_on_a_selected_photo_makes_it_the_source_and_deselects_it(self) -> None:
+        self.window.select_browser_paths([self.with_gps, self.with_gps_too])
         map_window = self._open_map()
         dot = map_window.map_view.screen_point_for(*self.gps_by_path[self.with_gps]).toPoint()
         QTest.mouseClick(map_window.map_view, Qt.LeftButton, Qt.NoModifier, dot)
 
         self.assertTrue(map_window.preview.isVisible())
-        self.assertFalse(map_window.preview.use_button.isEnabled())
-        self.assertIn("selected to change", map_window.preview.use_button.toolTip())
+        self.assertTrue(map_window.preview.use_button.isEnabled())
+        QTest.mouseClick(map_window.preview.use_button, Qt.LeftButton)
+
+        self.assertEqual(self.window._location_source, self.with_gps)
+        self.assertEqual(self.window.get_selected_paths(), [self.with_gps_too], "the source is deselected, the other stays")
+        self.assertEqual(self._fields(), ("40.586500", "-111.655800"))
 
     def test_map_always_opens_on_the_street_map(self) -> None:
         map_window = self._open_map()

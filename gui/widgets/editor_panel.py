@@ -44,9 +44,14 @@ if TYPE_CHECKING:
 
 # The pick button's label; it reads "Cancel" while picking.
 PICK_BUTTON_TEXT = "From a Photo in the Photo List"
+# The latitude and longitude fields' hint (put back after an invalid value is fixed).
+COORDINATE_FIELD_TIP = (
+    "Type or paste coordinates.\nA pair copied from Google Maps can be pasted into either field as is."
+)
+
 PICK_BUTTON_TIP = (
     "Click this, then click a photo with GPS in the Photo List to copy "
-    "its location. The photos selected to change stay selected."
+    "its location. A selected photo becomes the source and is deselected."
 )
 
 # The Date & Time pick button's label; it reads "Cancel" while picking.
@@ -176,9 +181,7 @@ def _build_location_group(window: "MainWindow") -> QGroupBox:
     window.latitude_input.setPlaceholderText("e.g. 40.5865 or 40° 35' 11\" N")
     window.longitude_input.setPlaceholderText("e.g. -111.6558 or 111° 39' 21\" W")
     for field in (window.latitude_input, window.longitude_input):
-        field.setToolTip(
-            "Type or paste coordinates.\nA pair copied from Google Maps can be pasted into either field as is."
-        )
+        field.setToolTip(COORDINATE_FIELD_TIP)
     window.latitude_input.editingFinished.connect(window.validate_latitude_field)
     window.longitude_input.editingFinished.connect(window.validate_longitude_field)
     window.latitude_input.textChanged.connect(window._handle_location_input_change)
@@ -375,11 +378,10 @@ class StepBox(QFrame):
 
 # The hover hint of Change Time Zone's "Keep the clock time" checkbox.
 KEEP_CLOCK_TIP = (
-    "Off: the photos keep the moment they were taken; their clock times change to "
-    "show that moment in the new zone (11:16 am MDT → 12:16 pm CDT).\n"
-    "On: the clock times stay as they are and only the zone changes (11:16 am MDT → "
-    "11:16 am CDT), which moves the moment. Use it when the times were right for "
-    "where the photos were taken but the zone was set wrong."
+    "Off: the moment taken stays; the clock time changes with the zone "
+    "(11:16 am MDT → 12:16 pm CDT).\n"
+    "On: the clock time stays and only the zone changes (11:16 am MDT → "
+    "11:16 am CDT), for photos whose times were right but whose zone was wrong."
 )
 
 # Step 2's card icons: orange, like the step to do now.

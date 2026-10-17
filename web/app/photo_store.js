@@ -481,9 +481,9 @@ export class PhotoStore {
     return this.mode === "date" ? this.timeSourceId : this.sourceId;
   }
 
-  /** Photos that can be the location source: with GPS and not selected to change. */
+  /** Photos that can be the location source: every photo with GPS (a selected one is deselected when picked). */
   pickableCount() {
-    return this.order.filter((id) => this.hasGps(id) && !this.selection.has(id)).length;
+    return this.order.filter((id) => this.hasGps(id)).length;
   }
 
   /** Photos whose time can be used: with a date and not selected. */
@@ -491,15 +491,18 @@ export class PhotoStore {
     return this.order.filter((id) => this.hasDate(id) && !this.selection.has(id)).length;
   }
 
-  /** While picking: why a photo can't be picked ("No GPS", "No Date", "Being Changed"), or "". */
+  /**
+   * While picking: why a photo can't be picked ("No GPS"; for a time "No
+   * Date" or "Being Changed"), or "". A selected photo can be the location
+   * source: it is deselected when it becomes the source.
+   */
   pickLabel(id) {
     if (!this.picking) return "";
     if (this.picking === "time") {
       if (!this.hasDate(id)) return "No Date";
-    } else if (!this.hasGps(id)) {
-      return "No GPS";
+      return this.selection.has(id) ? "Being Changed" : "";
     }
-    return this.selection.has(id) ? "Being Changed" : "";
+    return this.hasGps(id) ? "" : "No GPS";
   }
 
   /** Enter pick mode ("location" or "time"), or leave it (null). */

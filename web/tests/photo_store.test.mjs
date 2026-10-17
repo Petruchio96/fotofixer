@@ -226,6 +226,13 @@ test("pick mode kinds: time picking keeps the view and labels photos without a d
   store.setPicking("location");
   assert.deepEqual(store.visibleIds(), [ids[0]], "location picking shows Has GPS");
   assert.equal(store.pickLabel(ids[1]), "No GPS");
+  // A selected photo with GPS can be picked as the location source (it is deselected then).
+  store.toggle(ids[0]);
+  assert.equal(store.pickLabel(ids[0]), "");
+  assert.equal(store.pickableCount(), 1);
+  store.setSource(ids[0]);
+  assert.equal(store.selection.has(ids[0]), false, "becoming the source deselects it");
+  store.setSource(null);
   store.setPicking(null);
   store.setTimeSource(ids[0]);
   assert.equal(store.canSelect(ids[0]), true, "the time source stays selectable");

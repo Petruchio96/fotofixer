@@ -26,6 +26,7 @@ from PySide6.QtWidgets import (
 from core.places import photos_in_folders
 from core.runtime_paths import resource_path
 from gui.background import BackgroundRunner, InputBlocker
+from gui.hints import install_hint_wrapping
 from gui.styles import APP_STYLESHEET
 from gui.thumbnail_loader import ThumbnailLoader
 from gui.widgets.browser_panel import build_browser_panel
@@ -44,7 +45,7 @@ from services.gps_edit_history import EDIT_DATE, EDIT_GPS, GpsEditHistory, Photo
 from services.models import OverwriteEntry, WorkflowSession
 from services.workflow_facade import PhotoWorkflowFacade
 
-APP_VERSION = "1.11.0"
+APP_VERSION = "1.11.1"
 # The app's name, and the subtitle shown with it where people first meet it
 # (window title, About). Called Photo GPS Editor until 1.9.0.
 APP_NAME = "FotoFixer"
@@ -88,6 +89,8 @@ class MainWindow(
 
     def __init__(self, settings: QSettings | None = None) -> None:
         super().__init__()
+        # Every hover hint in the app shows on short, balanced lines.
+        install_hint_wrapping()
 
         # Saved preferences. Tests pass their own QSettings to stay isolated.
         self.settings = settings if settings is not None else QSettings()
@@ -111,6 +114,8 @@ class MainWindow(
         self._is_splitting_manual_coordinates = False
         # Where the New Location came from (a photo), and pick-mode state.
         self._location_source = None
+        # The source photo's altitude, copied to the targets by Apply (None: none).
+        self._location_source_altitude = None
         self._picking_location = False
         # What pick mode picks: "location" (Location tab) or "time" (Date & Time).
         self._pick_kind = "location"
@@ -450,13 +455,14 @@ class MainWindow(
         self,
         paths: list[Path],
     ) -> dict[Path, tuple[float | None, float | None]]:
-        states: dict[Path, tuple[float | None, float | None]] = {}
+        states: dict[Path, tuple] = {}
         for path in paths:
             info = self.session.loaded_photo_infos.get(path)
-            if info is None:
+            if info is None or info.current_latitude is None or info.current_longitude is None:
                 states[path] = (None, None)
             else:
-                states[path] = (info.current_latitude, info.current_longitude)
+                # With the altitude (None for none), so undo puts it back or clears it.
+                states[path] = (info.current_latitude, info.current_longitude, info.current_altitude)
         return states
 
     def _remember_gps_edit(
@@ -781,7 +787,9 @@ class MainWindow(
 
     def set_use_feet(self, use_feet: bool) -> None:
         self.settings.setValue(USE_FEET_SETTING, use_feet)
-        # The geotag window's hints and readout show altitudes.
+        # The Photo List's tile hints and the geotag window show altitudes.
+        if self.session.selected_paths:
+            self._rerender_selecting(self.get_selected_paths())
         self._geotag_photos_changed()
 
     @property

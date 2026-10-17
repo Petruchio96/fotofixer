@@ -143,7 +143,7 @@ class GeotagPlanTests(unittest.TestCase):
         tagged = rows["tagged.jpg"]
         self.assertTrue(tagged.has_gps)
         self.assertEqual(tagged.chip, "Has GPS")
-        self.assertIn("already has GPS coordinates (40.500000, -111.500000)", tagged.hint)
+        self.assertIn("has GPS coordinates (40.500000, -111.500000)", tagged.hint)
         self.assertFalse(tagged.included, "a photo with GPS starts unchecked")
         self.assertIn("check the box to use it", tagged.hint, "kilometres from its own GPS: suggested")
         self.assertIn("(40.625000, -111.575000 · 7,382 ft)", tagged.hint)

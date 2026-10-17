@@ -110,7 +110,9 @@ class SettingsDialog(QDialog):
 
         # --- Units (the explanation is the hover hint) ---
         units_group = QGroupBox("Units")
+        units_group.setProperty("compact", "true")
         units_layout = QVBoxLayout(units_group)
+        units_layout.setContentsMargins(8, 4, 8, 4)
         self.feet_radio = QRadioButton("Imperial")
         self.feet_radio.setToolTip(UNITS_HELP.format(unit="feet"))
         self.metres_radio = QRadioButton("Metric")
@@ -125,7 +127,9 @@ class SettingsDialog(QDialog):
 
         # --- Updates (the explanation is the hover hint) ---
         updates_group = QGroupBox("Updates")
+        updates_group.setProperty("compact", "true")
         updates_layout = QVBoxLayout(updates_group)
+        updates_layout.setContentsMargins(8, 4, 8, 4)
         self.check_updates_check = QCheckBox("Check for updates when the app starts")
         self.check_updates_check.setChecked(check_updates)
         self.check_updates_check.toggled.connect(self._update_buttons)

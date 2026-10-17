@@ -177,8 +177,7 @@ def _build_location_group(window: "MainWindow") -> QGroupBox:
     window.longitude_input.setPlaceholderText("e.g. -111.6558 or 111° 39' 21\" W")
     for field in (window.latitude_input, window.longitude_input):
         field.setToolTip(
-            "Type or paste coordinates. A whole pair copied from Google Maps or another photo "
-            '("40.5865, -111.6558") can go in either field: it is split into both.'
+            "Type or paste coordinates.\nA pair copied from Google Maps can be pasted into either field as is."
         )
     window.latitude_input.editingFinished.connect(window.validate_latitude_field)
     window.longitude_input.editingFinished.connect(window.validate_longitude_field)

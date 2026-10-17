@@ -114,6 +114,8 @@ class MainWindow(
         self._is_splitting_manual_coordinates = False
         # Where the New Location came from (a photo), and pick-mode state.
         self._location_source = None
+        # The source photo's altitude, copied to the targets by Apply (None: none).
+        self._location_source_altitude = None
         self._picking_location = False
         # What pick mode picks: "location" (Location tab) or "time" (Date & Time).
         self._pick_kind = "location"

@@ -118,6 +118,10 @@ Steps, each with its tests:
    `writeStates(after, {text: "Geotagging", makeBackups: true})`,
    `finishChange(kind: EDIT_GPS)` with "Geotagged N photos from the GPS track";
    download mode unchanged. Cancel/Esc: close, clear the selection, `"forget"`.
+   Parity with the desktop (1.11.1): the worker also reads `GPSAltitude`/`Ref`
+   into `gps.altitude`, so undo restores a photo's own altitude and Apply
+   Location copies a source photo's altitude; a selected photo can be the
+   location source (deselected when it becomes one, already in `setSource`).
    The Shift link: close, select the dated photos, `store.setMode("date")`, the
    Shift card. Known limit as the desktop: undoing a replaced photo's GPS leaves
    the track's altitude.

@@ -56,17 +56,22 @@ def apply_gps_to_paths(
     *,
     latitude: float,
     longitude: float,
+    altitude: float | None = None,
     writer,
     on_progress: Progress | None = None,
 ) -> ApplyExecutionResult:
     """
-    Write GPS metadata to each target path and collect failures.
+    Write GPS metadata to each target path and collect failures. With an
+    altitude (the source photo's), it is written too; without, the targets'
+    altitude is left as it is.
     """
-    return _write_each(
-        target_paths,
-        lambda path: writer.write_gps(path, latitude, longitude),
-        on_progress,
-    )
+    def write(path: Path) -> None:
+        if altitude is None:
+            writer.write_gps(path, latitude, longitude)
+        else:
+            writer.write_gps(path, latitude, longitude, altitude)
+
+    return _write_each(target_paths, write, on_progress)
 
 
 def clear_gps_from_paths(

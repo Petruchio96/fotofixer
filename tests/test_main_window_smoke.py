@@ -33,7 +33,7 @@ class FakeExifTool:
     def write_gps(self, path: Path, latitude: float, longitude: float, altitude="keep") -> None:
         if path in self.failures:
             raise self.failures[path]
-        self.writes.append((path, latitude, longitude))
+        self.writes.append((path, latitude, longitude) if altitude == "keep" else (path, latitude, longitude, altitude))
         self.gps_by_path[path] = (latitude, longitude)
 
     def clear_gps(self, path: Path) -> None:
@@ -50,12 +50,13 @@ class FakePhotoLoader:
 
     def load_photo_info(self, path: Path) -> PhotoInfo:
         self.calls.append(path)
-        latitude, longitude = self.gps_by_path[path]
+        latitude, longitude, *rest = self.gps_by_path[path]
         return PhotoInfo(
             path=path,
             file_type=path.suffix.upper().lstrip("."),
             current_latitude=latitude,
             current_longitude=longitude,
+            current_altitude=rest[0] if rest else None,
         )
 
 
@@ -917,6 +918,31 @@ class MainWindowSmokeTests(unittest.TestCase):
         self.window.clear_location_button.click()
         self.assertEqual(self.window.latitude_input.toolTip(), COORDINATE_FIELD_TIP, "Clear brings the hint back")
         self.assertEqual(self.window.longitude_input.toolTip(), COORDINATE_FIELD_TIP)
+
+    def test_a_source_photos_altitude_is_copied_with_its_location(self) -> None:
+        self.gps_by_path[self.source_path] = (40.486325, -111.813415, 1500.0)
+        self.window.load_photos([self.source_path, *self.paths])
+        self.window.use_location_from_path(self.source_path)
+        self._select_paths(self.paths)
+
+        self.window.apply_coordinates_to_selected()
+
+        self.assertEqual(
+            self.window.exiftool.writes,
+            [(self.paths[0], 40.486325, -111.813415, 1500.0), (self.paths[1], 40.486325, -111.813415, 1500.0)],
+        )
+        # Undo clears it again (the targets had no GPS); redo writes it back.
+        self.window.undo_gps_edit()
+        self.assertEqual(self.window.exiftool.clears, self.paths)
+        self.window.exiftool.writes.clear()
+        self.window.redo_gps_edit()
+        self.assertEqual(self.window.exiftool.writes[0][3], 1500.0)
+
+    def test_a_typed_location_leaves_the_targets_altitude_alone(self) -> None:
+        self._select_paths(self.paths)
+        self._set_location(*self.location)
+        self.window.apply_coordinates_to_selected()
+        self.assertEqual(self.window.exiftool.writes, [(self.paths[0], *self.location), (self.paths[1], *self.location)])
 
     def test_the_file_picker_offers_selected_photos_too(self) -> None:
         self._two_with_gps()

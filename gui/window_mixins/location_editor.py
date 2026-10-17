@@ -110,6 +110,7 @@ class LocationEditorMixin:
             f"{info.current_longitude:.6f}",
             source=path,
         )
+        self._location_source_altitude = info.current_altitude
         self._set_status_message(
             f"Using the location from {path.name}. "
             "Now select the photos to change and click Apply.",
@@ -148,6 +149,7 @@ class LocationEditorMixin:
             f"{info.current_longitude:.6f}",
             source=path,
         )
+        self._location_source_altitude = info.current_altitude
         self._set_status_message(
             f"Using the location from {path.name}: "
             f"{format_coordinates(GpsCoordinates(info.current_latitude, info.current_longitude))}.",

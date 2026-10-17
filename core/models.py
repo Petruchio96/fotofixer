@@ -8,6 +8,9 @@ from typing import Optional
 class GpsCoordinates:
     latitude: float
     longitude: float
+    # Copied with the coordinates when the location comes from a photo that
+    # has one (Apply Location); None leaves the targets' altitude alone.
+    altitude: Optional[float] = None
 
 
 @dataclass

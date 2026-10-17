@@ -57,6 +57,9 @@ class ApplyWorkflowMixin:
         if preparation.error_message is not None:
             self._set_status_message(preparation.error_message, "error")
             return
+        # The location came from a photo with an altitude: the targets get it too.
+        if self._location_source is not None and self._location_source_altitude is not None:
+            preparation.coordinates.altitude = self._location_source_altitude
 
         overwrite_entries = preparation.overwrite_entries
         if not overwrite_entries:
@@ -108,7 +111,11 @@ class ApplyWorkflowMixin:
                         path: before_states[path] for path in result.successful_paths
                     },
                     after_states={
-                        path: (coordinates.latitude, coordinates.longitude)
+                        path: (
+                            (coordinates.latitude, coordinates.longitude)
+                            if coordinates.altitude is None
+                            else (coordinates.latitude, coordinates.longitude, coordinates.altitude)
+                        )
                         for path in result.successful_paths
                     },
                     backups=backups,

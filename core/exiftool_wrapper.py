@@ -41,6 +41,12 @@ from core.runtime_paths import default_exiftool_executable
 
 # Read along with GPS: the date tags and the camera (Make and Model).
 METADATA_READ_OPTIONS = [f"-{tag}" for tag in (*ALL_DATE_TAGS, "Make", "Model")]
+# The altitude (metres, with -n; GPSAltitudeRef 1 = below sea level), read
+# so that undoing a geotag from a GPS track can put the original back.
+ALTITUDE_READ_OPTIONS = ["-GPSAltitude", "-GPSAltitudeRef"]
+
+# write_gps's altitude default: leave the photo's altitude as it is.
+KEEP_ALTITUDE = object()
 
 # Embedded JPEG previews to try for RAW thumbnails, smallest/fastest first.
 # Many RAW files have a small ThumbnailImage; others only have a larger
@@ -143,7 +149,7 @@ class ExifToolWrapper:
                 If ExifTool fails, such as when the file cannot be read.
         """
         output = self._run(
-            ["-json", "-n", "-GPSLatitude", "-GPSLongitude", *METADATA_READ_OPTIONS],
+            ["-json", "-n", "-GPSLatitude", "-GPSLongitude", *ALTITUDE_READ_OPTIONS, *METADATA_READ_OPTIONS],
             [path],
             "Failed to read metadata.",
         )
@@ -184,7 +190,7 @@ class ExifToolWrapper:
             ["-b", "-ThumbnailImage", "-Orientation", "-ImageSize"] if with_thumbnails else []
         )
         output = self._run(
-            ["-json", "-n", *extra_options, "-GPSLatitude", "-GPSLongitude", *METADATA_READ_OPTIONS],
+            ["-json", "-n", *extra_options, "-GPSLatitude", "-GPSLongitude", *ALTITUDE_READ_OPTIONS, *METADATA_READ_OPTIONS],
             paths,
             "Failed to read metadata.",
         )
@@ -304,7 +310,7 @@ class ExifToolWrapper:
         return previews
 
     def write_gps(
-        self, path: Path, latitude: float, longitude: float, altitude: float | None = None
+        self, path: Path, latitude: float, longitude: float, altitude: float | None | object = KEEP_ALTITUDE
     ) -> None:
         """
         Write GPS metadata to a file using ExifTool.
@@ -326,8 +332,10 @@ class ExifToolWrapper:
                 Decimal longitude value.
             altitude:
                 Metres above sea level (negative below), written with the
-                coordinates when given: geotagging from a GPS track has it.
-                None leaves the photo's altitude as it is (Apply Location).
+                coordinates: geotagging from a GPS track has it. None clears
+                the altitude (undo of a photo that had none). The default,
+                KEEP_ALTITUDE, leaves the photo's altitude as it is (Apply
+                Location).
 
         Raises:
             RuntimeError:
@@ -336,7 +344,9 @@ class ExifToolWrapper:
         latitude_ref = "N" if latitude >= 0 else "S"
         longitude_ref = "E" if longitude >= 0 else "W"
         altitude_options = []
-        if altitude is not None:
+        if altitude is None:
+            altitude_options = ["-GPSAltitude=", "-GPSAltitudeRef="]
+        elif altitude is not KEEP_ALTITUDE:
             # GPSAltitudeRef 0 = above sea level, 1 = below.
             altitude_options = [
                 f"-GPSAltitude={abs(altitude)}",
@@ -659,6 +669,7 @@ def _metadata_from_record(record: dict) -> dict:
     return {
         "latitude": record.get("GPSLatitude"),
         "longitude": record.get("GPSLongitude"),
+        "altitude": _altitude_from_record(record),
         "date_tags": {
             tag: str(record[tag]) if record.get(tag) not in (None, "") else None
             for tag in ALL_DATE_TAGS
@@ -666,6 +677,19 @@ def _metadata_from_record(record: dict) -> dict:
         "make": record.get("Make"),
         "model": record.get("Model"),
     }
+
+
+def _altitude_from_record(record: dict) -> float | None:
+    """GPSAltitude in metres, negative below sea level (GPSAltitudeRef 1), or None."""
+    altitude = record.get("GPSAltitude")
+    if altitude in (None, ""):
+        return None
+    try:
+        value = float(altitude)
+    except (TypeError, ValueError):
+        return None
+    below = str(record.get("GPSAltitudeRef", "0")).strip() in ("1", "Below Sea Level")
+    return -abs(value) if below else value
 
 
 def _decode_preview(record: dict, tag: str) -> EmbeddedPreview | None:

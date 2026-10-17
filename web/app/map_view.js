@@ -256,10 +256,10 @@ export function createMapDialog({ store, getFields, getLocation, getEsriKey, act
       const count = el("span", { className: "preview-count", textContent: `${popupIndex + 1} of ${popupIds.length}` });
       parts.push(el("div", { className: "preview-row" }, [previous, count, next]));
     }
-    const selected = store.selection.has(id);
+    // A selected photo can be the source too: it is deselected when used.
     const use = el("button", {
-      className: "use", disabled: selected,
-      title: selected ? "This photo is selected to change, so it can't be the source of the location too" : "Copy this photo's location into New Location",
+      className: "use",
+      title: "Copy this photo's location into New Location",
       onclick: () => { remember(); actions.usePhoto(id); },
     }, "Use This Location");
     parts.push(use);

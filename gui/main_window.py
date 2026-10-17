@@ -450,13 +450,14 @@ class MainWindow(
         self,
         paths: list[Path],
     ) -> dict[Path, tuple[float | None, float | None]]:
-        states: dict[Path, tuple[float | None, float | None]] = {}
+        states: dict[Path, tuple] = {}
         for path in paths:
             info = self.session.loaded_photo_infos.get(path)
-            if info is None:
+            if info is None or info.current_latitude is None or info.current_longitude is None:
                 states[path] = (None, None)
             else:
-                states[path] = (info.current_latitude, info.current_longitude)
+                # With the altitude (None for none), so undo puts it back or clears it.
+                states[path] = (info.current_latitude, info.current_longitude, info.current_altitude)
         return states
 
     def _remember_gps_edit(

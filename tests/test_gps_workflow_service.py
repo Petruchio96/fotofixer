@@ -15,8 +15,8 @@ class StubWriter:
     def clear_gps(self, path: Path) -> None:
         self.clears.append(path)
 
-    def write_gps(self, path: Path, latitude: float, longitude: float, altitude: float | None = None) -> None:
-        self.calls.append((path, latitude, longitude) if altitude is None else (path, latitude, longitude, altitude))
+    def write_gps(self, path: Path, latitude: float, longitude: float, altitude="keep") -> None:
+        self.calls.append((path, latitude, longitude) if altitude == "keep" else (path, latitude, longitude, altitude))
         if path in self.failing_paths:
             raise RuntimeError("boom")
 
@@ -26,8 +26,10 @@ class GpsWorkflowServiceTests(unittest.TestCase):
         from services.gps_workflow_service import restore_gps_states
         a, b, c = Path("/p/a.jpg"), Path("/p/b.jpg"), Path("/p/c.jpg")
         writer = StubWriter()
-        restore_gps_states({a: (40.5, -111.8), b: (None, None), c: (40.7, -111.6, 2050.0)}, writer=writer)
-        self.assertEqual(writer.calls, [(a, 40.5, -111.8), (c, 40.7, -111.6, 2050.0)])
+        d = Path("/p/d.jpg")
+        restore_gps_states({a: (40.5, -111.8), b: (None, None), c: (40.7, -111.6, 2050.0), d: (40.8, -111.5, None)}, writer=writer)
+        # Two values leave the altitude alone; None in the third clears it.
+        self.assertEqual(writer.calls, [(a, 40.5, -111.8), (c, 40.7, -111.6, 2050.0), (d, 40.8, -111.5, None)])
 
     def test_write_gps_values_gives_each_photo_its_own_position(self) -> None:
         a, b, c = Path("/p/a.jpg"), Path("/p/b.jpg"), Path("/p/c.jpg")

@@ -121,11 +121,7 @@ class LocationEditorMixin:
         """
         Choose any photo file to use its location (see use_location_from_file).
         """
-        self._pick_photo_file(
-            "Use the Location from a Photo",
-            self.use_location_from_file,
-            blocked=set(self.get_selected_paths()),
-        )
+        self._pick_photo_file("Use the Location from a Photo", self.use_location_from_file)
 
     def use_location_from_file(self, path: Path) -> None:
         """
@@ -184,8 +180,9 @@ class LocationEditorMixin:
 
         While picking, the grid shows Has GPS (the photos that can be
         picked), and everything is disabled except Add Photos, Clear List,
-        and this button (which reads "Cancel"). The photos selected to change
-        stay selected. Picking ends back on the view used before.
+        and this button (which reads "Cancel"). A selected photo can be
+        picked too: it becomes the source and is deselected. Picking ends
+        back on the view used before.
         """
         if not self._photos_with_gps_count():
             return
@@ -311,9 +308,8 @@ class LocationEditorMixin:
         self._apply_pick_mode_lock()
 
     def _photos_with_gps_count(self) -> int:
-        """Photos that can be the location source: with GPS and not selected to change."""
-        selected = set(self.get_selected_paths())
-        return sum(1 for item in self.session.thumbnail_items if item.has_gps and item.path not in selected)
+        """Photos that can be the location source: every photo with GPS (a selected one is deselected when picked)."""
+        return sum(1 for item in self.session.thumbnail_items if item.has_gps)
 
     def _update_pick_button(self) -> None:
         """
@@ -327,14 +323,15 @@ class LocationEditorMixin:
         self.pick_location_button.setToolTip(
             PICK_BUTTON_TIP
             if can_pick
-            else "No photo in the Photo List has GPS coordinates to copy, other than the photos "
-            "selected to change (a photo can't be both)."
+            else "No photo in the Photo List has GPS coordinates to copy."
         )
 
     def _refresh_pick_marks(self) -> None:
         """
         Dim the photos that can't be picked while picking ("No GPS"; for a
-        time "No Date" or "Being Changed"); clear the dimming otherwise.
+        time "No Date" or "Being Changed"); clear the dimming otherwise. A
+        selected photo can be picked as the location source: it is
+        deselected when it becomes the source.
         """
         selected = set(self.get_selected_paths())
         for path_text, item in self._grid_items_by_path.items():
@@ -345,8 +342,7 @@ class LocationEditorMixin:
             elif item.data(THUMBNAIL_LATITUDE_ROLE) is None:
                 label = "No GPS"
             else:
-                # A photo selected to change can't also be the source.
-                label = "Being Changed" if Path(path_text) in selected else ""
+                label = ""
             if (item.data(PICK_DISABLED_ROLE) or "") != label:
                 item.setData(PICK_DISABLED_ROLE, label or None)
 

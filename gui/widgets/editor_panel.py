@@ -46,7 +46,7 @@ if TYPE_CHECKING:
 PICK_BUTTON_TEXT = "From a Photo in the Photo List"
 PICK_BUTTON_TIP = (
     "Click this, then click a photo with GPS in the Photo List to copy "
-    "its location. The photos selected to change stay selected."
+    "its location. A selected photo becomes the source and is deselected."
 )
 
 # The Date & Time pick button's label; it reads "Cancel" while picking.

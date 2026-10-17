@@ -32,7 +32,7 @@ class StubWriter:
         self.clear_calls: list[Path] = []
         self.failing_paths = failing_paths or set()
 
-    def write_gps(self, path: Path, latitude: float, longitude: float) -> None:
+    def write_gps(self, path: Path, latitude: float, longitude: float, altitude="keep") -> None:
         self.calls.append((path, latitude, longitude))
         if path in self.failing_paths:
             raise RuntimeError("boom")

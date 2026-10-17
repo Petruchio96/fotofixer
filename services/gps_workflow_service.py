@@ -90,18 +90,18 @@ def restore_gps_states(
     """
     Write each file back to a remembered GPS state (used by undo and redo).
 
-    (None, None) means the file had no GPS, so its GPS is cleared. A third
-    value is an altitude (a geotag from a GPS track), written with the rest.
+    (None, None) means the file had no GPS, so its GPS is cleared. A state
+    with a third value restores the altitude too: a number is written, None
+    clears it (the photo had none); a two-value state leaves it alone.
     """
     def restore(path: Path) -> None:
         latitude, longitude, *rest = states[path]
-        altitude = rest[0] if rest else None
         if latitude is None or longitude is None:
             writer.clear_gps(path)
-        elif altitude is None:
-            writer.write_gps(path, latitude, longitude)
+        elif rest:
+            writer.write_gps(path, latitude, longitude, rest[0])
         else:
-            writer.write_gps(path, latitude, longitude, altitude)
+            writer.write_gps(path, latitude, longitude)
 
     return _write_each(list(states), restore, on_progress)
 

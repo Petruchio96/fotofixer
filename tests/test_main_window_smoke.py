@@ -30,7 +30,7 @@ class FakeExifTool:
         self.failures: dict[Path, Exception] = {}
         self.gps_by_path = gps_by_path if gps_by_path is not None else {}
 
-    def write_gps(self, path: Path, latitude: float, longitude: float) -> None:
+    def write_gps(self, path: Path, latitude: float, longitude: float, altitude="keep") -> None:
         if path in self.failures:
             raise self.failures[path]
         self.writes.append((path, latitude, longitude))
@@ -886,26 +886,26 @@ class MainWindowSmokeTests(unittest.TestCase):
                 release()
                 self.assertNotIn(self.paths[0], self.window.get_selected_paths())
 
-    def test_a_selected_photo_cannot_be_picked_as_the_source(self) -> None:
+    def test_a_selected_photo_can_be_picked_as_the_source_and_is_deselected(self) -> None:
         self._two_with_gps()
-        self._select_paths([self.paths[0]])
+        self._select_paths([self.paths[0], self.paths[1]])
 
         self.window.start_picking_location()
-        self.assertEqual(self._item_for(self.paths[0]).data(PICK_DISABLED_ROLE), "Being Changed")
+        self.assertIsNone(self._item_for(self.paths[0]).data(PICK_DISABLED_ROLE), "selected photos can be picked")
         self.window.pick_location_from_item(self._item_for(self.paths[0]))
-        self.assertTrue(self.window.is_picking_location)
-        self.assertIsNone(self.window._location_source)
 
-        self.window.pick_location_from_item(self._item_for(self.paths[1]))
-        self.assertEqual(self.window._location_source, self.paths[1])
+        self.assertFalse(self.window.is_picking_location)
+        self.assertEqual(self.window._location_source, self.paths[0])
+        self.assertEqual(self.window.get_selected_paths(), [self.paths[1]], "the source is deselected, the rest stay")
 
-    def test_pick_button_is_off_when_every_photo_with_gps_is_selected(self) -> None:
+    def test_pick_button_stays_on_when_every_photo_with_gps_is_selected(self) -> None:
+        # A selected photo can be picked as the source (it is deselected then).
         self.gps_by_path[self.paths[0]] = (41.0, -112.0)
         self.window.populate_list()
         self._select_paths([self.paths[0]])
-        self.assertFalse(self.window.pick_location_button.isEnabled())
+        self.assertTrue(self.window.pick_location_button.isEnabled())
 
-    def test_the_file_picker_offers_no_selected_photo(self) -> None:
+    def test_the_file_picker_offers_selected_photos_too(self) -> None:
         self._two_with_gps()
         self._select_paths([self.paths[0]])
         options = {}
@@ -916,7 +916,7 @@ class MainWindowSmokeTests(unittest.TestCase):
         with patch.object(self.window, "_pick_photo_file", side_effect=picker):
             self.window.location_from_photo_button.click()
 
-        self.assertEqual(options["blocked"], {self.paths[0]})
+        self.assertNotIn("blocked", options)
 
     def test_date_tab_time_source_stays_selectable(self) -> None:
         # The Date & Time tab keeps its own rules: the location source is
@@ -2042,7 +2042,8 @@ class MainWindowSmokeTests(unittest.TestCase):
         self.assertEqual(self.window.exiftool.clears, [self.paths[1]])
         self.assertEqual(self.gps_by_path[self.paths[0]], (41.0, -112.0))
         report_mock.assert_called_once_with("remove GPS from", ["photo-one.jpg: locked"])
-        self.assertEqual(self.window.gps_history.undo_states(), {self.paths[1]: (42.0, -113.0)})
+        # The state carries the altitude too (None: the photo had none).
+        self.assertEqual(self.window.gps_history.undo_states(), {self.paths[1]: (42.0, -113.0, None)})
 
     def _group_headings(self, *, visible_only: bool = False) -> list[str]:
         list_widget = self.window.list_widget

@@ -16,6 +16,9 @@ class PhotoInfo:
     file_type: str
     current_latitude: Optional[float] = None
     current_longitude: Optional[float] = None
+    # Metres above sea level (negative below), None without one. Only a
+    # geotag from a GPS track writes it; it is read so undo can restore it.
+    current_altitude: Optional[float] = None
     gps_error: Optional[str] = None
     # When the photo was taken (DateTimeOriginal, or CreateDate without it).
     date_taken: Optional[datetime] = None

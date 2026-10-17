@@ -64,8 +64,8 @@ ESRI_STEPS_HTML = (
     f'(<a href="{CREATE_KEY_URL}">Esri\'s instructions</a>)'
 )
 UNITS_HELP = (
-    "Altitudes from a GPS track (File > Geotag from GPS Track) are shown in feet or metres. "
-    "Photos always store them in metres."
+    "Show altitudes and distances from a GPS track (File > Geotag from GPS Track) in {unit}. "
+    "Photos always store altitude in metres."
 )
 UPDATES_HELP = (
     "About five seconds after the app opens, at most once a day, it asks GitHub "
@@ -108,37 +108,29 @@ class SettingsDialog(QDialog):
         backups_layout.addWidget(self.keep_backups_check)
         backups_layout.addWidget(backups_help)
 
-        # --- Units ---
+        # --- Units (the explanation is the hover hint) ---
         units_group = QGroupBox("Units")
         units_layout = QVBoxLayout(units_group)
-        self.feet_radio = QRadioButton("Feet")
-        self.feet_radio.setToolTip("Show altitudes (from a GPS track) in feet")
-        self.metres_radio = QRadioButton("Metres")
-        self.metres_radio.setToolTip("Show altitudes (from a GPS track) in metres")
+        self.feet_radio = QRadioButton("Imperial")
+        self.feet_radio.setToolTip(UNITS_HELP.format(unit="feet"))
+        self.metres_radio = QRadioButton("Metric")
+        self.metres_radio.setToolTip(UNITS_HELP.format(unit="metres"))
         (self.feet_radio if use_feet else self.metres_radio).setChecked(True)
         self.feet_radio.toggled.connect(self._update_buttons)
         units_row = QHBoxLayout()
         units_row.addWidget(self.feet_radio)
         units_row.addWidget(self.metres_radio)
         units_row.addStretch(1)
-        units_help = QLabel(UNITS_HELP)
-        units_help.setObjectName("settingsHelp")
-        units_help.setWordWrap(True)
         units_layout.addLayout(units_row)
-        units_layout.addWidget(units_help)
 
-        # --- Updates ---
+        # --- Updates (the explanation is the hover hint) ---
         updates_group = QGroupBox("Updates")
         updates_layout = QVBoxLayout(updates_group)
         self.check_updates_check = QCheckBox("Check for updates when the app starts")
         self.check_updates_check.setChecked(check_updates)
         self.check_updates_check.toggled.connect(self._update_buttons)
         self.check_updates_check.setToolTip(UPDATES_HELP)
-        updates_help = QLabel(UPDATES_HELP)
-        updates_help.setObjectName("settingsHelp")
-        updates_help.setWordWrap(True)
         updates_layout.addWidget(self.check_updates_check)
-        updates_layout.addWidget(updates_help)
 
         # --- Esri Satellite ---
         esri_group = QGroupBox("Esri Satellite Map")
@@ -202,7 +194,12 @@ class SettingsDialog(QDialog):
         layout.addLayout(buttons)
         self._update_buttons()
         # A fixed width lets the wrapped text work out its height, so the
-        # window opens tall enough for all of it.
+        # window opens tall enough for all of it. Qt underestimates a
+        # word-wrapped label's height in a layout, so each gets its height
+        # at the group's width as a minimum first.
+        label_width = self.width() - 60
+        for label in (backups_help, *esri_labels):
+            label.setMinimumHeight(label.heightForWidth(label_width))
         self.adjustSize()
 
     def keep_backups(self) -> bool:

@@ -47,8 +47,9 @@ export function createLocationView(container, store, actions) {
   const sourceClear = el("button", { className: "source-clear", title: "Clear the location", onclick: () => clearFields() }, "✕");
   const sourceCard = el("div", { className: "source-card", hidden: true }, [sourceThumb, el("div", { className: "source-text" }, [sourceTitle, sourceDetail]), sourceClear]);
 
-  const latitude = el("input", { className: "field", id: "latitude", placeholder: "e.g. 40.5865 or 40° 35' 11\" N", autocomplete: "off", spellcheck: "false" });
-  const longitude = el("input", { className: "field", id: "longitude", placeholder: "e.g. -111.6558 or 111° 39' 21\" W", autocomplete: "off", spellcheck: "false" });
+  const pairHint = 'Type or paste coordinates. A whole pair copied from Google Maps or another photo ("40.5865, -111.6558") can go in either field: it is split into both.';
+  const latitude = el("input", { className: "field", id: "latitude", placeholder: "e.g. 40.5865 or 40° 35' 11\" N", autocomplete: "off", spellcheck: "false", title: pairHint });
+  const longitude = el("input", { className: "field", id: "longitude", placeholder: "e.g. -111.6558 or 111° 39' 21\" W", autocomplete: "off", spellcheck: "false", title: pairHint });
   for (const field of [latitude, longitude]) {
     field.addEventListener("input", () => onFieldInput(field));
     field.addEventListener("blur", () => validateField(field));

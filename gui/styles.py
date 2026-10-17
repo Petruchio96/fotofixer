@@ -195,6 +195,12 @@ QGroupBox {
     padding: 14px 16px 16px 16px;
     font-weight: 700;
 }
+/* Settings > the Units / Updates box: a group without a title, two lines. */
+QFrame#settingsOptions {
+    background: #ffffff;
+    border: 1px solid #d8e1ea;
+    border-radius: 14px;
+}
 QGroupBox::title {
     subcontrol-origin: margin;
     left: 14px;

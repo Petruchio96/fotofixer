@@ -20,9 +20,11 @@ from PySide6.QtWidgets import (
     QCheckBox,
     QDialog,
     QGroupBox,
+    QFrame,
     QGridLayout,
     QHBoxLayout,
     QRadioButton,
+    QSizePolicy,
     QLabel,
     QLineEdit,
     QPushButton,
@@ -111,10 +113,15 @@ class SettingsDialog(QDialog):
 
         # --- Units and Updates: one box, a line each (the explanations
         # are the hover hints) ---
-        options_group = QGroupBox("Units and Updates")
+        # A plain box without a title (the row labels say it all), and
+        # never stretched taller than its two lines.
+        options_group = QFrame()
+        options_group.setObjectName("settingsOptions")
+        options_group.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
         options_layout = QGridLayout(options_group)
+        options_layout.setContentsMargins(14, 8, 14, 8)
         options_layout.setHorizontalSpacing(14)
-        options_layout.setVerticalSpacing(8)
+        options_layout.setVerticalSpacing(4)
         self.feet_radio = QRadioButton("Imperial")
         self.feet_radio.setToolTip(UNITS_HELP.format(unit="feet"))
         self.metres_radio = QRadioButton("Metric")

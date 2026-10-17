@@ -230,6 +230,8 @@ class PhotoListMixin:
             self.session.loaded_photos
         )
         self._render_photo_list()
+        # The Geotag from GPS Track window, when open, shows the same photos.
+        self._geotag_photos_changed()
 
     def _render_photo_list(self) -> None:
         # The items are about to be replaced, so forget any still-loading ones.
@@ -648,6 +650,7 @@ class PhotoListMixin:
                 self._refresh_source_card()
         if hidden_changed:
             self._relayout_after_hidden_icon_change()
+        self._geotag_thumbnails_changed()
 
         done = self._thumbnail_total - len(self._pending_thumbnail_items)
         self.loading_indicator.set_progress(

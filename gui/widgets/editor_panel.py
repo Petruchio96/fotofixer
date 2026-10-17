@@ -175,6 +175,10 @@ def _build_location_group(window: "MainWindow") -> QGroupBox:
     window.longitude_input = QLineEdit()
     window.latitude_input.setPlaceholderText("e.g. 40.5865 or 40° 35' 11\" N")
     window.longitude_input.setPlaceholderText("e.g. -111.6558 or 111° 39' 21\" W")
+    for field in (window.latitude_input, window.longitude_input):
+        field.setToolTip(
+            "Type or paste coordinates.\nA pair copied from Google Maps can be pasted into either field as is."
+        )
     window.latitude_input.editingFinished.connect(window.validate_latitude_field)
     window.longitude_input.editingFinished.connect(window.validate_longitude_field)
     window.latitude_input.textChanged.connect(window._handle_location_input_change)

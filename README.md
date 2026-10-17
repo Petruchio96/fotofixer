@@ -21,13 +21,17 @@ The app supports the photos cameras and phones make (JPG, iPhone HEIC, and RAW f
 - Apply the new location to the selected photos, with a warning before
   replacing existing GPS.
 - Remove GPS coordinates from selected photos.
+- Geotag photos from a GPS track (File > Geotag from GPS Track): load the
+  GPX file your phone, watch, or logger recorded, and every photo taken
+  while it was recording gets the position (and altitude) the track holds
+  for that moment, shown on a map before anything is written.
 - Fix photo dates on the Date & Time tab: shift every selected photo by the
   same amount (correct one reference photo's date, or copy the time from a
   photo known to be right, such as one from your phone), or give them all
   one date and time. The Photo List groups photos by camera there.
 - Undo or redo the most recent GPS or date change while the app is open (undo
   also puts the photo list back the way it was).
-- Optionally keep a backup copy of each original file (Edit > Settings > Keep Backup Copies of Originals).
+- Optionally keep a backup copy of each original file (Edit > Settings > Keep backup copies of originals); Settings also chooses feet or metres for the track's altitudes.
 
 ## In the Browser (the Docker Version)
 

@@ -1589,7 +1589,9 @@ class MainWindowSmokeTests(unittest.TestCase):
         # include them again by accident.
         self.assertEqual(self.window.get_selected_paths(), [])
 
-    def test_backups_made_by_apply_join_the_list_unselected(self) -> None:
+    def test_backups_made_by_apply_stay_out_of_the_list(self) -> None:
+        # A backup at the old location next to the moved photo looked like the
+        # photo hadn't moved, so backups are never added to the Photo List.
         backup = Path("/tmp/photo-one_original.jpg")
         self.gps_by_path[self.paths[0]] = (41.0, -112.0)
         self.gps_by_path[backup] = (41.0, -112.0)
@@ -1602,9 +1604,8 @@ class MainWindowSmokeTests(unittest.TestCase):
         with dialog_patch:
             self.window.apply_coordinates_to_selected()
 
-        self.assertIn(backup, self.window.session.selected_paths)
-        self.assertNotIn(backup, self.window.get_selected_paths())
-        self.assertIn("Saved a backup of the original", self.window.browser_hint.text())
+        self.assertNotIn(backup, self.window.session.selected_paths)
+        self.assertIn("Saved a backup of the original next to it.", self.window.browser_hint.text())
 
     def test_undo_deletes_the_backups_the_change_made_and_redo_makes_them_again(self) -> None:
         temp_dir = tempfile.TemporaryDirectory()
@@ -1625,19 +1626,18 @@ class MainWindowSmokeTests(unittest.TestCase):
         with dialog_patch:
             self.window.apply_coordinates_to_selected()
         self.assertTrue(backup.exists())
-        self.assertIn(backup, self.window.session.selected_paths)
+        self.assertNotIn(backup, self.window.session.selected_paths)
 
         with patch.object(Path, "exists", return_value=True):
             self.window.undo_gps_edit()
 
         self.assertFalse(backup.is_file())
-        self.assertNotIn(backup, self.window.session.selected_paths)
 
         # Redo makes the backup again; the next undo deletes it again.
         with patch.object(Path, "exists", return_value=True):
             self.window.redo_gps_edit()
         self.assertTrue(backup.is_file())
-        self.assertIn(backup, self.window.session.selected_paths)
+        self.assertNotIn(backup, self.window.session.selected_paths)
         self.window.exiftool.take_created_backups = lambda: []
         with patch.object(Path, "exists", return_value=True):
             self.window.undo_gps_edit()
@@ -2099,6 +2099,49 @@ class MainWindowSmokeTests(unittest.TestCase):
         self.addCleanup(reopened.close)
         self.assertTrue(reopened.keep_backups)
         self.assertTrue(reopened.workflow.writer.keep_backups)
+
+    def test_units_option_defaults_to_feet_and_is_saved(self) -> None:
+        dialog = self._open_settings()
+        self.assertTrue(dialog.feet_radio.isChecked())
+        self.assertTrue(self.window.use_feet)
+
+        self._click_checkbox(dialog.metres_radio)
+        self.assertTrue(dialog.save_button.isEnabled())
+        QTest.mouseClick(dialog.save_button, Qt.LeftButton)
+
+        self.assertFalse(self.window.use_feet)
+        self.assertFalse(self.settings.value("units/feet", type=bool))
+        reopened = MainWindow(settings=QSettings(str(self.settings_path), QSettings.IniFormat))
+        self.addCleanup(reopened.close)
+        self.assertFalse(reopened.use_feet)
+
+    def test_the_esri_steps_are_folded_up_until_asked_for(self) -> None:
+        dialog = self._open_settings()
+        self.assertFalse(dialog.esri_help.isVisible())
+        self.assertFalse(dialog.help_toggle.isChecked())
+        height = dialog.height()
+
+        QTest.mouseClick(dialog.help_toggle, Qt.LeftButton)
+        QTest.qWait(50)  # the layout resizes the window on the next pass
+        self.assertTrue(dialog.esri_help.isVisible())
+        self.assertGreater(dialog.height(), height, "the window grows for the steps")
+        self.assertFalse(dialog.save_button.isEnabled(), "opening the steps changes no setting")
+
+        QTest.mouseClick(dialog.help_toggle, Qt.LeftButton)
+        QTest.qWait(50)
+        self.assertFalse(dialog.esri_help.isVisible())
+        self.assertEqual(dialog.height(), height, "and shrinks back")
+
+    def test_the_units_segment_is_exclusive(self) -> None:
+        dialog = self._open_settings()
+        self.assertTrue(dialog.feet_radio.isChecked())
+        self.assertFalse(dialog.metres_radio.isChecked())
+        QTest.mouseClick(dialog.metres_radio, Qt.LeftButton)
+        self.assertFalse(dialog.feet_radio.isChecked())
+        self.assertFalse(dialog.use_feet())
+        # Clicking the chosen one again keeps it chosen (a segment, not a toggle).
+        QTest.mouseClick(dialog.metres_radio, Qt.LeftButton)
+        self.assertTrue(dialog.metres_radio.isChecked())
 
     def test_save_is_off_until_a_setting_changes(self) -> None:
         dialog = self._open_settings()

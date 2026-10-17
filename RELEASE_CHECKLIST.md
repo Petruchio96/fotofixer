@@ -89,15 +89,33 @@ the merge, then tag and publish right after it.
 - [ ] The camera filter appears when the photos come from more than one
       camera.
 
+## Geotag from GPS Track
+
+- [ ] File > Geotag from GPS Track… is greyed out until photos are loaded,
+      then opens the GPX dialog (several files allowed) and the window.
+- [ ] Photos taken while the track was recorded get dots on the track and
+      start checked; photos before/after the track, in a pause, or without
+      a date are grey with a chip and a hint; photos with GPS start
+      unchecked (blue dot where they are; an orange ring and row border
+      when the track has a suggestion for them).
+- [ ] Clicking a dot or a name zooms in and opens the preview; Leave Off
+      Track / Put On Track / Suggested Track Location toggle the photo;
+      Check All checks the photos without GPS and the suggested ones.
+- [ ] Geotag writes the positions and altitudes (`exiftool -n -GPS*`), asks
+      Replace / Skip for checked photos with GPS, and Undo removes them again
+      (Redo writes the altitude back).
+- [ ] Edit > Settings > Units switches the hints and readout between feet
+      and metres.
+
 ## Undo, Backups, Settings
 
 - [ ] Undo and Redo work for GPS and date changes, as one history across
       both tabs, and put the Photo List back the way it was.
-- [ ] With Keep Backup Copies of Originals on, changing GPS on a photo that
-      already had GPS makes `<name>_original.<ext>`, adds it to the Photo
-      List, and Undo deletes it.
-- [ ] Edit > Settings (backups, Esri key) and the last folder are remembered
-      after reopening the app.
+- [ ] With Keep backup copies of originals on, changing GPS on a photo that
+      already had GPS makes `<name>_original.<ext>` next to it (not in the
+      Photo List), and Undo deletes it.
+- [ ] Edit > Settings (backups, units, updates, Esri key) and the last folder
+      are remembered after reopening the app.
 - [ ] After reopening the app, the changes are still in the files.
 
 ## Updates

@@ -22,7 +22,7 @@ def _backup_note(count: int) -> str:
     if not count:
         return ""
     copies = "a backup of the original" if count == 1 else f"{count} backups of the originals"
-    return f" Saved {copies} and added {'it' if count == 1 else 'them'} to the list."
+    return f" Saved {copies} next to {'it' if count == 1 else 'them'}."
 
 
 class ApplyWorkflowMixin:
@@ -119,7 +119,6 @@ class ApplyWorkflowMixin:
             self._rerender_selecting(
                 self._failed_targets(selected_paths, preparation.target_paths, result.successful_paths)
             )
-            self._add_backups_to_list(backups)
             backup_count = len(backups)
             if result.successful_paths:
                 message = f"Applied GPS to {_photos(len(result.successful_paths))}."
@@ -265,7 +264,6 @@ class ApplyWorkflowMixin:
             self._rerender_selecting(
                 self._failed_targets(selected_paths, paths_with_gps, result.successful_paths)
             )
-            self._add_backups_to_list(backups)
             backup_count = len(backups)
             if result.successful_paths:
                 self._set_status_message(

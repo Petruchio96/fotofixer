@@ -7,7 +7,9 @@ and remove finished items.
 
 ## Order
 
-1. **Whatever is wanted before the app is feature complete** (for example
+1. **Geotagging in the web version** (Part 4): the desktop's Geotag from
+   GPS Track (1.11.0) in the Docker version, as **1.11.1**.
+2. **Whatever is wanted before the app is feature complete** (for example
    the not-scheduled items below and the web version's leftovers in
    Part 3), as 1.x releases. Feature complete is **2.0.0**. The Docker
    version (the user's name for the web version) shipped in 1.10.0 on
@@ -20,22 +22,24 @@ Not scheduled:
   version has drag and drop from the start.)
 - **Macs.** No release has been tested on a real Mac yet; test when one is
   available.
-- **Geotagging from a GPS track** (below): load a track log from a phone,
-  watch, or GPS logger and give each photo the location recorded at the
-  moment it was taken. A future feature, in the desktop and web apps.
+- **Geotagging from KML or CSV tracks** (GPX shipped in 1.11.0): a parser
+  per format in `core/gpx_track.py`; nothing else changes.
 
 ## Versions
 
 Decided 2026-10-12 (the user's plan):
 
-- **1.10.1** (2026-10-13) is the latest release: fixes (picking a time
-  from the Photo List shows every camera, desktop and web; in the web
-  version, the inactive tab page is hidden again, the map preview is laid
-  out like the desktop's, and its ‹ › arrows work). 1.10.0 (2026-10-13) was the **Docker version**
-  (the web app and its image), released together with the desktop app of
-  the same version. 1.9.0 (2026-10-12) was the rename to FotoFixer – When &
-  Where, HEIC/HEIF, and more RAW formats. Fixes are **1.10.x**.
-- Further features before the app is feature complete: **1.11.0**, and so
+- **1.11.0** (2026-10-16) is the latest release: **Geotag from GPS Track**
+  in the desktop app (File menu), the Settings dialog laid out as setting
+  rows with a Units choice, and backups kept out of the Photo List.
+  **1.11.1** brings geotagging to the web version (Part 4). 1.10.1
+  (2026-10-13): fixes (picking a time from the Photo List shows every
+  camera, desktop and web; web tab page, map preview, ‹ › arrows). 1.10.0
+  (2026-10-13) was the **Docker version** (the web app and its image),
+  released together with the desktop app of the same version. 1.9.0
+  (2026-10-12) was the rename to FotoFixer – When & Where, HEIC/HEIF, and
+  more RAW formats. Fixes are **1.11.x**.
+- Further features before the app is feature complete: **1.12.0**, and so
   on.
 - **2.0.0** marks **feature complete**. After it, every release is a fix or
   a small enhancement: **2.0.x** (2.0.1, 2.0.2, …).
@@ -46,29 +50,82 @@ Decided 2026-10-12 (the user's plan):
 
 ---
 
-## Geotagging from a GPS track (future)
+## Part 4: Geotagging in the web version (1.11.1)
 
-Added 2026-10-12 (the user's idea, after comparing GeoSetter and GeoTag,
-which both do this). Not scheduled yet.
+Decided 2026-10-16. The desktop feature (1.11.0: `gui/widgets/geotag_window.py`,
+`gui/window_mixins/geotagger.py`, `core/gpx_track.py`, `services/geotag_service.py`;
+`PROJECT_CONTEXT.md` "Geotag from GPS Track window") in the Docker version, same
+look and behaviour: dots, one preview, the master Check All, feet or metres, the
+suggestion rules. The matching is the desktop's Python through Pyodide, as Date
+& Time is; the UI is a full-size `<dialog>` like the map dialog. The web rules
+in `CLAUDE.md` bind (no inline styles or scripts, every button through `el()`
+with a `title`, Python ops straight to the worker).
 
-What it does: load a track file that lists times and GPS positions (a phone,
-watch, or GPS logger records one while you walk or drive), and the app gives
-each selected photo the position recorded at the moment the photo was taken.
+Entry point (the user's choice): a fourth item in the Photo List's **+ Add
+Photos** menu, "Geotag from GPS Track…", greyed out until photos are loaded
+(the hint says to add photos first); it opens the browser's file picker for
+one or more `.gpx` files. Dropping a `.gpx` on the Photo List opens the same
+dialog (today `file_sources.js` silently drops non-photo files).
 
-- **Files:** GPX first (Garmin, Strava, most GPS apps export it); later KML
-  and CSV. ExifTool can read GPX itself (`-geotag`), or the app matches the
-  times in `core/`/`services/` (pure Python, so the web version reuses it).
-- **Matching works on the moment taken** (the app's rule): the photo's
-  date, time, and time zone become a UTC moment, compared with the track's
-  UTC times. Between two track points, the position is interpolated.
-- **Camera clock off:** the user can enter an offset (or use the existing
-  Shift first). A photo with no time zone needs one chosen before matching.
-- **Limits:** a photo taken far from any track point (default: more than a
-  few minutes before the first point, after the last, or across a long gap)
-  is skipped and listed, not guessed.
-- **UI:** probably a third source on the Location tab ("From a GPS Track"),
-  with the track drawn on the map and the matched photos as dots before
-  Apply; step-4-style before → after list; Undo as usual. Mockup first.
+Steps, each with its tests:
+
+1. **Python.** `packaging/fetch_web_vendor.py` `BROWSER_MODULES` +=
+   `core/gpx_track.py`, `services/geotag_service.py` (their imports are listed;
+   `xml.etree` and `pyexpat` are in the vendored Pyodide); rebuild the zip
+   (`--python-only`). `web/bridge/fotofixer_bridge.py` `geotag(op, payload_json)`
+   like `dates`: `"load"` (`{tracks: [{name, text}]}` → parse with `parse_gpx`,
+   merge, cache the points in a module-level `_TRACK`, return the points, count,
+   span), `"plan"` (`{photos: [{id, name, dates, make, model, gps}], checks,
+   computerOffsetMinutes, feet}` → `build_geotag_plan` with `_info(index, photo)`,
+   the checks re-applied, return the rows with `status, chip, hint, timeText,
+   included, hasGps, onTrack, suggested, checkable, latitude, longitude,
+   altitude, current`, the summary, span text, nothing-matches hint, and
+   `values`), `"forget"`. `tests/test_web_bridge.py` `GeotagTests`.
+2. **Worker and client.** `web/worker/exif_worker.js`: `geotag` in the object
+   `pythonReady` returns, a wrapper like `dates`, a `"geotag"` branch; `web/app/
+   exif_client.js` `geotag(op, payload)` via `_send`.
+3. **A shared Leaflet helper** (`web/app/leaflet_map.js`): `loadLeaflet`,
+   `createLeafletMap(box, {getEsriKey, onEsriFailed})` (`showSource`,
+   `setSatelliteSource`, `fitPoints`, `tileLayer`) and `buildPreview` for the
+   "‹ 1 of n ›" popup, pulled out of `map_view.js`'s `createMapDialog`, which
+   then uses them (behaviour unchanged; check the map dialog in the browser).
+4. **The dialog** (`web/app/geotag_view.js` + pure `web/app/geotag_state.js`,
+   Node-tested: `dotStyle`, `markerLocation`, `sameDotGroups` (14 px),
+   `masterState`, `applyLabel`, `filesText`): `<dialog class="geotag-dialog">`
+   with the map bar (Street/Satellite, Show Whole Track, Show All Photos, +/−),
+   the summary line, the row list (`.geotag-row`: checkbox, 40×30 thumb from
+   `photo.thumb` or `photoIcon()`, name, time, chip; `.on`/`.off`/`.active`/
+   `.has-gps`/`.suggested`; the row's `title` is the hint) and the master Check
+   All (`indeterminate`), the Leaflet map (`L.polyline` green 3 px; a
+   `circleMarker` per photo, rings as a second larger marker drawn last,
+   hovered +3), the readout, the bottom bar (the warning with the Shift link,
+   + Add More Photos, Cancel, Geotag N Photos). Clicking a dot or a row (outside
+   the checkbox) → `setView(location, 17)` and the preview popup with Leave Off
+   Track (grey outline) / Put On Track or Suggested Track Location (orange); the
+   same row again or a map click closes it. A store subscription re-runs
+   `"plan"` while open (debounced 30 ms), keeping the checks. Units:
+   `settings.useFeet` (default true) in the `fotofixer.settings` localStorage
+   object; `dialogs.showSettings` gains Imperial / Metric.
+5. **Entry points and the flow** (`main.js`, `photo_list_view.js`,
+   `file_sources.js`): the menu item and a hidden `<input type=file
+   accept=".gpx" multiple>`; `entriesFromDrop` keeps `.gpx` files and
+   `dropEntries` opens the dialog on them; `openGeotag(files)` reads each
+   file's text, `"load"` (an error → `showMessage`), opens the dialog. Apply:
+   `dialogs.askOverwrite` for checked has-GPS rows (Skip removes them);
+   `after = Map(id → {gps: {latitude, longitude, altitude}, tags: gpsTags(gps)})`
+   with `gpsTags` extended (`GPSAltitude`/`GPSAltitudeRef` when `gps.altitude
+   != null`, both `""` in `gpsTags(null)` so Remove GPS clears them);
+   `writeStates(after, {text: "Geotagging", makeBackups: true})`,
+   `finishChange(kind: EDIT_GPS)` with "Geotagged N photos from the GPS track";
+   download mode unchanged. Cancel/Esc: close, clear the selection, `"forget"`.
+   The Shift link: close, select the dated photos, `store.setMode("date")`, the
+   Shift card. Known limit as the desktop: undoing a replaced photo's GPS leaves
+   the track's altitude.
+6. **Checks and docs.** `node --test web/tests/*.test.mjs`, the Python tests, the
+   browser on the dev server with `~/Pictures/Test Pics/GPS Track Test Pics`
+   (the campaign's photos and tracks; `reset_test_photos.sh` there resets them)
+   through `window.fotofixerDebug`, `docker/check_container.sh`;
+   `PROJECT_CONTEXT.md` "Web version", this Part, `README.md`; version 1.11.1.
 
 ---
 

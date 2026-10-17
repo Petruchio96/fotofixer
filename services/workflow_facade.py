@@ -27,6 +27,7 @@ from services.workflow_controller import (
     refresh_photo_workflow,
     restore_gps_states_workflow,
     write_date_tags_workflow,
+    write_gps_values_workflow,
 )
 
 
@@ -133,6 +134,26 @@ class PhotoWorkflowFacade:
         return restore_gps_states_workflow(
             session=session,
             states=states,
+            writer=self.writer,
+            loader=self.loader,
+            cache=self.metadata_cache,
+            on_progress=on_progress,
+        )
+
+    def write_gps_values_workflow(
+        self,
+        *,
+        session: WorkflowSession,
+        values_by_path: dict[Path, tuple[float, float, float | None]],
+        on_progress=None,
+    ) -> ApplyWorkflowResult:
+        """
+        Write each photo its own position and altitude (geotagging from a
+        GPS track, see services/geotag_service.py) and refresh the session.
+        """
+        return write_gps_values_workflow(
+            session=session,
+            values_by_path=values_by_path,
             writer=self.writer,
             loader=self.loader,
             cache=self.metadata_cache,

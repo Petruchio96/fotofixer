@@ -195,6 +195,54 @@ QGroupBox {
     padding: 14px 16px 16px 16px;
     font-weight: 700;
 }
+/* Settings: captions, white cards of rows with hairlines, titles and
+   descriptions, the "How to get a key" expander. */
+QLabel#settingsCaption {
+    color: #556579;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    padding-left: 4px;
+}
+QFrame#settingsCard {
+    background: #ffffff;
+    border: 1px solid #d8e1ea;
+    border-radius: 12px;
+}
+QFrame#settingsRule {
+    background: #e8eef3;
+    border: none;
+    margin: 0px 16px;
+}
+QLabel#settingTitle {
+    color: #162131;
+    font-size: 14px;
+    font-weight: 600;
+}
+QCheckBox#settingTitleCheck {
+    color: #162131;
+    font-size: 14px;
+    font-weight: 600;
+    spacing: 8px;
+}
+QLabel#settingDescription {
+    color: #556579;
+    font-size: 12px;
+}
+QPushButton#filterButton[accent="true"]:checked {
+    background: #d97706;
+    border-color: #d97706;
+}
+QToolButton#settingsExpander {
+    background: transparent;
+    border: none;
+    color: #1f5fc4;
+    font-weight: 600;
+    padding: 2px 4px 2px 0px;
+}
+QToolButton#settingsExpander:hover {
+    color: #17428a;
+}
 QGroupBox::title {
     subcontrol-origin: margin;
     left: 14px;
@@ -752,6 +800,24 @@ QPushButton#stepAddButton {
     padding: 7px 14px;
     font-weight: 600;
 }
+/* A grey outline button: the geotag preview's Leave Off Track. */
+QPushButton#outlineButton {
+    background: #ffffff;
+    color: #556579;
+    border: 1px solid #b7c3cf;
+    border-radius: 10px;
+    padding: 8px 14px;
+    font-weight: 600;
+}
+QPushButton#outlineButton:hover {
+    background: #f3f6f9;
+    border-color: #8c9aa8;
+    color: #31445a;
+}
+QPushButton#outlineButton:disabled {
+    color: #b7c3cf;
+    border-color: #e1e8ef;
+}
 QPushButton#stepAddButton:hover {
     background: #1a5fd0;
 }
@@ -973,6 +1039,38 @@ QLabel#updateError {
 }
 QLabel#mapHint {
     color: #556579;
+}
+/* The Geotag from GPS Track window. */
+QLabel#geotagSummary {
+    color: #31445a;
+    font-size: 13px;
+}
+QLabel#geotagListHeading {
+    color: #b45f06;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 2px 4px;
+}
+QCheckBox#geotagCheckAll {
+    color: #b45f06;
+    font-weight: 600;
+    padding: 0px 4px;
+}
+QListWidget#geotagList {
+    background: #fbfdff;
+    border: 1px solid #d6dfe8;
+    border-radius: 10px;
+    padding: 3px;
+    outline: none;
+}
+QLabel#geotagWarning {
+    font-size: 12px;
+}
+QLabel#geotagWarning[tone="warning"] {
+    color: #8a5300;
+}
+QLabel#geotagWarning[tone="error"] {
+    color: #9b2c2c;
 }
 QLabel#mapReadout {
     color: #31445a;

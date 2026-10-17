@@ -11,6 +11,7 @@ from services.gps_workflow_service import (
     clear_gps_from_paths,
     prepare_apply_gps,
     restore_gps_states,
+    write_gps_values,
     write_date_tags_to_paths,
 )
 from services.models import (
@@ -178,6 +179,28 @@ def restore_gps_states_workflow(
     Every file is attempted even if some fail; failures are in the result.
     """
     execution_result = restore_gps_states(states, writer=writer, on_progress=on_progress)
+    refreshed_session = refresh_photo_workflow(session, loader, cache)
+    return ApplyWorkflowResult(
+        session=refreshed_session,
+        execution_result=execution_result,
+    )
+
+
+def write_gps_values_workflow(
+    *,
+    session: WorkflowSession,
+    values_by_path: dict[Path, tuple[float, float, float | None]],
+    writer,
+    loader,
+    cache=None,
+    on_progress=None,
+) -> ApplyWorkflowResult:
+    """
+    Write each photo its own position (geotagging from a GPS track) and
+    refresh the selected-photo state afterward. Every file is attempted even
+    if some fail; failures are in the result.
+    """
+    execution_result = write_gps_values(values_by_path, writer=writer, on_progress=on_progress)
     refreshed_session = refresh_photo_workflow(session, loader, cache)
     return ApplyWorkflowResult(
         session=refreshed_session,

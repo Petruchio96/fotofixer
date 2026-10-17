@@ -34,6 +34,7 @@ from gui.widgets.photo_picker import PhotoPickerDialog
 from gui.widgets.settings_dialog import SettingsDialog
 from gui.window_mixins.apply_workflow import ApplyWorkflowMixin
 from gui.window_mixins.date_time_editor import DateTimeEditorMixin
+from gui.window_mixins.geotagger import GeotaggerMixin
 from gui.window_mixins.inspector import InspectorMixin
 from gui.window_mixins.location_editor import LocationEditorMixin
 from gui.window_mixins.map_picker import ESRI_KEY_SETTING, MapPickerMixin
@@ -43,7 +44,7 @@ from services.gps_edit_history import EDIT_DATE, EDIT_GPS, GpsEditHistory, Photo
 from services.models import OverwriteEntry, WorkflowSession
 from services.workflow_facade import PhotoWorkflowFacade
 
-APP_VERSION = "1.10.1"
+APP_VERSION = "1.11.0"
 # The app's name, and the subtitle shown with it where people first meet it
 # (window title, About). Called Photo GPS Editor until 1.9.0.
 APP_NAME = "FotoFixer"
@@ -51,6 +52,8 @@ APP_SUBTITLE = "When & Where"
 
 # QSettings key for the "Keep Backup Copies of Originals" option.
 KEEP_BACKUPS_SETTING = "keep_backup_copies"
+# QSettings key: altitudes in feet (True, the default) or metres.
+USE_FEET_SETTING = "units/feet"
 
 # QSettings key: the folder photos were last chosen from, so the file
 # pickers open there next time.
@@ -66,6 +69,7 @@ class MainWindow(
     LocationEditorMixin,
     DateTimeEditorMixin,
     MapPickerMixin,
+    GeotaggerMixin,
     UpdateCheckMixin,
     PhotoListMixin,
     ApplyWorkflowMixin,
@@ -225,6 +229,15 @@ class MainWindow(
         self.open_action.triggered.connect(self.add_photos)
         file_menu.addAction(self.open_action)
 
+        # Geotagging from a GPS track lives only here (see GeotaggerMixin).
+        self.geotag_action = QAction("Geotag from GPS Track...", self)
+        self.geotag_action.setShortcut(QKeySequence("Ctrl+G"))
+        self.geotag_action.triggered.connect(self.geotag_from_track)
+        file_menu.addAction(self.geotag_action)
+        self._update_geotag_action(0)
+        # Menu items show their hover hints (the greyed-out Geotag item says why).
+        file_menu.setToolTipsVisible(True)
+
         self.clear_list_action = QAction("Clear List", self)
         self.clear_list_action.setEnabled(False)
         self.clear_list_action.triggered.connect(self.clear_photo_list)
@@ -310,6 +323,7 @@ class MainWindow(
             settings_dialog.reject()
         self._cancel_update_download()
         self._close_map_window()
+        self._close_geotag_window()
         self.stop_background_work()
         super().closeEvent(event)
 
@@ -427,6 +441,7 @@ class MainWindow(
             self.select_all_action.setEnabled(loaded_count > 0)
         if hasattr(self, "clear_list_action"):
             self.clear_list_action.setEnabled(loaded_count > 0)
+            self._update_geotag_action(loaded_count)
         if hasattr(self, "copy_action"):
             self.copy_action.setEnabled(self._selected_browser_gps_coordinates() is not None)
         self._update_undo_redo_actions()
@@ -545,7 +560,7 @@ class MainWindow(
         Write remembered states back to files in the background (write does
         it; see _run_writes), and put the photo list back the way it was
         when the edit was made. Then on_done(failure messages, the backups
-        the writes made, which are added to the list).
+        the writes made).
 
         make_backups False (undo): no backup copies even with Keep Backup
         Copies of Originals on. Otherwise undoing a location added to a photo
@@ -572,9 +587,7 @@ class MainWindow(
             else:
                 self.list_widget.clearSelection()
                 self.update_details_panel()
-            backups = self._take_new_backups()
-            self._add_backups_to_list(backups)
-            on_done(list(result.execution_result.failed_paths), backups)
+            on_done(list(result.execution_result.failed_paths), self._take_new_backups())
 
         self._run_writes(text, total, write, done)
 
@@ -660,21 +673,13 @@ class MainWindow(
         take = getattr(self.workflow.writer, "take_created_backups", None)
         return take() if take is not None else []
 
-    def _add_backups_to_list(self, backups: list[Path]) -> None:
-        """
-        Add new backups to the Photo List, not selected.
-        """
-        in_list = set(self.session.selected_paths)
-        new_backups = [path for path in backups if path not in in_list]
-        if new_backups:
-            # Loads in the background like Add Photos; the selection stays.
-            self.load_photos(self.session.selected_paths + new_backups)
-
     def _delete_backups(self, backups: tuple[Path, ...]) -> list[str]:
         """
         Undo: delete the backups the undone change made (the photos have
-        their earlier GPS back, so the copies aren't needed), and take them
-        out of the Photo List. Returns failure messages.
+        their earlier GPS back, so the copies aren't needed). Backups never
+        join the Photo List (a copy at the old location next to the moved
+        photo looked like the photo hadn't moved); they stay in the folder
+        for whoever needs them. Returns failure messages.
         """
         failed = []
         for backup in backups:
@@ -682,14 +687,6 @@ class MainWindow(
                 backup.unlink(missing_ok=True)
             except OSError as exc:
                 failed.append(f"{backup.name}: could not delete the backup ({exc})")
-        gone = set(backups)
-        if any(path in gone for path in self.session.selected_paths):
-            selected = self.get_selected_paths()
-            self.session.selected_paths = [
-                path for path in self.session.selected_paths if path not in gone
-            ]
-            self._render_current_photo_session()
-            self.select_browser_paths([path for path in selected if path not in gone])
         return failed
 
     def _report_write_failures(self, action: str, failed_paths: list[str]) -> None:
@@ -760,6 +757,7 @@ class MainWindow(
             keep_backups=self.keep_backups,
             esri_key=self.settings.value(ESRI_KEY_SETTING, "", type=str),
             check_updates=self.check_updates_on_start,
+            use_feet=self.use_feet,
         )
         # Kept so tests (and late signals) find a live object.
         self._settings_dialog = dialog
@@ -770,10 +768,21 @@ class MainWindow(
             self.set_keep_backups(dialog.keep_backups())
             self.set_esri_key(dialog.esri_key())
             self.set_check_updates_on_start(dialog.check_updates())
+            self.set_use_feet(dialog.use_feet())
 
         dialog.finished.connect(closed)
         dialog.setWindowModality(Qt.ApplicationModal)
         dialog.show()
+
+    @property
+    def use_feet(self) -> bool:
+        """Altitudes in feet (the default) or metres (Edit > Settings)."""
+        return self.settings.value(USE_FEET_SETTING, True, type=bool)
+
+    def set_use_feet(self, use_feet: bool) -> None:
+        self.settings.setValue(USE_FEET_SETTING, use_feet)
+        # The geotag window's hints and readout show altitudes.
+        self._geotag_photos_changed()
 
     @property
     def keep_backups(self) -> bool:

@@ -52,6 +52,6 @@ test("the overwrite question and the change messages", () => {
   assert.match(overwriteQuestion(1, 2), /^1 photo already has GPS coordinates\. Choose Skip/);
   assert.match(overwriteQuestion(2, 0), /^2 photos already have GPS coordinates\. Choose Replace/);
   assert.equal(changeMessage({ action: "apply", count: 3 }), "Applied GPS to 3 photos.");
-  assert.equal(changeMessage({ action: "apply", count: 1, skipped: 1, backups: 1 }), "Applied GPS to 1 photo. Skipped 1 that already has GPS. Saved a backup of the original and added it to the list.");
-  assert.equal(changeMessage({ action: "remove", count: 2, backups: 2 }), "Removed GPS from 2 photos. Saved 2 backups of the originals and added them to the list.");
+  assert.equal(changeMessage({ action: "apply", count: 1, skipped: 1, backups: 1 }), "Applied GPS to 1 photo. Skipped 1 that already has GPS. Saved a backup of the original next to it.");
+  assert.equal(changeMessage({ action: "remove", count: 2, backups: 2 }), "Removed GPS from 2 photos. Saved 2 backups of the originals next to them.");
 });

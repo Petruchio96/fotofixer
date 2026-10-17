@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="FotoFixer tests" xmlns="http://www.topografix.com/GPX/1/1">
+  <wpt lat="40.0" lon="-111.0"><name>Ignored waypoint</name><time>2026-10-03T15:00:00Z</time></wpt>
+  <trk>
+    <name>Morning</name>
+    <trkseg>
+      <trkpt lat="40.6000" lon="-111.6000"><ele>2000</ele><time>2026-10-03T15:12:00Z</time></trkpt>
+      <trkpt lat="40.6100" lon="-111.5900"><ele>2100</ele><time>2026-10-03T15:22:00Z</time></trkpt>
+      <trkpt lat="40.6200" lon="-111.5800"><time>2026-10-03T15:32:00Z</time></trkpt>
+      <trkpt lat="40.6300" lon="-111.5700"><ele>2300</ele></trkpt>
+      <trkpt lat="40.6400" lon="-111.5600"><ele>2400</ele><time>2026-10-03T15:42:00.500Z</time></trkpt>
+    </trkseg>
+    <trkseg>
+      <trkpt lat="40.7000" lon="-111.5000"><ele>2600</ele><time>2026-10-03T17:42:00Z</time></trkpt>
+      <trkpt lat="40.7100" lon="-111.4900"><ele>2700</ele><time>2026-10-03T11:52:00-06:00</time></trkpt>
+    </trkseg>
+  </trk>
+</gpx>

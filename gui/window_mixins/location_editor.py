@@ -24,7 +24,7 @@ from PySide6.QtWidgets import QApplication, QLineEdit, QListWidgetItem, QMessage
 
 from core.models import GpsCoordinates
 from gui.presenters.inspector_state import format_coordinates
-from gui.widgets.editor_panel import PICK_BUTTON_TEXT, PICK_BUTTON_TIP, PICK_TIME_BUTTON_TEXT
+from gui.widgets.editor_panel import COORDINATE_FIELD_TIP, PICK_BUTTON_TEXT, PICK_BUTTON_TIP, PICK_TIME_BUTTON_TEXT
 from gui.widgets.thumbnail_delegate import PICK_DISABLED_ROLE, SOURCE_ROLE
 from gui.window_mixins.photo_list import THUMBNAIL_LATITUDE_ROLE
 from services.coordinate_service import (
@@ -556,7 +556,8 @@ class LocationEditorMixin:
                 )
         else:
             field.setStyleSheet("")
-            field.setToolTip("")
+            # Back to the usual hint (an empty one hid it after any valid edit).
+            field.setToolTip(COORDINATE_FIELD_TIP)
 
     def validate_latitude_field(self) -> None:
         text = self.latitude_input.text().strip()

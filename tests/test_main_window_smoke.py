@@ -905,6 +905,19 @@ class MainWindowSmokeTests(unittest.TestCase):
         self._select_paths([self.paths[0]])
         self.assertTrue(self.window.pick_location_button.isEnabled())
 
+    def test_the_coordinate_fields_keep_their_hint_after_edits(self) -> None:
+        from gui.widgets.editor_panel import COORDINATE_FIELD_TIP
+        self.assertEqual(self.window.latitude_input.toolTip(), COORDINATE_FIELD_TIP)
+        self.window.latitude_input.setText("40.5")
+        self.window.validate_latitude_field()
+        self.assertEqual(self.window.latitude_input.toolTip(), COORDINATE_FIELD_TIP, "a valid value keeps the hint")
+        self.window.latitude_input.setText("not a latitude")
+        self.window.validate_latitude_field()
+        self.assertIn("Invalid latitude", self.window.latitude_input.toolTip())
+        self.window.clear_location_button.click()
+        self.assertEqual(self.window.latitude_input.toolTip(), COORDINATE_FIELD_TIP, "Clear brings the hint back")
+        self.assertEqual(self.window.longitude_input.toolTip(), COORDINATE_FIELD_TIP)
+
     def test_the_file_picker_offers_selected_photos_too(self) -> None:
         self._two_with_gps()
         self._select_paths([self.paths[0]])

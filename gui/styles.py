@@ -195,10 +195,6 @@ QGroupBox {
     padding: 14px 16px 16px 16px;
     font-weight: 700;
 }
-/* A one-line group (Settings > Units, Updates): less room above and below. */
-QGroupBox[compact="true"] {
-    padding: 2px 16px 4px 16px;
-}
 QGroupBox::title {
     subcontrol-origin: margin;
     left: 14px;

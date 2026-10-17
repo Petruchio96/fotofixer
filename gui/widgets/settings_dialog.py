@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
     QCheckBox,
     QDialog,
     QGroupBox,
+    QGridLayout,
     QHBoxLayout,
     QRadioButton,
     QLabel,
@@ -108,11 +109,12 @@ class SettingsDialog(QDialog):
         backups_layout.addWidget(self.keep_backups_check)
         backups_layout.addWidget(backups_help)
 
-        # --- Units (the explanation is the hover hint) ---
-        units_group = QGroupBox("Units")
-        units_group.setProperty("compact", "true")
-        units_layout = QVBoxLayout(units_group)
-        units_layout.setContentsMargins(8, 4, 8, 4)
+        # --- Units and Updates: one box, a line each (the explanations
+        # are the hover hints) ---
+        options_group = QGroupBox("Units and Updates")
+        options_layout = QGridLayout(options_group)
+        options_layout.setHorizontalSpacing(14)
+        options_layout.setVerticalSpacing(8)
         self.feet_radio = QRadioButton("Imperial")
         self.feet_radio.setToolTip(UNITS_HELP.format(unit="feet"))
         self.metres_radio = QRadioButton("Metric")
@@ -120,21 +122,23 @@ class SettingsDialog(QDialog):
         (self.feet_radio if use_feet else self.metres_radio).setChecked(True)
         self.feet_radio.toggled.connect(self._update_buttons)
         units_row = QHBoxLayout()
+        units_row.setSpacing(18)
         units_row.addWidget(self.feet_radio)
         units_row.addWidget(self.metres_radio)
         units_row.addStretch(1)
-        units_layout.addLayout(units_row)
-
-        # --- Updates (the explanation is the hover hint) ---
-        updates_group = QGroupBox("Updates")
-        updates_group.setProperty("compact", "true")
-        updates_layout = QVBoxLayout(updates_group)
-        updates_layout.setContentsMargins(8, 4, 8, 4)
+        units_label = QLabel("Units")
+        units_label.setObjectName("fieldLabel")
+        options_layout.addWidget(units_label, 0, 0)
+        options_layout.addLayout(units_row, 0, 1)
         self.check_updates_check = QCheckBox("Check for updates when the app starts")
         self.check_updates_check.setChecked(check_updates)
         self.check_updates_check.toggled.connect(self._update_buttons)
         self.check_updates_check.setToolTip(UPDATES_HELP)
-        updates_layout.addWidget(self.check_updates_check)
+        updates_label = QLabel("Updates")
+        updates_label.setObjectName("fieldLabel")
+        options_layout.addWidget(updates_label, 1, 0)
+        options_layout.addWidget(self.check_updates_check, 1, 1)
+        options_layout.setColumnStretch(1, 1)
 
         # --- Esri Satellite ---
         esri_group = QGroupBox("Esri Satellite Map")
@@ -192,8 +196,7 @@ class SettingsDialog(QDialog):
         layout = QVBoxLayout(self)
         layout.setSpacing(12)
         layout.addWidget(backups_group)
-        layout.addWidget(units_group)
-        layout.addWidget(updates_group)
+        layout.addWidget(options_group)
         layout.addWidget(esri_group)
         layout.addLayout(buttons)
         self._update_buttons()

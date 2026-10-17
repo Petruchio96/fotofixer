@@ -785,7 +785,9 @@ class MainWindow(
 
     def set_use_feet(self, use_feet: bool) -> None:
         self.settings.setValue(USE_FEET_SETTING, use_feet)
-        # The geotag window's hints and readout show altitudes.
+        # The Photo List's tile hints and the geotag window show altitudes.
+        if self.session.selected_paths:
+            self._rerender_selecting(self.get_selected_paths())
         self._geotag_photos_changed()
 
     @property

@@ -2115,6 +2115,34 @@ class MainWindowSmokeTests(unittest.TestCase):
         self.addCleanup(reopened.close)
         self.assertFalse(reopened.use_feet)
 
+    def test_the_esri_steps_are_folded_up_until_asked_for(self) -> None:
+        dialog = self._open_settings()
+        self.assertFalse(dialog.esri_help.isVisible())
+        self.assertFalse(dialog.help_toggle.isChecked())
+        height = dialog.height()
+
+        QTest.mouseClick(dialog.help_toggle, Qt.LeftButton)
+        QTest.qWait(50)  # the layout resizes the window on the next pass
+        self.assertTrue(dialog.esri_help.isVisible())
+        self.assertGreater(dialog.height(), height, "the window grows for the steps")
+        self.assertFalse(dialog.save_button.isEnabled(), "opening the steps changes no setting")
+
+        QTest.mouseClick(dialog.help_toggle, Qt.LeftButton)
+        QTest.qWait(50)
+        self.assertFalse(dialog.esri_help.isVisible())
+        self.assertEqual(dialog.height(), height, "and shrinks back")
+
+    def test_the_units_segment_is_exclusive(self) -> None:
+        dialog = self._open_settings()
+        self.assertTrue(dialog.feet_radio.isChecked())
+        self.assertFalse(dialog.metres_radio.isChecked())
+        QTest.mouseClick(dialog.metres_radio, Qt.LeftButton)
+        self.assertFalse(dialog.feet_radio.isChecked())
+        self.assertFalse(dialog.use_feet())
+        # Clicking the chosen one again keeps it chosen (a segment, not a toggle).
+        QTest.mouseClick(dialog.metres_radio, Qt.LeftButton)
+        self.assertTrue(dialog.metres_radio.isChecked())
+
     def test_save_is_off_until_a_setting_changes(self) -> None:
         dialog = self._open_settings()
         self.assertFalse(dialog.save_button.isEnabled())

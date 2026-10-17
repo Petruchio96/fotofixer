@@ -195,11 +195,53 @@ QGroupBox {
     padding: 14px 16px 16px 16px;
     font-weight: 700;
 }
-/* Settings > the Units / Updates box: a group without a title, two lines. */
-QFrame#settingsOptions {
+/* Settings: captions, white cards of rows with hairlines, titles and
+   descriptions, the "How to get a key" expander. */
+QLabel#settingsCaption {
+    color: #556579;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    padding-left: 4px;
+}
+QFrame#settingsCard {
     background: #ffffff;
     border: 1px solid #d8e1ea;
-    border-radius: 14px;
+    border-radius: 12px;
+}
+QFrame#settingsRule {
+    background: #e8eef3;
+    border: none;
+    margin: 0px 16px;
+}
+QLabel#settingTitle {
+    color: #162131;
+    font-size: 14px;
+    font-weight: 600;
+}
+QCheckBox#settingTitleCheck {
+    color: #162131;
+    font-size: 14px;
+    font-weight: 600;
+    spacing: 8px;
+}
+QLabel#settingDescription {
+    color: #556579;
+    font-size: 12px;
+}
+QPushButton#filterButton[accent="true"]:checked {
+    background: #d97706;
+    border-color: #d97706;
+}
+QToolButton#settingsExpander {
+    background: transparent;
+    border: none;
+    color: #1f5fc4;
+    font-weight: 600;
+    padding: 2px 4px 2px 0px;
+}
+QToolButton#settingsExpander:hover {
+    color: #17428a;
 }
 QGroupBox::title {
     subcontrol-origin: margin;

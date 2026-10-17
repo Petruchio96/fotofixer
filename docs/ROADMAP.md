@@ -8,7 +8,7 @@ and remove finished items.
 ## Order
 
 1. **Geotagging in the web version** (Part 4): the desktop's Geotag from
-   GPS Track (1.11.0) in the Docker version, as **1.11.1**.
+   GPS Track (1.11.0) in the Docker version, as **1.11.2**.
 2. **Whatever is wanted before the app is feature complete** (for example
    the not-scheduled items below and the web version's leftovers in
    Part 3), as 1.x releases. Feature complete is **2.0.0**. The Docker
@@ -29,10 +29,13 @@ Not scheduled:
 
 Decided 2026-10-12 (the user's plan):
 
-- **1.11.0** (2026-10-16) is the latest release: **Geotag from GPS Track**
-  in the desktop app (File menu), the Settings dialog laid out as setting
-  rows with a Units choice, and backups kept out of the Photo List.
-  **1.11.1** brings geotagging to the web version (Part 4). 1.10.1
+- **1.11.1** (2026-10-17) is the latest release: fixes and UI improvements
+  after 1.11.0 (undo and selection fixes in the geotag window, a selected
+  photo can be the location source, altitude restored by undo and copied
+  from a source photo, wrapped hover hints). 1.11.0 (2026-10-16): **Geotag
+  from GPS Track** in the desktop app (File menu), the Settings dialog laid
+  out as setting rows with a Units choice, and backups kept out of the
+  Photo List. **1.11.2** brings geotagging to the web version (Part 4). 1.10.1
   (2026-10-13): fixes (picking a time from the Photo List shows every
   camera, desktop and web; web tab page, map preview, ‹ › arrows). 1.10.0
   (2026-10-13) was the **Docker version** (the web app and its image),
@@ -50,7 +53,7 @@ Decided 2026-10-12 (the user's plan):
 
 ---
 
-## Part 4: Geotagging in the web version (1.11.1)
+## Part 4: Geotagging in the web version (1.11.2)
 
 Decided 2026-10-16. The desktop feature (1.11.0: `gui/widgets/geotag_window.py`,
 `gui/window_mixins/geotagger.py`, `core/gpx_track.py`, `services/geotag_service.py`;
@@ -118,7 +121,7 @@ Steps, each with its tests:
    `writeStates(after, {text: "Geotagging", makeBackups: true})`,
    `finishChange(kind: EDIT_GPS)` with "Geotagged N photos from the GPS track";
    download mode unchanged. Cancel/Esc: close, clear the selection, `"forget"`.
-   Parity with the desktop (1.11.1): the worker also reads `GPSAltitude`/`Ref`
+   Parity with the desktop (1.11.1's changes): the worker also reads `GPSAltitude`/`Ref`
    into `gps.altitude`, so undo restores a photo's own altitude and Apply
    Location copies a source photo's altitude; a selected photo can be the
    location source (deselected when it becomes one, already in `setSource`).
@@ -129,7 +132,7 @@ Steps, each with its tests:
    browser on the dev server with `~/Pictures/Test Pics/GPS Track Test Pics`
    (the campaign's photos and tracks; `reset_test_photos.sh` there resets them)
    through `window.fotofixerDebug`, `docker/check_container.sh`;
-   `PROJECT_CONTEXT.md` "Web version", this Part, `README.md`; version 1.11.1.
+   `PROJECT_CONTEXT.md` "Web version", this Part, `README.md`; version 1.11.2.
 
 ---
 

@@ -462,8 +462,8 @@ class GeotagWindow(QWidget):
         self.check_all_box = QCheckBox("Check All")
         self.check_all_box.setObjectName("geotagCheckAll")
         self.check_all_box.setToolTip(
-            "Check every photo on the track that has no GPS yet, and every photo with a suggested track "
-            "location (orange border); or uncheck every photo. Other photos with GPS are checked one by one."
+            "Check every photo on the track without GPS and every suggested one (orange border), "
+            "or uncheck every photo. Other photos with GPS are checked one by one."
         )
         self.check_all_box.clicked.connect(self._check_all_clicked)
         left_layout.addWidget(self.check_all_box)

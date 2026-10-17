@@ -26,6 +26,7 @@ from PySide6.QtWidgets import (
 from core.places import photos_in_folders
 from core.runtime_paths import resource_path
 from gui.background import BackgroundRunner, InputBlocker
+from gui.hints import install_hint_wrapping
 from gui.styles import APP_STYLESHEET
 from gui.thumbnail_loader import ThumbnailLoader
 from gui.widgets.browser_panel import build_browser_panel
@@ -88,6 +89,8 @@ class MainWindow(
 
     def __init__(self, settings: QSettings | None = None) -> None:
         super().__init__()
+        # Every hover hint in the app shows on short, balanced lines.
+        install_hint_wrapping()
 
         # Saved preferences. Tests pass their own QSettings to stay isolated.
         self.settings = settings if settings is not None else QSettings()

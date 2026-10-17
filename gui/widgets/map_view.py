@@ -53,6 +53,7 @@ from core.map_tiles import (
     world_to_lat_lon,
     zoom_to_fit,
 )
+from gui.hints import wrap_hint
 from gui.widgets.icons import draw_location_pin, location_pin_path
 
 # Tile download results (TileFetcher.tile_finished).
@@ -998,7 +999,7 @@ class MapView(QWidget):
             # No photo names while another program is active.
             text = self.hover_text_at(QPointF(event.pos())) if self._window_active else ""
             if text:
-                QToolTip.showText(event.globalPos(), text, self)
+                QToolTip.showText(event.globalPos(), wrap_hint(text), self)
             else:
                 QToolTip.hideText()
                 event.ignore()

@@ -375,11 +375,10 @@ class StepBox(QFrame):
 
 # The hover hint of Change Time Zone's "Keep the clock time" checkbox.
 KEEP_CLOCK_TIP = (
-    "Off: the photos keep the moment they were taken; their clock times change to "
-    "show that moment in the new zone (11:16 am MDT → 12:16 pm CDT).\n"
-    "On: the clock times stay as they are and only the zone changes (11:16 am MDT → "
-    "11:16 am CDT), which moves the moment. Use it when the times were right for "
-    "where the photos were taken but the zone was set wrong."
+    "Off: the moment taken stays; the clock time changes with the zone "
+    "(11:16 am MDT → 12:16 pm CDT).\n"
+    "On: the clock time stays and only the zone changes (11:16 am MDT → "
+    "11:16 am CDT), for photos whose times were right but whose zone was wrong."
 )
 
 # Step 2's card icons: orange, like the step to do now.

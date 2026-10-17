@@ -56,9 +56,8 @@ BACKUPS_HELP = (
     "saved next to it. Photos without GPS aren't copied."
 )
 BACKUPS_HINT = (
-    "Before a photo's GPS is first changed, save an untouched copy next to it, with "
-    '"_original" added to its name. Photos that had no GPS aren\'t copied (adding GPS '
-    "loses nothing). Backups stay out of the Photo List."
+    "Before a photo's GPS is first changed, save an untouched copy next to it "
+    'as "<name>_original". Photos without GPS aren\'t copied; backups stay out of the list.'
 )
 UNITS_HELP = "Altitudes and distances from a GPS track."
 UNITS_HINT = (
@@ -67,9 +66,8 @@ UNITS_HINT = (
 )
 UPDATES_HELP = "Asks GitHub once a day. Help > Check for Updates always checks."
 UPDATES_HINT = (
-    "About five seconds after the app opens, at most once a day, it asks GitHub "
-    "whether a newer version exists and shows a notice if one does. "
-    "Help > Check for Updates always checks."
+    "Shortly after the app opens, at most once a day, it asks GitHub for a newer "
+    "version and shows a notice if there is one. Help > Check for Updates always checks."
 )
 
 # The Esri row: the description, and the steps behind "How to get a key".
